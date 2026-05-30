@@ -32,12 +32,36 @@ export interface OverlayPayload {
 /** Commands raised by global hotkeys in the main process. */
 export type OverlayCommand = 'pause' | 'recalibrate';
 
+/** A persisted region (structurally identical to the renderer's NormRegion). */
+export interface PersistedRegion {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** User settings persisted to Electron userData (survive restart). */
+export interface AppSettings {
+  sourceId?: string;
+  sourceName?: string;
+  region?: PersistedRegion | null;
+  location?: string | null;
+  scale?: number;
+  intervalMs?: number;
+  quorum?: number;
+  activePatch?: string;
+}
+
 /** The typed, sandboxed API exposed to the renderer as `window.sco`. */
 export interface ScoBridge {
   /** Enumerate capturable screens and windows (control window). */
   getCaptureSources(): Promise<CaptureSource[]>;
   /** Liveness check confirming the preload bridge is wired up. */
   ping(): string;
+  /** Load persisted settings (control window). */
+  getSettings(): Promise<AppSettings>;
+  /** Merge + persist settings to Electron userData (control window). */
+  setSettings(patch: Partial<AppSettings>): void;
   /** Control → overlay (relayed by main): push the latest matches. */
   sendMatches(payload: OverlayPayload): void;
   /** Overlay: receive pushed matches. Returns an unsubscribe fn. */

@@ -46,8 +46,9 @@ electron-builder. See `CLAUDE.md` for the locked stack and domain notes, and
 
 The signature table is generated at build time from the
 [Star Citizen Wiki API](https://api.star-citizen.wiki) and committed to
-`src/data/signatures.json`. Re-crawl **per game patch** — signatures and
-clustering change between patches.
+`src/data/tables/<patch>.json` (one file per patch). Re-crawl **per game
+patch** — signatures and clustering change between patches — then switch the
+active patch from the **Patch** dropdown in the control window.
 
 ```bash
 npm run crawl                 # ship-mineable only (v1)
@@ -90,6 +91,12 @@ over the game and fades when idle. Global hotkeys:
 
 The overlay passes all clicks through to the game except in edit mode, and only
 draws over **borderless/windowed** games (see above).
+
+## Settings
+
+Capture source, RS region, location, OCR tuning, and the active patch persist to
+Electron `userData` and are restored on the next launch — the last capture
+source auto-reconnects if it's still available.
 
 ## Guardrails
 

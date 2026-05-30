@@ -2,7 +2,7 @@
 // also accepts a static image file — handy for tuning the OCR against a saved
 // HUD screenshot without Star Citizen running.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, CSSProperties } from 'react';
 import type { CaptureSource } from '../../shared/bridge';
 
@@ -12,14 +12,23 @@ export interface PickedSource {
   label: string;
   stream?: MediaStream;
   imageUrl?: string;
+  /** desktopCapturer id (desktop sources only) — persisted for auto-reconnect. */
+  sourceId?: string;
 }
 
 const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
-export function SourcePicker({ onPick }: { onPick: (s: PickedSource) => void }) {
+export function SourcePicker({
+  onPick,
+  lastSourceId,
+}: {
+  onPick: (s: PickedSource) => void;
+  lastSourceId?: string;
+}) {
   const [sources, setSources] = useState<CaptureSource[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const reconnected = useRef(false);
 
   const refresh = async (): Promise<void> => {
     setLoading(true);
@@ -53,11 +62,21 @@ export function SourcePicker({ onPick }: { onPick: (s: PickedSource) => void }) 
           },
         },
       } as unknown as MediaStreamConstraints);
-      onPick({ kind: 'desktop', label: src.name, stream });
+      onPick({ kind: 'desktop', label: src.name, stream, sourceId: src.id });
     } catch (e) {
       setError(`Could not capture “${src.name}”: ${msg(e)}`);
     }
   };
+
+  // Auto-reconnect to the last-used source once it appears in the list.
+  useEffect(() => {
+    if (reconnected.current || !lastSourceId) return;
+    const hit = sources.find((s) => s.id === lastSourceId);
+    if (hit) {
+      reconnected.current = true;
+      void pickDesktop(hit);
+    }
+  }, [sources, lastSourceId]);
 
   const pickImage = (e: ChangeEvent<HTMLInputElement>): void => {
     const file = e.target.files?.[0];

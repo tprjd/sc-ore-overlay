@@ -4,6 +4,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { IpcRendererEvent } from 'electron';
 import type {
+  AppSettings,
   CaptureSource,
   OverlayCommand,
   OverlayPayload,
@@ -14,6 +15,8 @@ const api: ScoBridge = {
   getCaptureSources: () =>
     ipcRenderer.invoke('sco:get-capture-sources') as Promise<CaptureSource[]>,
   ping: () => 'pong',
+  getSettings: () => ipcRenderer.invoke('sco:get-settings') as Promise<AppSettings>,
+  setSettings: (patch) => ipcRenderer.send('sco:set-settings', patch),
 
   sendMatches: (payload) => ipcRenderer.send('sco:matches', payload),
 

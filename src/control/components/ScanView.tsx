@@ -22,6 +22,9 @@ export interface ScanViewProps {
   table: SignatureTable;
   location: string | null;
   onLocationChange: (location: string | null) => void;
+  patches: string[];
+  activePatch: string;
+  onPatchChange: (patch: string) => void;
   onBack: () => void;
 }
 
@@ -52,6 +55,9 @@ export function ScanView({
   table,
   location,
   onLocationChange,
+  patches,
+  activePatch,
+  onPatchChange,
   onBack,
 }: ScanViewProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -203,6 +209,20 @@ export function ScanView({
           </div>
 
           <Section title="Match">
+            <label style={S.selectRow}>
+              <span style={S.sliderLabel}>Patch</span>
+              <select
+                style={S.select}
+                value={activePatch}
+                onChange={(e) => onPatchChange(e.target.value)}
+              >
+                {patches.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label style={S.selectRow}>
               <span style={S.sliderLabel}>Location</span>
               <select

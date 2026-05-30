@@ -91,7 +91,7 @@ const getOpt = (name: string, fallback: string): string => {
 };
 
 const PATCH = getOpt('patch', 'unknown');
-const OUT = path.resolve(repoRoot, getOpt('out', 'src/data/signatures.json'));
+const OUT = path.resolve(repoRoot, getOpt('out', path.join('src', 'data', 'tables', `${PATCH}.json`)));
 const METHOD = getOpt('method', 'Ship');
 const ALL_METHODS = hasFlag('all-methods');
 const REFRESH = hasFlag('refresh');

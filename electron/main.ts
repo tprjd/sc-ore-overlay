@@ -7,8 +7,14 @@
 
 import { app, BrowserWindow, desktopCapturer, globalShortcut, ipcMain } from 'electron';
 import type { IpcMainEvent } from 'electron';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import type { CaptureSource, OverlayCommand, OverlayPayload } from '../src/shared/bridge';
+import type {
+  AppSettings,
+  CaptureSource,
+  OverlayCommand,
+  OverlayPayload,
+} from '../src/shared/bridge';
 
 const dirname = __dirname;
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
@@ -40,6 +46,26 @@ ipcMain.handle('sco:get-capture-sources', async (): Promise<CaptureSource[]> => 
 // Control → overlay relay.
 ipcMain.on('sco:matches', (_e: IpcMainEvent, payload: OverlayPayload) => {
   overlayWin?.webContents.send('sco:matches', payload);
+});
+
+// Settings persistence (Electron userData/settings.json).
+const settingsFile = (): string => path.join(app.getPath('userData'), 'settings.json');
+function readSettings(): AppSettings {
+  try {
+    return JSON.parse(readFileSync(settingsFile(), 'utf8')) as AppSettings;
+  } catch {
+    return {};
+  }
+}
+ipcMain.handle('sco:get-settings', (): AppSettings => readSettings());
+ipcMain.on('sco:set-settings', (_e: IpcMainEvent, patch: Partial<AppSettings>) => {
+  const next: AppSettings = { ...readSettings(), ...patch };
+  try {
+    mkdirSync(path.dirname(settingsFile()), { recursive: true });
+    writeFileSync(settingsFile(), JSON.stringify(next, null, 2));
+  } catch {
+    // ignore write errors
+  }
 });
 
 // --- Windows -----------------------------------------------------------------
