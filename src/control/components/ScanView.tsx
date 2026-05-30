@@ -85,6 +85,22 @@ export function ScanView({
     [loop.stable, table, location],
   );
 
+  // Phase 3: push current matches to the overlay (no-op outside Electron).
+  useEffect(() => {
+    window.sco?.sendMatches?.({
+      reading: loop.stable,
+      candidates: matches.map((c) => ({ name: c.name, nodes: c.nodes, score: c.score })),
+    });
+  }, [loop.stable, matches]);
+
+  // Respond to global-hotkey commands relayed from the main process.
+  useEffect(() => {
+    return window.sco?.onCommand?.((command) => {
+      if (command === 'pause') setPaused((p) => !p);
+      else if (command === 'recalibrate') onRegionChange(null);
+    });
+  }, [onRegionChange]);
+
   // ---- region drag (normalized to the displayed media box) ----
   const toNorm = (clientX: number, clientY: number): { x: number; y: number } => {
     const el = wrapRef.current;

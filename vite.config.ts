@@ -1,3 +1,4 @@
+import { resolve as resolvePath } from 'node:path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import electron from 'vite-plugin-electron';
@@ -26,4 +27,13 @@ export default defineConfig({
     exclude: ['onnxruntime-web'],
   },
   resolve: { dedupe: ['onnxruntime-web'] },
+  // Two renderer entries: the control window and the transparent overlay.
+  build: {
+    rollupOptions: {
+      input: {
+        index: resolvePath('index.html'),
+        overlay: resolvePath('overlay.html'),
+      },
+    },
+  },
 });

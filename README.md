@@ -75,6 +75,22 @@ Click-through overlays do **not** draw over exclusive fullscreen. Set Star
 Citizen to **Borderless** (or **Windowed**) in graphics settings so the overlay
 is visible on top of the game.
 
+## Overlay & hotkeys
+
+The app opens two windows: the **control** window (capture / calibrate / match)
+and a transparent, always-on-top, click-through **overlay** that shows `Ore ×N`
+over the game and fades when idle. Global hotkeys:
+
+| Hotkey | Action |
+| --- | --- |
+| `Alt+Shift+O` | Toggle overlay visibility |
+| `Alt+Shift+P` | Pause / resume OCR |
+| `Alt+Shift+R` | Re-enter calibration (redraw the RS region) |
+| `Alt+Shift+E` | Toggle "edit overlay" mode — drag the overlay to reposition, then press again to lock it back to click-through |
+
+The overlay passes all clicks through to the game except in edit mode, and only
+draws over **borderless/windowed** games (see above).
+
 ## Guardrails
 
 Read-only by design: screen capture + public-data lookup only. The app never
