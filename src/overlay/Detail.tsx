@@ -119,6 +119,7 @@ export function Detail() {
               cluster {detail.clusterMin}–{detail.clusterMax}
               {detail.clusterProbability != null ? ` (${pct(detail.clusterProbability)})` : ''}
             </div>
+            <div style={{ ...S.sub, marginTop: 4 }}>composition (everything the rock yields):</div>
             <div style={S.table}>
               {detail.materials.map((m, i) => (
                 <div key={`${m.name}-${i}`} style={S.matRow}>
