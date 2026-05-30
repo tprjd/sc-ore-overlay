@@ -96,8 +96,16 @@ export function Overlay() {
 
   return (
     <div style={{ ...S.root, opacity: visible ? 1 : 0, fontFamily: config.fontFamily }}>
-      <div style={{ ...S.card, padding: config.padding, gap: config.gap, background: cardBg, ...(editing ? S.cardEditing : null) }}>
-        {editing && <div style={DRAG}>⠿ drag · grip resizes · Alt+Shift+E locks</div>}
+      <div
+        style={{
+          ...S.card,
+          padding: config.padding,
+          gap: config.gap,
+          background: cardBg,
+          ...(editing ? S.cardEditing : null),
+          ...(editing ? DRAG_REGION : null),
+        }}
+      >
         {candidates.length > 0 ? (
           candidates.map((c, i) => (
             <div key={c.name} style={{ ...S.row, opacity: i === 0 ? 1 : 0.85 }}>
@@ -118,21 +126,11 @@ export function Overlay() {
   );
 }
 
-// `-webkit-app-region` isn't typed on React.CSSProperties — cast. The drag bar
-// is an in-flow child at the top of the card (edit mode only) so it doesn't
-// overlap the text; the card always fills the window, so toggling edit never
-// changes the window size.
-const DRAG = {
-  WebkitAppRegion: 'drag',
-  flex: '0 0 auto',
-  fontSize: 11,
-  color: '#9fb3c8',
-  background: 'rgba(13,15,18,0.9)',
-  padding: '3px 8px',
-  borderRadius: 6,
-  textAlign: 'center',
-  marginBottom: 6,
-} as unknown as CSSProperties;
+// In edit mode the whole card is a drag region — move the window by dragging the
+// body (the grip below is `no-drag`, so it resizes instead). The dashed border
+// signals edit mode; instructions live in the control window's Overlay panel.
+// `-webkit-app-region` isn't typed on React.CSSProperties, hence the cast.
+const DRAG_REGION = { WebkitAppRegion: 'drag' } as unknown as CSSProperties;
 
 const GRIP = {
   WebkitAppRegion: 'no-drag',
