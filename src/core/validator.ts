@@ -55,9 +55,9 @@ export interface VoteResult {
   /** Carry this into the next `voteStep` call. */
   state: VoteState;
   /**
-   * The accepted, stable reading — non-null only while the current consecutive
-   * streak has reached the quorum. Drops back to null the moment a different
-   * reading (or a dropped frame) breaks the streak.
+   * The accepted, stable reading — non-null once the streak reaches the quorum,
+   * and it stays latched until a *different* value reaches quorum. Dropped or
+   * garbage frames (null) are ignored, not treated as a reset.
    */
   stable: number | null;
 }
@@ -68,8 +68,8 @@ export const initialVoteState: VoteState = { candidate: null, count: 0 };
 /**
  * Advance the temporal voter by one frame.
  *
- * - A `null` reading (implausible / no read) breaks the streak and clears the
- *   stable output.
+ * - A `null` reading (implausible / no match / dropped frame) is ignored — the
+ *   state and stable output are unchanged.
  * - A reading equal to the current candidate extends the streak.
  * - A different reading starts a new streak at count 1.
  * - `stable` is the candidate once its streak reaches `quorum`, else null.
@@ -82,7 +82,9 @@ export function voteStep(
   const quorum = Math.max(1, Math.floor(opts.quorum));
 
   if (reading == null) {
-    return { state: { candidate: null, count: 0 }, stable: null };
+    // Ignore a dropped/garbage frame: keep state so one miss doesn't break a
+    // stable reading (the overlay's idle-fade handles a value truly leaving).
+    return { state, stable: state.count >= quorum ? state.candidate : null };
   }
 
   const count = reading === state.candidate ? state.count + 1 : 1;

@@ -105,7 +105,11 @@ export function Overlay() {
           padding: config.padding,
           gap: config.gap,
           background: cardBg,
-          ...(editing ? S.cardEditing : null),
+          border: editing
+            ? '1px dashed rgba(79,209,255,0.85)'
+            : config.border
+              ? '1px solid rgba(79,209,255,0.25)'
+              : 'none',
           ...(editing ? DRAG_REGION : null),
         }}
       >
@@ -159,7 +163,6 @@ const S: Record<string, CSSProperties> = {
   card: {
     width: '100%',
     height: '100%',
-    border: '1px solid rgba(79,209,255,0.25)',
     borderRadius: 10,
     display: 'flex',
     flexDirection: 'column',
@@ -168,7 +171,6 @@ const S: Record<string, CSSProperties> = {
     backdropFilter: 'blur(2px)',
     boxSizing: 'border-box',
   },
-  cardEditing: { border: '1px dashed rgba(79,209,255,0.8)' },
   row: { display: 'flex', alignItems: 'baseline', lineHeight: 1.1, minWidth: 0 },
   name: {
     fontWeight: 700,

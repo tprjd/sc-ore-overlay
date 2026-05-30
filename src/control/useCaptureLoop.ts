@@ -6,12 +6,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 
-import { hashPixels } from '../core/image';
-import { bestReading } from '../core/parse';
-import { isPlausibleReading, createVoter } from '../core/validator';
+import { createVoter, hashPixels, isPlausibleReading, matchOre } from '../core';
+import type { SignatureTable } from '../core';
 import { preprocess } from './preprocess';
 import type { DrawableSource, NormRegion, PreprocessParams } from './preprocess';
 import { recognize } from './ocr';
+import type { OcrLine } from './ocr';
 
 export interface LoopParams extends PreprocessParams {
   /** Frame sampling period in ms (~500–1000). */
@@ -54,11 +54,35 @@ const INITIAL: LoopState = {
  * Run the capture→OCR→validate loop while `enabled` and a `region` are set.
  * The voter resets whenever params change (so tuning starts a fresh streak).
  */
+/**
+ * From PP-OCR's detected lines, pick the largest digit token that matches a
+ * ship ore — the signature table acts as a validity filter, so OCR garbage
+ * (e.g. a misread 27080) that divides no signature cleanly is dropped. Returns
+ * null when nothing matches.
+ */
+function pickReading(lines: OcrLine[], table: SignatureTable): number | null {
+  const numbers = new Set<number>();
+  for (const line of lines) {
+    for (const token of line.text.split(/\s+/)) {
+      const digits = token.replace(/\D/g, '');
+      if (digits) numbers.add(Number.parseInt(digits, 10));
+    }
+  }
+  let best: number | null = null;
+  for (const n of numbers) {
+    if (!isPlausibleReading(n)) continue;
+    if (matchOre(n, table, { method: 'Ship' }).length === 0) continue;
+    if (best === null || n > best) best = n;
+  }
+  return best;
+}
+
 export function useCaptureLoop(
   mediaRef: RefObject<DrawableSource | null>,
   region: NormRegion | null,
   params: LoopParams,
   enabled: boolean,
+  table: SignatureTable,
 ): LoopState {
   const [state, setState] = useState<LoopState>(INITIAL);
   const busy = useRef(false);
@@ -98,10 +122,9 @@ export function useCaptureLoop(
       try {
         const lines = await recognize(pre.dataUrl);
         if (cancelled) return;
-        const value = bestReading(lines);
-        const plausible = isPlausibleReading(value);
-        lastValue.current = plausible ? value : null;
-        const stable = voter.push(lastValue.current);
+        const value = pickReading(lines, table);
+        lastValue.current = value;
+        const stable = voter.push(value);
         const rawText = lines.length
           ? lines.map((l) => `${l.text} ${Math.round(l.score * 100)}%`).join(' | ')
           : '(no text)';
@@ -109,7 +132,7 @@ export function useCaptureLoop(
           ...s,
           rawText,
           value,
-          plausible,
+          plausible: value !== null,
           stable,
           ocrRuns: s.ocrRuns + 1,
           skipped: false,
@@ -133,7 +156,7 @@ export function useCaptureLoop(
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [mediaRef, region, scale, intervalMs, quorum, enabled]);
+  }, [mediaRef, region, scale, intervalMs, quorum, enabled, table]);
 
   return state;
 }

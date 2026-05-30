@@ -94,7 +94,7 @@ export function ScanView({
     }
   }, [source]);
 
-  const loop = useCaptureLoop(mediaRef, region, params, !paused);
+  const loop = useCaptureLoop(mediaRef, region, params, !paused, table);
 
   // Phase 2: feed the accepted reading into the matcher (method "Ship" + the
   // selected location). Overlapping signatures surface as multiple candidates.
@@ -420,6 +420,14 @@ export function ScanView({
               onChange={(v) => onOverlayConfigChange({ ...overlayConfig, gap: v })}
               suffix=" px"
             />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginBottom: 8 }}>
+              <input
+                type="checkbox"
+                checked={overlayConfig.border}
+                onChange={(e) => onOverlayConfigChange({ ...overlayConfig, border: e.target.checked })}
+              />
+              Border
+            </label>
             <p style={S.dim}>In edit mode (Alt+Shift+E): drag to move, drag the corner grip to resize.</p>
           </Section>
         </div>

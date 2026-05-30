@@ -50,6 +50,8 @@ export interface OverlayConfig {
   padding: number;
   /** Vertical gap between lines in px. */
   gap: number;
+  /** Show the card border. */
+  border: boolean;
 }
 
 /** Default overlay appearance. */
@@ -61,6 +63,7 @@ export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
   bgOpacity: 0.55,
   padding: 10,
   gap: 4,
+  border: true,
 };
 
 /** A rebindable global-hotkey action. */

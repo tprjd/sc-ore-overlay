@@ -16,7 +16,7 @@ import type { HotkeyAction, HotkeyMap, OverlayConfig } from '../shared/bridge';
 
 // PP-OCR reads raw color text and localizes it, so there is nothing to tune but
 // the crop upscale and the loop cadence.
-const DEFAULT_PARAMS: LoopParams = { scale: 3, intervalMs: 700, quorum: 3 };
+const DEFAULT_PARAMS: LoopParams = { scale: 4, intervalMs: 700, quorum: 3 };
 
 // All crawled patch tables, bundled at build time → { patch: table }.
 const tableModules = import.meta.glob('../data/tables/*.json', { eager: true, import: 'default' });

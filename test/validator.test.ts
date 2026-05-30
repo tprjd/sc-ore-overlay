@@ -70,14 +70,12 @@ describe('voteStep', () => {
     expect(voteStep(s, 99, quorum3).stable).toBe(99);
   });
 
-  it('treats a dropped frame (null) as a reset', () => {
+  it('ignores dropped/garbage frames (null) so the stable reading persists', () => {
     let s: VoteState = initialVoteState;
-    for (const v of [7, 7, 7]) s = voteStep(s, v, quorum3).state;
-    expect(voteStep(s, 7, quorum3).stable).toBe(7);
-
+    for (const v of [7, 7, 7]) s = voteStep(s, v, quorum3).state; // latched 7
     const dropped = voteStep(s, null, quorum3);
-    expect(dropped.stable).toBeNull();
-    expect(dropped.state).toEqual({ candidate: null, count: 0 });
+    expect(dropped.stable).toBe(7); // still latched
+    expect(dropped.state).toEqual(s); // state unchanged
   });
 
   it('accepts immediately when quorum is 1', () => {
