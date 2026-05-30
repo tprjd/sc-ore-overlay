@@ -80,7 +80,8 @@ is visible on top of the game.
 
 The app opens two windows: the **control** window (capture / calibrate / match)
 and a transparent, always-on-top, click-through **overlay** that shows `Ore ×N`
-over the game and fades when idle. Global hotkeys:
+over the game and fades when idle. Global hotkeys (rebindable in the control
+window's **Hotkeys** panel — bindings persist):
 
 | Hotkey | Action |
 | --- | --- |

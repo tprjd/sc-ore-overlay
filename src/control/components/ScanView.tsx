@@ -4,7 +4,12 @@
 // dropdown narrows overlapping-signature matches.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
+import type {
+  CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent,
+  PointerEvent as ReactPointerEvent,
+  ReactNode,
+} from 'react';
 
 import { useCaptureLoop } from '../useCaptureLoop';
 import type { LoopParams } from '../useCaptureLoop';
@@ -12,6 +17,7 @@ import type { DrawableSource, NormRegion } from '../preprocess';
 import type { PickedSource } from './SourcePicker';
 import { matchOre, groupLocations } from '../../core';
 import type { SignatureTable } from '../../core';
+import type { HotkeyAction, HotkeyMap } from '../../shared/bridge';
 
 export interface ScanViewProps {
   source: PickedSource;
@@ -25,6 +31,9 @@ export interface ScanViewProps {
   patches: string[];
   activePatch: string;
   onPatchChange: (patch: string) => void;
+  hotkeys: HotkeyMap;
+  hotkeyStatus: Partial<Record<HotkeyAction, boolean>>;
+  onHotkeysChange: (map: HotkeyMap) => void;
   onBack: () => void;
 }
 
@@ -58,6 +67,9 @@ export function ScanView({
   patches,
   activePatch,
   onPatchChange,
+  hotkeys,
+  hotkeyStatus,
+  onHotkeysChange,
   onBack,
 }: ScanViewProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -311,6 +323,20 @@ export function ScanView({
               suffix=" frames"
             />
           </Section>
+
+          <Section title="Hotkeys">
+            {HOTKEY_ROWS.map(([action, label]) => (
+              <div key={action} style={S.hotkeyRow}>
+                <span style={S.sliderLabel}>{label}</span>
+                <KeyCapture
+                  value={hotkeys[action]}
+                  onChange={(accel) => onHotkeysChange({ ...hotkeys, [action]: accel })}
+                />
+                {hotkeyStatus[action] === false && <span style={S.hotkeyErr}>conflict</span>}
+              </div>
+            ))}
+            <p style={S.dim}>Click a binding, then press the combo (needs a modifier).</p>
+          </Section>
         </div>
       </div>
     </div>
@@ -369,6 +395,66 @@ function Slider({
         {suffix}
       </span>
     </label>
+  );
+}
+
+const HOTKEY_ROWS: Array<[HotkeyAction, string]> = [
+  ['toggleOverlay', 'Toggle overlay'],
+  ['pause', 'Pause / resume'],
+  ['recalibrate', 'Recalibrate'],
+  ['editOverlay', 'Edit overlay'],
+];
+
+/** Convert a KeyboardEvent key to an Electron accelerator token, or null. */
+function normalizeKey(key: string): string | null {
+  if (key === 'Shift' || key === 'Control' || key === 'Alt' || key === 'Meta') return null;
+  if (key === ' ') return 'Space';
+  if (/^[a-z]$/i.test(key)) return key.toUpperCase();
+  if (/^[0-9]$/.test(key)) return key;
+  if (/^F\d{1,2}$/.test(key)) return key;
+  const special: Record<string, string> = {
+    ArrowUp: 'Up',
+    ArrowDown: 'Down',
+    ArrowLeft: 'Left',
+    ArrowRight: 'Right',
+    Escape: 'Esc',
+    Enter: 'Return',
+    Tab: 'Tab',
+    Delete: 'Delete',
+    Backspace: 'Backspace',
+  };
+  return special[key] ?? null;
+}
+
+/** A button that records the next key combo into an Electron accelerator. */
+function KeyCapture({ value, onChange }: { value: string; onChange: (accel: string) => void }) {
+  const [capturing, setCapturing] = useState(false);
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLButtonElement>): void => {
+    e.preventDefault();
+    if (e.key === 'Escape') {
+      setCapturing(false);
+      return;
+    }
+    const mods: string[] = [];
+    if (e.ctrlKey) mods.push('Control');
+    if (e.altKey) mods.push('Alt');
+    if (e.shiftKey) mods.push('Shift');
+    if (e.metaKey) mods.push('Super');
+    const key = normalizeKey(e.key);
+    if (!key || mods.length === 0) return; // require at least one modifier + a real key
+    onChange([...mods, key].join('+'));
+    setCapturing(false);
+  };
+  return (
+    <button
+      type="button"
+      style={{ ...S.keyBtn, ...(capturing ? S.keyBtnActive : null) }}
+      onClick={() => setCapturing(true)}
+      onKeyDown={capturing ? onKeyDown : undefined}
+      onBlur={() => setCapturing(false)}
+    >
+      {capturing ? 'press combo…' : value}
+    </button>
   );
 }
 
@@ -435,4 +521,8 @@ const S: Record<string, CSSProperties> = {
   candName: { flex: 1, fontSize: 16, fontWeight: 600 },
   candNodes: { fontSize: 16, color: '#4fd1ff', fontVariantNumeric: 'tabular-nums' },
   candScore: { fontSize: 11, opacity: 0.5, width: 40, textAlign: 'right' },
+  hotkeyRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 },
+  hotkeyErr: { fontSize: 11, color: '#ffb4bd' },
+  keyBtn: { flex: 1, background: '#0d0f12', color: '#e6e6e6', border: '1px solid #3a4150', borderRadius: 6, padding: '5px 8px', fontSize: 12, fontFamily: 'ui-monospace, monospace', cursor: 'pointer', textAlign: 'left' },
+  keyBtnActive: { borderColor: '#4fd1ff', color: '#4fd1ff' },
 };

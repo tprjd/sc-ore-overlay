@@ -6,12 +6,15 @@
 // Built as CommonJS by vite-plugin-electron, so `__dirname` is available.
 
 import { app, BrowserWindow, desktopCapturer, globalShortcut, ipcMain } from 'electron';
-import type { IpcMainEvent } from 'electron';
+import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { DEFAULT_HOTKEYS } from '../src/shared/bridge';
 import type {
   AppSettings,
   CaptureSource,
+  HotkeyAction,
+  HotkeyMap,
   OverlayCommand,
   OverlayPayload,
 } from '../src/shared/bridge';
@@ -57,15 +60,17 @@ function readSettings(): AppSettings {
     return {};
   }
 }
-ipcMain.handle('sco:get-settings', (): AppSettings => readSettings());
-ipcMain.on('sco:set-settings', (_e: IpcMainEvent, patch: Partial<AppSettings>) => {
-  const next: AppSettings = { ...readSettings(), ...patch };
+function writeSettings(next: AppSettings): void {
   try {
     mkdirSync(path.dirname(settingsFile()), { recursive: true });
     writeFileSync(settingsFile(), JSON.stringify(next, null, 2));
   } catch {
     // ignore write errors
   }
+}
+ipcMain.handle('sco:get-settings', (): AppSettings => readSettings());
+ipcMain.on('sco:set-settings', (_e: IpcMainEvent, patch: Partial<AppSettings>) => {
+  writeSettings({ ...readSettings(), ...patch });
 });
 
 // --- Windows -----------------------------------------------------------------
@@ -149,28 +154,60 @@ function toCommand(command: OverlayCommand): void {
   controlWin?.webContents.send('sco:command', command);
 }
 
-function registerShortcuts(): void {
-  // Toggle overlay visibility.
-  globalShortcut.register('Alt+Shift+O', () => {
-    if (!overlayWin) return;
-    if (overlayWin.isVisible()) overlayWin.hide();
-    else overlayWin.showInactive();
-  });
-  // Pause/resume OCR (handled in the control window).
-  globalShortcut.register('Alt+Shift+P', () => toCommand('pause'));
-  // Re-enter calibration (clear the region) and surface the control window.
-  globalShortcut.register('Alt+Shift+R', () => {
-    toCommand('recalibrate');
-    controlWin?.show();
-  });
-  // Toggle "edit overlay" mode.
-  globalShortcut.register('Alt+Shift+E', () => setEditMode(!editing));
+function hotkeyHandlers(): Record<HotkeyAction, () => void> {
+  return {
+    // Toggle overlay visibility.
+    toggleOverlay: () => {
+      if (!overlayWin) return;
+      if (overlayWin.isVisible()) overlayWin.hide();
+      else overlayWin.showInactive();
+    },
+    // Pause/resume OCR (handled in the control window).
+    pause: () => toCommand('pause'),
+    // Re-enter calibration (clear the region) and surface the control window.
+    recalibrate: () => {
+      toCommand('recalibrate');
+      controlWin?.show();
+    },
+    // Toggle "edit overlay" mode.
+    editOverlay: () => setEditMode(!editing),
+  };
 }
+
+function currentHotkeys(): HotkeyMap {
+  return { ...DEFAULT_HOTKEYS, ...(readSettings().hotkeys ?? {}) };
+}
+
+// (Re-)register every global hotkey. Returns which bindings registered OK
+// (false = invalid accelerator or already taken by another app).
+function applyHotkeys(map: HotkeyMap): Record<HotkeyAction, boolean> {
+  globalShortcut.unregisterAll();
+  const handlers = hotkeyHandlers();
+  const results = {} as Record<HotkeyAction, boolean>;
+  (Object.keys(handlers) as HotkeyAction[]).forEach((action) => {
+    const accel = map[action];
+    try {
+      results[action] = accel ? globalShortcut.register(accel, handlers[action]) : false;
+    } catch {
+      results[action] = false;
+    }
+  });
+  return results;
+}
+
+ipcMain.handle(
+  'sco:set-hotkeys',
+  (_e: IpcMainInvokeEvent, map: HotkeyMap): Record<HotkeyAction, boolean> => {
+    const results = applyHotkeys(map);
+    writeSettings({ ...readSettings(), hotkeys: map });
+    return results;
+  },
+);
 
 void app.whenReady().then(() => {
   controlWin = createControlWindow();
   overlayWin = createOverlayWindow();
-  registerShortcuts();
+  applyHotkeys(currentHotkeys());
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

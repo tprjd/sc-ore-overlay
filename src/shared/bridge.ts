@@ -32,6 +32,20 @@ export interface OverlayPayload {
 /** Commands raised by global hotkeys in the main process. */
 export type OverlayCommand = 'pause' | 'recalibrate';
 
+/** A rebindable global-hotkey action. */
+export type HotkeyAction = 'toggleOverlay' | 'pause' | 'recalibrate' | 'editOverlay';
+
+/** Electron accelerator string per action, e.g. { pause: "Alt+Shift+P" }. */
+export type HotkeyMap = Record<HotkeyAction, string>;
+
+/** Default global hotkeys (Electron accelerators). */
+export const DEFAULT_HOTKEYS: HotkeyMap = {
+  toggleOverlay: 'Alt+Shift+O',
+  pause: 'Alt+Shift+P',
+  recalibrate: 'Alt+Shift+R',
+  editOverlay: 'Alt+Shift+E',
+};
+
 /** A persisted region (structurally identical to the renderer's NormRegion). */
 export interface PersistedRegion {
   x: number;
@@ -50,6 +64,7 @@ export interface AppSettings {
   intervalMs?: number;
   quorum?: number;
   activePatch?: string;
+  hotkeys?: Partial<HotkeyMap>;
 }
 
 /** The typed, sandboxed API exposed to the renderer as `window.sco`. */
@@ -62,6 +77,8 @@ export interface ScoBridge {
   getSettings(): Promise<AppSettings>;
   /** Merge + persist settings to Electron userData (control window). */
   setSettings(patch: Partial<AppSettings>): void;
+  /** Re-register the global hotkeys and persist them. Returns ok-per-action. */
+  setHotkeys(map: HotkeyMap): Promise<Record<HotkeyAction, boolean>>;
   /** Control → overlay (relayed by main): push the latest matches. */
   sendMatches(payload: OverlayPayload): void;
   /** Overlay: receive pushed matches. Returns an unsubscribe fn. */

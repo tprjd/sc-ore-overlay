@@ -6,6 +6,8 @@ import type { IpcRendererEvent } from 'electron';
 import type {
   AppSettings,
   CaptureSource,
+  HotkeyAction,
+  HotkeyMap,
   OverlayCommand,
   OverlayPayload,
   ScoBridge,
@@ -17,6 +19,8 @@ const api: ScoBridge = {
   ping: () => 'pong',
   getSettings: () => ipcRenderer.invoke('sco:get-settings') as Promise<AppSettings>,
   setSettings: (patch) => ipcRenderer.send('sco:set-settings', patch),
+  setHotkeys: (map: HotkeyMap) =>
+    ipcRenderer.invoke('sco:set-hotkeys', map) as Promise<Record<HotkeyAction, boolean>>,
 
   sendMatches: (payload) => ipcRenderer.send('sco:matches', payload),
 

@@ -11,6 +11,8 @@ import type { NormRegion } from './preprocess';
 import type { LoopParams } from './useCaptureLoop';
 import { loadSignatureTable } from '../core';
 import type { SignatureTable } from '../core';
+import { DEFAULT_HOTKEYS } from '../shared/bridge';
+import type { HotkeyAction, HotkeyMap } from '../shared/bridge';
 
 // PP-OCR reads raw color text and localizes it, so there is nothing to tune but
 // the crop upscale and the loop cadence.
@@ -37,6 +39,8 @@ export function App() {
   const [params, setParams] = useState<LoopParams>(DEFAULT_PARAMS);
   const [activePatch, setActivePatch] = useState<string>(() => patches[0] ?? 'unknown');
   const [loaded, setLoaded] = useState(false);
+  const [hotkeys, setHotkeys] = useState<HotkeyMap>(DEFAULT_HOTKEYS);
+  const [hotkeyStatus, setHotkeyStatus] = useState<Partial<Record<HotkeyAction, boolean>>>({});
   const lastSource = useRef<{ id?: string; name?: string }>({});
 
   // Restore persisted settings once (Electron userData).
@@ -61,6 +65,7 @@ export function App() {
           quorum: s.quorum ?? prev.quorum,
         }));
         if (s.activePatch && tables[s.activePatch]) setActivePatch(s.activePatch);
+        if (s.hotkeys) setHotkeys({ ...DEFAULT_HOTKEYS, ...s.hotkeys });
         lastSource.current = { id: s.sourceId, name: s.sourceName };
       })
       .finally(finish);
@@ -96,6 +101,12 @@ export function App() {
     }
   };
 
+  const handleHotkeys = async (map: HotkeyMap): Promise<void> => {
+    setHotkeys(map);
+    const results = await window.sco?.setHotkeys?.(map);
+    if (results) setHotkeyStatus(results);
+  };
+
   const handleBack = (): void => {
     source?.stream?.getTracks().forEach((t) => t.stop());
     if (source?.imageUrl) URL.revokeObjectURL(source.imageUrl);
@@ -129,6 +140,9 @@ export function App() {
       patches={patches}
       activePatch={activePatch}
       onPatchChange={setActivePatch}
+      hotkeys={hotkeys}
+      hotkeyStatus={hotkeyStatus}
+      onHotkeysChange={handleHotkeys}
       onBack={handleBack}
     />
   );
