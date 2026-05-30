@@ -126,4 +126,6 @@ export interface ScoBridge {
   onOverlayConfig(cb: (config: OverlayConfig) => void): () => void;
   /** Overlay → main: resize the overlay window to the given content size. */
   resizeOverlay(size: { width: number; height: number }): void;
+  /** Overlay: receive a visibility toggle from a hotkey. Returns an unsubscribe fn. */
+  onToggleVisible(cb: () => void): () => void;
 }

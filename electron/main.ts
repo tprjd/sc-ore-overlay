@@ -179,12 +179,9 @@ function toCommand(command: OverlayCommand): void {
 
 function hotkeyHandlers(): Record<HotkeyAction, () => void> {
   return {
-    // Toggle overlay visibility.
-    toggleOverlay: () => {
-      if (!overlayWin) return;
-      if (overlayWin.isVisible()) overlayWin.hide();
-      else overlayWin.showInactive();
-    },
+    // Toggle overlay visibility (renderer-side flag — reliable and independent
+    // of the idle-fade and of transparent/always-on-top window quirks).
+    toggleOverlay: () => overlayWin?.webContents.send('sco:overlay-toggle'),
     // Pause/resume OCR (handled in the control window).
     pause: () => toCommand('pause'),
     // Re-enter calibration (clear the region) and surface the control window.

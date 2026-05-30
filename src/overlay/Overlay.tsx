@@ -32,6 +32,7 @@ export function Overlay() {
   const [editing, setEditing] = useState(false);
   const [idle, setIdle] = useState(true);
   const [config, setConfig] = useState<OverlayConfig>(DEFAULT_OVERLAY_CONFIG);
+  const [hidden, setHidden] = useState(false);
 
   const idleMsRef = useRef(DEFAULT_OVERLAY_CONFIG.idleMs);
   const idleTimer = useRef<number | null>(null);
@@ -64,11 +65,13 @@ export function Overlay() {
       setConfig(cfg);
       armIdle();
     });
+    const offToggle = sco.onToggleVisible(() => setHidden((h) => !h));
 
     return () => {
       offMatches();
       offEdit();
       offConfig();
+      offToggle();
       if (idleTimer.current) window.clearTimeout(idleTimer.current);
     };
   }, []);
@@ -91,7 +94,7 @@ export function Overlay() {
 
   const { reading, candidates } = payload;
   const sz = SCALE[config.scale];
-  const visible = editing || config.idleMs <= 0 || !idle;
+  const visible = editing || (!hidden && (config.idleMs <= 0 || !idle));
   const cardBg = hexToRgba(config.bgColor, config.bgOpacity);
 
   return (
