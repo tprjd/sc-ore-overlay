@@ -11,8 +11,8 @@ import type { NormRegion } from './preprocess';
 import type { LoopParams } from './useCaptureLoop';
 import { loadSignatureTable } from '../core';
 import type { SignatureTable } from '../core';
-import { DEFAULT_HOTKEYS } from '../shared/bridge';
-import type { HotkeyAction, HotkeyMap } from '../shared/bridge';
+import { DEFAULT_HOTKEYS, DEFAULT_OVERLAY_CONFIG } from '../shared/bridge';
+import type { HotkeyAction, HotkeyMap, OverlayConfig } from '../shared/bridge';
 
 // PP-OCR reads raw color text and localizes it, so there is nothing to tune but
 // the crop upscale and the loop cadence.
@@ -41,6 +41,7 @@ export function App() {
   const [loaded, setLoaded] = useState(false);
   const [hotkeys, setHotkeys] = useState<HotkeyMap>(DEFAULT_HOTKEYS);
   const [hotkeyStatus, setHotkeyStatus] = useState<Partial<Record<HotkeyAction, boolean>>>({});
+  const [overlayConfig, setOverlayConfig] = useState<OverlayConfig>(DEFAULT_OVERLAY_CONFIG);
   const lastSource = useRef<{ id?: string; name?: string }>({});
 
   // Restore persisted settings once (Electron userData).
@@ -66,6 +67,10 @@ export function App() {
         }));
         if (s.activePatch && tables[s.activePatch]) setActivePatch(s.activePatch);
         if (s.hotkeys) setHotkeys({ ...DEFAULT_HOTKEYS, ...s.hotkeys });
+        setOverlayConfig({
+          idleMs: s.overlayIdleMs ?? DEFAULT_OVERLAY_CONFIG.idleMs,
+          scale: s.overlayScale ?? DEFAULT_OVERLAY_CONFIG.scale,
+        });
         lastSource.current = { id: s.sourceId, name: s.sourceName };
       })
       .finally(finish);
@@ -107,6 +112,11 @@ export function App() {
     if (results) setHotkeyStatus(results);
   };
 
+  const handleOverlayConfig = (cfg: OverlayConfig): void => {
+    setOverlayConfig(cfg);
+    window.sco?.setOverlayConfig?.(cfg);
+  };
+
   const handleBack = (): void => {
     source?.stream?.getTracks().forEach((t) => t.stop());
     if (source?.imageUrl) URL.revokeObjectURL(source.imageUrl);
@@ -143,6 +153,8 @@ export function App() {
       hotkeys={hotkeys}
       hotkeyStatus={hotkeyStatus}
       onHotkeysChange={handleHotkeys}
+      overlayConfig={overlayConfig}
+      onOverlayConfigChange={handleOverlayConfig}
       onBack={handleBack}
     />
   );

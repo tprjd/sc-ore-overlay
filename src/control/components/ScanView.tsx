@@ -17,7 +17,7 @@ import type { DrawableSource, NormRegion } from '../preprocess';
 import type { PickedSource } from './SourcePicker';
 import { matchOre, groupLocations } from '../../core';
 import type { SignatureTable } from '../../core';
-import type { HotkeyAction, HotkeyMap } from '../../shared/bridge';
+import type { HotkeyAction, HotkeyMap, OverlayConfig, OverlayScale } from '../../shared/bridge';
 
 export interface ScanViewProps {
   source: PickedSource;
@@ -34,6 +34,8 @@ export interface ScanViewProps {
   hotkeys: HotkeyMap;
   hotkeyStatus: Partial<Record<HotkeyAction, boolean>>;
   onHotkeysChange: (map: HotkeyMap) => void;
+  overlayConfig: OverlayConfig;
+  onOverlayConfigChange: (config: OverlayConfig) => void;
   onBack: () => void;
 }
 
@@ -70,6 +72,8 @@ export function ScanView({
   hotkeys,
   hotkeyStatus,
   onHotkeysChange,
+  overlayConfig,
+  onOverlayConfigChange,
   onBack,
 }: ScanViewProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -336,6 +340,40 @@ export function ScanView({
               </div>
             ))}
             <p style={S.dim}>Click a binding, then press the combo (needs a modifier).</p>
+          </Section>
+
+          <Section title="Overlay">
+            <label style={S.selectRow}>
+              <span style={S.sliderLabel}>Fade after</span>
+              <select
+                style={S.select}
+                value={overlayConfig.idleMs}
+                onChange={(e) =>
+                  onOverlayConfigChange({ ...overlayConfig, idleMs: Number(e.target.value) })
+                }
+              >
+                <option value={5000}>5s</option>
+                <option value={10000}>10s</option>
+                <option value={30000}>30s</option>
+                <option value={60000}>60s</option>
+                <option value={0}>Never</option>
+              </select>
+            </label>
+            <label style={S.selectRow}>
+              <span style={S.sliderLabel}>Size</span>
+              <select
+                style={S.select}
+                value={overlayConfig.scale}
+                onChange={(e) =>
+                  onOverlayConfigChange({ ...overlayConfig, scale: e.target.value as OverlayScale })
+                }
+              >
+                <option value="compact">Compact</option>
+                <option value="normal">Normal</option>
+                <option value="large">Large</option>
+              </select>
+            </label>
+            <p style={S.dim}>Drag the overlay edges to resize it in edit mode (Alt+Shift+E).</p>
           </Section>
         </div>
       </div>

@@ -9,6 +9,7 @@ import type {
   HotkeyAction,
   HotkeyMap,
   OverlayCommand,
+  OverlayConfig,
   OverlayPayload,
   ScoBridge,
 } from '../src/shared/bridge';
@@ -40,6 +41,13 @@ const api: ScoBridge = {
     const handler = (_e: IpcRendererEvent, editing: boolean): void => cb(editing);
     ipcRenderer.on('sco:edit-mode', handler);
     return () => ipcRenderer.off('sco:edit-mode', handler);
+  },
+
+  setOverlayConfig: (config) => ipcRenderer.send('sco:overlay-config', config),
+  onOverlayConfig: (cb) => {
+    const handler = (_e: IpcRendererEvent, config: OverlayConfig): void => cb(config);
+    ipcRenderer.on('sco:overlay-config', handler);
+    return () => ipcRenderer.off('sco:overlay-config', handler);
   },
 };
 

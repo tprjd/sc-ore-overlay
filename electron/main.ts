@@ -16,6 +16,7 @@ import type {
   HotkeyAction,
   HotkeyMap,
   OverlayCommand,
+  OverlayConfig,
   OverlayPayload,
 } from '../src/shared/bridge';
 
@@ -72,6 +73,10 @@ ipcMain.handle('sco:get-settings', (): AppSettings => readSettings());
 ipcMain.on('sco:set-settings', (_e: IpcMainEvent, patch: Partial<AppSettings>) => {
   writeSettings({ ...readSettings(), ...patch });
 });
+ipcMain.on('sco:overlay-config', (_e: IpcMainEvent, config: OverlayConfig) => {
+  writeSettings({ ...readSettings(), overlayIdleMs: config.idleMs, overlayScale: config.scale });
+  overlayWin?.webContents.send('sco:overlay-config', config);
+});
 
 // --- Windows -----------------------------------------------------------------
 function loadPage(win: BrowserWindow, page: 'index' | 'overlay'): void {
@@ -105,14 +110,17 @@ function createControlWindow(): BrowserWindow {
 }
 
 function createOverlayWindow(): BrowserWindow {
+  const saved = readSettings().overlayBounds;
   const win = new BrowserWindow({
-    width: 320,
-    height: 180,
-    x: 40,
-    y: 40,
+    width: saved?.width ?? 320,
+    height: saved?.height ?? 180,
+    x: saved?.x ?? 40,
+    y: saved?.y ?? 40,
+    minWidth: 140,
+    minHeight: 70,
     transparent: true,
     frame: false,
-    resizable: false,
+    resizable: true,
     movable: true,
     alwaysOnTop: true,
     skipTaskbar: true,
@@ -130,6 +138,18 @@ function createOverlayWindow(): BrowserWindow {
   win.setAlwaysOnTop(true, 'screen-saver');
   win.setIgnoreMouseEvents(true, { forward: true });
   loadPage(win, 'overlay');
+
+  // Persist position/size (debounced) as the user drags/resizes in edit mode.
+  let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  const persistBounds = (): void => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      if (overlayWin) writeSettings({ ...readSettings(), overlayBounds: overlayWin.getBounds() });
+    }, 400);
+  };
+  win.on('move', persistBounds);
+  win.on('resize', persistBounds);
+
   win.on('closed', () => {
     overlayWin = null;
   });

@@ -91,7 +91,10 @@ window's **Hotkeys** panel — bindings persist):
 | `Alt+Shift+E` | Toggle "edit overlay" mode — drag the overlay to reposition, then press again to lock it back to click-through |
 
 The overlay passes all clicks through to the game except in edit mode, and only
-draws over **borderless/windowed** games (see above).
+draws over **borderless/windowed** games (see above). From the control window's
+**Overlay** panel, set the fade-out delay (or **Never**) and the size (compact /
+normal / large); resize the overlay by dragging its edges in edit mode. Position,
+size, and these settings persist.
 
 ## Settings
 

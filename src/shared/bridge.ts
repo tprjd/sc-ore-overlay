@@ -32,6 +32,19 @@ export interface OverlayPayload {
 /** Commands raised by global hotkeys in the main process. */
 export type OverlayCommand = 'pause' | 'recalibrate';
 
+/** Overlay text-size preset. */
+export type OverlayScale = 'compact' | 'normal' | 'large';
+
+/** Live-tunable overlay appearance. */
+export interface OverlayConfig {
+  /** Idle fade-out delay in ms; 0 = never fade. */
+  idleMs: number;
+  scale: OverlayScale;
+}
+
+/** Default overlay appearance. */
+export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = { idleMs: 10_000, scale: 'normal' };
+
 /** A rebindable global-hotkey action. */
 export type HotkeyAction = 'toggleOverlay' | 'pause' | 'recalibrate' | 'editOverlay';
 
@@ -65,6 +78,9 @@ export interface AppSettings {
   quorum?: number;
   activePatch?: string;
   hotkeys?: Partial<HotkeyMap>;
+  overlayIdleMs?: number;
+  overlayScale?: OverlayScale;
+  overlayBounds?: { x: number; y: number; width: number; height: number };
 }
 
 /** The typed, sandboxed API exposed to the renderer as `window.sco`. */
@@ -87,4 +103,8 @@ export interface ScoBridge {
   onCommand(cb: (command: OverlayCommand) => void): () => void;
   /** Overlay: receive edit-mode toggles from main. Returns an unsubscribe fn. */
   onEditMode(cb: (editing: boolean) => void): () => void;
+  /** Control → overlay (relayed by main): live appearance config (persisted). */
+  setOverlayConfig(config: OverlayConfig): void;
+  /** Overlay: receive appearance config. Returns an unsubscribe fn. */
+  onOverlayConfig(cb: (config: OverlayConfig) => void): () => void;
 }
