@@ -95,6 +95,8 @@ draws over **borderless/windowed** games (see above). From the control window's
 **Overlay** panel, set the fade-out delay (or **Never**), size (compact / normal
 / large), font, background color, opacity, padding, and line gap. In edit mode (`Alt+Shift+E`) drag
 to move and drag the corner grip to resize. Position, size, and settings persist.
+Enable **Show ore detail box** for a second window showing the matched ore's
+per-location quality breakdown — possible qualities, spread, and composition.
 
 ## Settings
 

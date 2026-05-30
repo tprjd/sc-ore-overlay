@@ -2,6 +2,8 @@
 // `electron` or DOM imports — so both the Node (main/preload) and browser
 // (renderer) TypeScript projects can reference it without leaking globals.
 
+import type { QualityDetail } from '../core/quality';
+
 /** A screen or window the user can capture, as enumerated by desktopCapturer. */
 export interface CaptureSource {
   /** desktopCapturer id, e.g. "screen:0:0" or "window:12345:0". */
@@ -21,12 +23,14 @@ export interface OverlayCandidate {
   score: number;
 }
 
-/** What the control window pushes to the overlay. */
+/** What the control window pushes to the overlay (relayed to both boxes). */
 export interface OverlayPayload {
   /** The accepted RS reading, or null when none is stable. */
   reading: number | null;
   /** Ranked candidates (best first); empty = no match. */
   candidates: OverlayCandidate[];
+  /** Quality detail for the top candidate (for the detail box); null = none. */
+  detail?: QualityDetail | null;
 }
 
 /** Commands raised by global hotkeys in the main process. */
@@ -54,6 +58,8 @@ export interface OverlayConfig {
   border: boolean;
   /** Show the "scanning…" / "no match" placeholder when there are no candidates. */
   showPlaceholder: boolean;
+  /** Show the second "ore detail" overlay box. */
+  showDetail: boolean;
 }
 
 /** Default overlay appearance. */
@@ -67,6 +73,7 @@ export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
   gap: 4,
   border: true,
   showPlaceholder: true,
+  showDetail: false,
 };
 
 /** A rebindable global-hotkey action. */
@@ -104,6 +111,7 @@ export interface AppSettings {
   hotkeys?: Partial<HotkeyMap>;
   overlay?: Partial<OverlayConfig>;
   overlayBounds?: { x: number; y: number; width: number; height: number };
+  detailBounds?: { x: number; y: number; width: number; height: number };
 }
 
 /** The typed, sandboxed API exposed to the renderer as `window.sco`. */
@@ -134,4 +142,6 @@ export interface ScoBridge {
   resizeOverlay(size: { width: number; height: number }): void;
   /** Overlay: receive a visibility toggle from a hotkey. Returns an unsubscribe fn. */
   onToggleVisible(cb: () => void): () => void;
+  /** Detail box → main: resize the detail window to the given content size. */
+  resizeDetail(size: { width: number; height: number }): void;
 }

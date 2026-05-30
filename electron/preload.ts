@@ -55,6 +55,7 @@ const api: ScoBridge = {
     ipcRenderer.on('sco:overlay-toggle', handler);
     return () => ipcRenderer.off('sco:overlay-toggle', handler);
   },
+  resizeDetail: (size) => ipcRenderer.send('sco:detail-resize', size),
 };
 
 contextBridge.exposeInMainWorld('sco', api);

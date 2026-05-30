@@ -25,6 +25,7 @@ import type {
   Clustering,
   Deposit,
   DepositLocation,
+  QualityMaterial,
   SignatureTable,
 } from '../src/core/types';
 
@@ -39,20 +40,36 @@ interface WikiClusterParam {
 interface WikiClustering {
   min_size?: number;
   max_size?: number;
+  probability?: number | null;
   params?: WikiClusterParam[] | null;
+}
+interface WikiMaterial {
+  name?: string;
+  min_percentage?: number | null;
+  max_percentage?: number | null;
+  quality_min?: number | null;
+  quality_max?: number | null;
+  quality_mean?: number | null;
+  quality_stddev?: number | null;
+  quality_quantized_values?: number[] | null;
+  instability?: number | null;
+  resistance?: number | null;
 }
 interface WikiResource {
   key?: string;
   label?: string;
   signature?: number | null;
   clustering?: WikiClustering | null;
+  materials?: WikiMaterial[] | null;
 }
 interface WikiLocation {
   name?: string;
   display_name?: string;
   system?: string;
+  type?: string;
   uuid?: string;
   group_probability?: number | null;
+  relative_probability?: number | null;
   resources?: WikiResource[] | null;
 }
 interface WikiCommodity {
@@ -172,6 +189,7 @@ interface RowAccumulator {
   commoditySignature?: number;
   commodityName?: string;
   resourceKey?: string;
+  materials: QualityMaterial[];
 }
 
 function toClustering(cl: WikiClustering): Clustering | null {
@@ -188,7 +206,29 @@ function toClustering(cl: WikiClustering): Clustering | null {
       maxSize: p.max_size,
       relativeProbability: p.relative_probability,
     }));
-  return { minSize: cl.min_size, maxSize: cl.max_size, params };
+  return {
+    minSize: cl.min_size,
+    maxSize: cl.max_size,
+    probability: typeof cl.probability === 'number' ? cl.probability : undefined,
+    params,
+  };
+}
+
+function toMaterials(materials: WikiMaterial[] | null | undefined): QualityMaterial[] {
+  return (materials ?? [])
+    .filter((m): m is WikiMaterial & { name: string } => typeof m.name === 'string')
+    .map((m) => ({
+      name: m.name,
+      minPercent: typeof m.min_percentage === 'number' ? m.min_percentage : 0,
+      maxPercent: typeof m.max_percentage === 'number' ? m.max_percentage : 0,
+      qualityMin: typeof m.quality_min === 'number' ? m.quality_min : 0,
+      qualityMax: typeof m.quality_max === 'number' ? m.quality_max : 0,
+      mean: typeof m.quality_mean === 'number' ? m.quality_mean : 0,
+      stddev: typeof m.quality_stddev === 'number' ? m.quality_stddev : 0,
+      quantized: Array.isArray(m.quality_quantized_values) ? m.quality_quantized_values : [],
+      instability: typeof m.instability === 'number' ? m.instability : 0,
+      resistance: typeof m.resistance === 'number' ? m.resistance : 0,
+    }));
 }
 
 /** Detect the current game patch label (e.g. "4.8.0") from the wiki API. */
@@ -271,6 +311,7 @@ async function main(): Promise<void> {
               typeof data.signature === 'number' ? data.signature : undefined,
             commodityName: data.name,
             resourceKey: res.key,
+            materials: toMaterials(res.materials),
           };
           rows.set(key, row);
         }
@@ -284,8 +325,11 @@ async function main(): Promise<void> {
             system: loc.system ?? 'Unknown System',
             name: locName,
             uuid: loc.uuid,
+            type: loc.type,
             probability:
               typeof loc.group_probability === 'number' ? loc.group_probability : 1,
+            occurrence:
+              typeof loc.relative_probability === 'number' ? loc.relative_probability : undefined,
           });
         }
       }
@@ -301,6 +345,7 @@ async function main(): Promise<void> {
     commoditySignature: r.commoditySignature,
     commodityName: r.commodityName,
     resourceKey: r.resourceKey,
+    materials: r.materials,
   }));
 
   if (!ALL_METHODS) deposits = deposits.filter((d) => d.methods.includes(METHOD));

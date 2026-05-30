@@ -5,11 +5,15 @@ export type {
   Clustering,
   DepositLocation,
   Deposit,
+  QualityMaterial,
   SignatureTable,
   MatchOptions,
   MatchContext,
   OreCandidate,
 } from './types';
+
+export { getQualityDetail } from './quality';
+export type { QualityDetail } from './quality';
 
 export { matchOre, clusterProb, DEFAULT_REL_TOL } from './matcher';
 

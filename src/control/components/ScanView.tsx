@@ -15,7 +15,7 @@ import { useCaptureLoop } from '../useCaptureLoop';
 import type { LoopParams } from '../useCaptureLoop';
 import type { DrawableSource, NormRegion } from '../preprocess';
 import type { PickedSource } from './SourcePicker';
-import { matchOre, groupLocations } from '../../core';
+import { matchOre, groupLocations, getQualityDetail } from '../../core';
 import type { SignatureTable } from '../../core';
 import type { HotkeyAction, HotkeyMap, OverlayConfig, OverlayScale } from '../../shared/bridge';
 
@@ -107,13 +107,17 @@ export function ScanView({
     [loop.stable, table, location],
   );
 
-  // Phase 3: push current matches to the overlay (no-op outside Electron).
+  // Push current matches + top-candidate quality detail to the overlay boxes
+  // (no-op outside Electron).
   useEffect(() => {
+    const top = matches[0];
+    const detail = top ? getQualityDetail(table, top.name, top.signature, location) : null;
     window.sco?.sendMatches?.({
       reading: loop.stable,
       candidates: matches.map((c) => ({ name: c.name, nodes: c.nodes, score: c.score })),
+      detail,
     });
-  }, [loop.stable, matches]);
+  }, [loop.stable, matches, table, location]);
 
   // Respond to global-hotkey commands relayed from the main process.
   useEffect(() => {
@@ -437,6 +441,16 @@ export function ScanView({
                 }
               />
               Show “scanning” placeholder
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginBottom: 8 }}>
+              <input
+                type="checkbox"
+                checked={overlayConfig.showDetail}
+                onChange={(e) =>
+                  onOverlayConfigChange({ ...overlayConfig, showDetail: e.target.checked })
+                }
+              />
+              Show ore detail box
             </label>
             <p style={S.dim}>In edit mode (Alt+Shift+E): drag to move, drag the corner grip to resize.</p>
           </Section>

@@ -24,8 +24,30 @@ export interface Clustering {
   minSize: number;
   /** Largest valid cluster size (inclusive). */
   maxSize: number;
+  /** Overall probability the deposit clusters (wiki clustering.probability, 0..1). */
+  probability?: number;
   /** Per-size probability buckets. May be empty (then treated as uniform). */
   params: ClusterParam[];
+}
+
+/** One material in a deposit's composition, with its quality distribution. */
+export interface QualityMaterial {
+  /** Material name, e.g. "Aluminum (Ore)". */
+  name: string;
+  /** Composition percentage range (min..max). */
+  minPercent: number;
+  maxPercent: number;
+  /** Quality value range, e.g. 245..490. */
+  qualityMin: number;
+  qualityMax: number;
+  /** Mean quality. */
+  mean: number;
+  /** Quality standard deviation. */
+  stddev: number;
+  /** Quantized quality values the scanner can report (the "Received" column). */
+  quantized: number[];
+  instability: number;
+  resistance: number;
 }
 
 /** A place a deposit spawns, merged across the build-time crawl. */
@@ -38,6 +60,10 @@ export interface DepositLocation {
   uuid?: string;
   /** Spawn weight for this location (wiki `group_probability`, 0..1). */
   probability: number;
+  /** Location type, e.g. "Asteroid". */
+  type?: string;
+  /** Occurrence weight at this location (wiki `relative_probability`, 0..1). */
+  occurrence?: number;
 }
 
 /**
@@ -64,6 +90,8 @@ export interface Deposit {
   commodityName?: string;
   /** Source resource key, e.g. "MineableRock_AsteroidCommon_Iron". */
   resourceKey?: string;
+  /** Material composition + per-material quality (for the detail view). */
+  materials?: QualityMaterial[];
 }
 
 /** The compact table the crawl writes and the renderer loads. */

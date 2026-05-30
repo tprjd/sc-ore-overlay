@@ -33,6 +33,7 @@ export default defineConfig({
       input: {
         index: resolvePath('index.html'),
         overlay: resolvePath('overlay.html'),
+        detail: resolvePath('detail.html'),
       },
     },
   },
