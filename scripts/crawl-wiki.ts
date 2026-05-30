@@ -71,6 +71,11 @@ interface WikiListResponse {
 interface WikiDetailResponse {
   data: WikiCommodity;
 }
+interface WikiGameVersion {
+  code: string;
+  channel?: string;
+  is_default?: boolean;
+}
 
 // ---------------------------------------------------------------------------
 // Config / CLI args
@@ -90,8 +95,8 @@ const getOpt = (name: string, fallback: string): string => {
   return hit ? hit.slice(name.length + 3) : fallback;
 };
 
-const PATCH = getOpt('patch', 'unknown');
-const OUT = path.resolve(repoRoot, getOpt('out', path.join('src', 'data', 'tables', `${PATCH}.json`)));
+const PATCH_ARG = getOpt('patch', ''); // empty → auto-detect from the API
+const OUT_ARG = getOpt('out', ''); // empty → src/data/tables/<patch>.json
 const METHOD = getOpt('method', 'Ship');
 const ALL_METHODS = hasFlag('all-methods');
 const REFRESH = hasFlag('refresh');
@@ -186,8 +191,30 @@ function toClustering(cl: WikiClustering): Clustering | null {
   return { minSize: cl.min_size, maxSize: cl.max_size, params };
 }
 
+/** Detect the current game patch label (e.g. "4.8.0") from the wiki API. */
+async function detectPatch(): Promise<string> {
+  try {
+    const resp = await cachedGet<{ data: WikiGameVersion[] }>(
+      `${API_BASE}/game-versions`,
+      'game-versions.json',
+    );
+    const versions = resp.data ?? [];
+    const current = versions.find((v) => v.is_default) ?? versions[0];
+    if (current?.code) return current.code.split('-')[0]; // "4.8.0-LIVE.x" → "4.8.0"
+  } catch {
+    // fall through to "unknown"
+  }
+  return 'unknown';
+}
+
 async function main(): Promise<void> {
   console.log(`Crawling ${API_BASE} (cache: ${REFRESH ? 'refresh' : 'on'})`);
+  const patch = PATCH_ARG || (await detectPatch());
+  const OUT = path.resolve(
+    repoRoot,
+    OUT_ARG || path.join('src', 'data', 'tables', `${patch}.json`),
+  );
+  console.log(`patch=${patch}`);
   const all = await listAllCommodities();
   const mineable = all.filter((c) => c.is_mineable === true);
 
@@ -280,7 +307,7 @@ async function main(): Promise<void> {
   deposits.sort((a, b) => a.name.localeCompare(b.name) || a.signature - b.signature);
 
   const table: SignatureTable = {
-    patch: PATCH,
+    patch,
     generatedAt: new Date().toISOString(),
     source: API_BASE,
     methodsIncluded: ALL_METHODS ? ['*'] : [METHOD],
@@ -294,7 +321,7 @@ async function main(): Promise<void> {
   console.log(
     `rows=${rows.size} deposits=${deposits.length} skippedResources=${skippedResources}`,
   );
-  console.log(`wrote ${path.relative(repoRoot, OUT)} (patch=${PATCH})`);
+  console.log(`wrote ${path.relative(repoRoot, OUT)} (patch=${patch})`);
 
   const distinctOres = new Set(deposits.map((d) => d.name)).size;
   console.log(`distinct ores=${distinctOres}`);

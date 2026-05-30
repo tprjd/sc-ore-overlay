@@ -1,6 +1,6 @@
 {
-  "patch": "unknown",
-  "generatedAt": "2026-05-30T18:12:17.293Z",
+  "patch": "4.8.0",
+  "generatedAt": "2026-05-30T20:23:50.574Z",
   "source": "https://api.star-citizen.wiki/api",
   "methodsIncluded": [
     "Ship"
