@@ -52,6 +52,8 @@ export interface OverlayConfig {
   gap: number;
   /** Show the card border. */
   border: boolean;
+  /** Show the "scanning…" / "no match" placeholder when there are no candidates. */
+  showPlaceholder: boolean;
 }
 
 /** Default overlay appearance. */
@@ -64,6 +66,7 @@ export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
   padding: 10,
   gap: 4,
   border: true,
+  showPlaceholder: true,
 };
 
 /** A rebindable global-hotkey action. */

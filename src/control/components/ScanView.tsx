@@ -297,7 +297,7 @@ export function ScanView({
             {loop.error && <div style={S.error}>{loop.error}</div>}
           </Section>
 
-          <Section title="Capture">
+          <Section title="Capture" defaultOpen={false}>
             <Slider
               label="Upscale"
               min={1}
@@ -328,7 +328,7 @@ export function ScanView({
             />
           </Section>
 
-          <Section title="Hotkeys">
+          <Section title="Hotkeys" defaultOpen={false}>
             {HOTKEY_ROWS.map(([action, label]) => (
               <div key={action} style={S.hotkeyRow}>
                 <span style={S.sliderLabel}>{label}</span>
@@ -342,7 +342,7 @@ export function ScanView({
             <p style={S.dim}>Click a binding, then press the combo (needs a modifier).</p>
           </Section>
 
-          <Section title="Overlay">
+          <Section title="Overlay" defaultOpen={false}>
             <label style={S.selectRow}>
               <span style={S.sliderLabel}>Fade after</span>
               <select
@@ -428,6 +428,16 @@ export function ScanView({
               />
               Border
             </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginBottom: 8 }}>
+              <input
+                type="checkbox"
+                checked={overlayConfig.showPlaceholder}
+                onChange={(e) =>
+                  onOverlayConfigChange({ ...overlayConfig, showPlaceholder: e.target.checked })
+                }
+              />
+              Show “scanning” placeholder
+            </label>
             <p style={S.dim}>In edit mode (Alt+Shift+E): drag to move, drag the corner grip to resize.</p>
           </Section>
         </div>
@@ -436,11 +446,23 @@ export function ScanView({
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({
+  title,
+  children,
+  defaultOpen = true,
+}: {
+  title: string;
+  children: ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <section style={S.section}>
-      <h2 style={S.h2}>{title}</h2>
-      {children}
+      <button type="button" style={S.sectionHeader} onClick={() => setOpen((o) => !o)}>
+        <span style={S.caret}>{open ? '▾' : '▸'}</span>
+        {title}
+      </button>
+      {open && children}
     </section>
   );
 }
@@ -581,6 +603,8 @@ const S: Record<string, CSSProperties> = {
   readoutMeta: { fontSize: 11, opacity: 0.55 },
   section: { marginBottom: 16 },
   h2: { fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.6, margin: '0 0 8px' },
+  sectionHeader: { display: 'flex', alignItems: 'center', gap: 6, width: '100%', background: 'none', border: 'none', padding: 0, margin: '0 0 8px', cursor: 'pointer', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5, color: '#e6e6e6', opacity: 0.65, textAlign: 'left' },
+  caret: { fontSize: 10, width: 10, display: 'inline-block' },
   debugRow: { display: 'flex', gap: 10, alignItems: 'flex-start' },
   cropWrap: {
     minWidth: 120,

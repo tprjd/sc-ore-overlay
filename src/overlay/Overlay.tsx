@@ -94,7 +94,8 @@ export function Overlay() {
 
   const { reading, candidates } = payload;
   const sz = SCALE[config.scale];
-  const visible = editing || (!hidden && (config.idleMs <= 0 || !idle));
+  const hasContent = candidates.length > 0 || config.showPlaceholder;
+  const visible = editing || (!hidden && hasContent && (config.idleMs <= 0 || !idle));
   const cardBg = hexToRgba(config.bgColor, config.bgOpacity);
 
   return (
@@ -120,11 +121,11 @@ export function Overlay() {
               <span style={{ ...S.nodes, fontSize: sz.font }}>×{c.nodes}</span>
             </div>
           ))
-        ) : (
+        ) : config.showPlaceholder ? (
           <div style={{ ...S.muted, fontSize: sz.muted }}>
             {reading != null ? `${reading} — no match` : 'scanning…'}
           </div>
-        )}
+        ) : null}
       </div>
       {editing && (
         <div style={GRIP} onPointerDown={onGripDown} onPointerMove={onGripMove} onPointerUp={onGripUp} />
