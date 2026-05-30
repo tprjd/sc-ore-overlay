@@ -404,6 +404,22 @@ export function ScanView({
               onChange={(v) => onOverlayConfigChange({ ...overlayConfig, bgOpacity: v / 100 })}
               suffix="%"
             />
+            <Slider
+              label="Padding"
+              min={0}
+              max={40}
+              value={overlayConfig.padding}
+              onChange={(v) => onOverlayConfigChange({ ...overlayConfig, padding: v })}
+              suffix=" px"
+            />
+            <Slider
+              label="Line gap"
+              min={0}
+              max={24}
+              value={overlayConfig.gap}
+              onChange={(v) => onOverlayConfigChange({ ...overlayConfig, gap: v })}
+              suffix=" px"
+            />
             <p style={S.dim}>In edit mode (Alt+Shift+E): drag to move, drag the corner grip to resize.</p>
           </Section>
         </div>

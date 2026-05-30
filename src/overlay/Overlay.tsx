@@ -1,9 +1,9 @@
 // The transparent, click-through overlay. Receives matches over IPC and renders
 // "Ore ×N" (stacked on overlap). Appearance (idle fade, size preset, font,
-// background color + opacity) is live-configurable from the control window. In
-// "edit overlay" mode the window is interactive: drag to move, and drag the
-// bottom-right grip to resize (reliable on frameless/transparent windows where
-// OS edge-resize often isn't).
+// background color + opacity, padding, line gap) is live-configurable from the
+// control window. In "edit overlay" mode the window is interactive: drag the
+// body to move, drag the bottom-right grip to resize. The drag bar is an overlay
+// (out of layout flow) so toggling edit mode never resizes the content.
 
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
@@ -12,11 +12,11 @@ import type { OverlayConfig, OverlayPayload, OverlayScale } from '../shared/brid
 
 const EMPTY: OverlayPayload = { reading: null, candidates: [] };
 
-/** Per-preset sizing. */
-const SCALE: Record<OverlayScale, { font: number; gap: number; pad: number; muted: number }> = {
-  compact: { font: 15, gap: 6, pad: 8, muted: 12 },
-  normal: { font: 22, gap: 12, pad: 12, muted: 14 },
-  large: { font: 32, gap: 18, pad: 16, muted: 18 },
+/** Font sizes per preset (padding + gap come from config). */
+const SCALE: Record<OverlayScale, { font: number; muted: number }> = {
+  compact: { font: 15, muted: 12 },
+  normal: { font: 22, muted: 14 },
+  large: { font: 32, muted: 18 },
 };
 
 /** "#rrggbb" + alpha → "rgba(r,g,b,a)". */
@@ -73,7 +73,6 @@ export function Overlay() {
     };
   }, []);
 
-  // Resize grip → drive the window size from pointer drag (screen-space deltas).
   const onGripDown = (e: ReactPointerEvent<HTMLDivElement>): void => {
     e.currentTarget.setPointerCapture(e.pointerId);
     resizeStart.current = { x: e.screenX, y: e.screenY, w: window.innerWidth, h: window.innerHeight };
@@ -97,13 +96,10 @@ export function Overlay() {
 
   return (
     <div style={{ ...S.root, opacity: visible ? 1 : 0, fontFamily: config.fontFamily }}>
-      {editing && <div style={DRAG}>⠿ drag to move · grip to resize · Alt+Shift+E to lock</div>}
-      <div
-        style={{ ...S.card, padding: sz.pad, gap: sz.gap, background: cardBg, ...(editing ? S.cardEditing : null) }}
-      >
+      <div style={{ ...S.card, padding: config.padding, gap: config.gap, background: cardBg, ...(editing ? S.cardEditing : null) }}>
         {candidates.length > 0 ? (
           candidates.map((c, i) => (
-            <div key={c.name} style={{ ...S.row, gap: sz.gap, opacity: i === 0 ? 1 : 0.85 }}>
+            <div key={c.name} style={{ ...S.row, opacity: i === 0 ? 1 : 0.85 }}>
               <span style={{ ...S.name, fontSize: sz.font }}>{c.name}</span>
               <span style={{ ...S.nodes, fontSize: sz.font }}>×{c.nodes}</span>
             </div>
@@ -114,35 +110,36 @@ export function Overlay() {
           </div>
         )}
       </div>
+      {editing && <div style={DRAG}>⠿ drag to move · grip to resize · Alt+Shift+E to lock</div>}
       {editing && (
-        <div
-          style={GRIP}
-          onPointerDown={onGripDown}
-          onPointerMove={onGripMove}
-          onPointerUp={onGripUp}
-        />
+        <div style={GRIP} onPointerDown={onGripDown} onPointerMove={onGripMove} onPointerUp={onGripUp} />
       )}
     </div>
   );
 }
 
-// `-webkit-app-region` isn't typed on React.CSSProperties — cast.
+// `-webkit-app-region` isn't typed on React.CSSProperties — cast. The drag bar
+// is absolutely positioned so it never affects the card's height.
 const DRAG = {
   WebkitAppRegion: 'drag',
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  right: 0,
   fontSize: 11,
   color: '#9fb3c8',
-  background: 'rgba(13,15,18,0.85)',
+  background: 'rgba(13,15,18,0.9)',
   padding: '3px 8px',
   borderRadius: 6,
   textAlign: 'center',
-  flex: '0 0 auto',
+  boxSizing: 'border-box',
 } as unknown as CSSProperties;
 
 const GRIP = {
   WebkitAppRegion: 'no-drag',
   position: 'absolute',
-  right: 2,
-  bottom: 2,
+  right: 1,
+  bottom: 1,
   width: 16,
   height: 16,
   cursor: 'nwse-resize',
@@ -157,26 +154,22 @@ const S: Record<string, CSSProperties> = {
     width: '100%',
     height: '100%',
     boxSizing: 'border-box',
-    padding: 6,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 6,
-    transition: 'opacity 400ms ease',
+    overflow: 'hidden',
   },
   card: {
-    flex: 1,
-    minHeight: 0,
+    width: '100%',
+    height: '100%',
     border: '1px solid rgba(79,209,255,0.25)',
     borderRadius: 10,
     display: 'flex',
     flexDirection: 'column',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     overflow: 'hidden',
     backdropFilter: 'blur(2px)',
     boxSizing: 'border-box',
   },
   cardEditing: { border: '1px dashed rgba(79,209,255,0.8)' },
-  row: { display: 'flex', alignItems: 'baseline', lineHeight: 1.3, minWidth: 0 },
+  row: { display: 'flex', alignItems: 'baseline', lineHeight: 1.1, minWidth: 0 },
   name: {
     fontWeight: 700,
     color: '#fff',

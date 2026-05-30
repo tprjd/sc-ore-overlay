@@ -46,6 +46,10 @@ export interface OverlayConfig {
   bgColor: string;
   /** Card background opacity, 0..1. */
   bgOpacity: number;
+  /** Card inner padding in px. */
+  padding: number;
+  /** Vertical gap between lines in px. */
+  gap: number;
 }
 
 /** Default overlay appearance. */
@@ -55,6 +59,8 @@ export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
   fontFamily: 'system-ui, sans-serif',
   bgColor: '#0d0f12',
   bgOpacity: 0.55,
+  padding: 10,
+  gap: 4,
 };
 
 /** A rebindable global-hotkey action. */
