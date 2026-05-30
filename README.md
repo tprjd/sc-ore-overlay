@@ -25,9 +25,10 @@ shows all of them.
 
 ## Stack
 
-TypeScript (strict) · Electron · React · Vite · Tesseract.js (digit OCR) ·
-Vitest · electron-builder. See `CLAUDE.md` for the locked stack and domain notes,
-and `TASKS.md` for the phased build plan.
+TypeScript (strict) · Electron · React · Vite · **PP-OCR** (PaddleOCR detection +
+recognition via `@gutenye/ocr-browser` on ONNX Runtime Web) · Vitest ·
+electron-builder. See `CLAUDE.md` for the locked stack and domain notes, and
+`TASKS.md` for the phased build plan.
 
 ## Scripts
 
@@ -35,7 +36,8 @@ and `TASKS.md` for the phased build plan.
 | --- | --- |
 | `npm run dev` | Vite + Electron in development. |
 | `npm run build` | Build the renderer + Electron main/preload. |
-| `npm test` | Run the Vitest suite (matcher, validator, table). |
+| `npm run setup:models` | Copy PP-OCR models from `@gutenye/ocr-models` into `public/models` (auto-run by dev/build). |
+| `npm test` | Run the Vitest suite (matcher, validator, table, image, parse). |
 | `npm run typecheck` | Type-check the browser and Node projects. |
 | `npm run crawl` | Build-time crawl of the SC Wiki API → `src/data/signatures.json`. |
 | `npm run dist` | Package a Windows build with electron-builder. |
@@ -56,6 +58,16 @@ npm run crawl -- --all-methods # keep every mining method (Phase 5)
 
 The crawl is throttled, cached under `.cache/`, and sends a descriptive
 User-Agent. It is **never** called on the per-scan hot path.
+
+### Reading the number (OCR)
+
+The RS number is read with **PP-OCR** (PaddleOCR detection + recognition) on ONNX
+Runtime Web, in the renderer. You draw a *rough* box over the number; text
+detection localizes the digits inside it (ignoring the pin icon / padding) and
+reads the raw HUD text on any background — no threshold tuning. Models ship in
+the `@gutenye/ocr-models` dependency and are copied into `public/models` at
+dev/build time (`setup:models`); the ONNX Runtime WASM is fetched from a CDN in
+dev (bundled for offline use when packaging).
 
 ## Requirement: run Star Citizen in borderless windowed mode
 

@@ -26,12 +26,22 @@ always-on-top, click-through overlay while the user plays.
 - **Shell:** Electron. This is non-negotiable — it's the only practical way to get a click-through,
   always-on-top overlay over a game plus Chromium screen capture in one app.
 - **UI:** React.
-- **OCR:** Tesseract.js (WASM, runs in the renderer; digit-only recognition).
+- **OCR:** **PP-OCR** (PaddleOCR detection + recognition models) via **@gutenye/ocr-browser** on
+  ONNX Runtime Web (WASM, runs in the renderer). The user draws a *rough* region; PP-OCR's text
+  **detection** localizes the digits inside it (ignoring the pin icon / padding) and **recognition**
+  reads the **raw color** text on any background — no binarization or threshold tuning. The detected
+  line whose whitespace token holds the most digits is taken as the reading (see `bestReading`).
+  (Chosen after both Tesseract.js and a small TrOCR model misread the stylized HUD font and broke on
+  imperfect crops; PP-OCR verified reading "17,080" at 0.99 on sloppy real crops. The RS number is
+  always white but the chip background color varies — PP-OCR handles that natively. Models are
+  bundled under `public/models`.)
 - **Bundler/dev:** Vite (with a Vite↔Electron integration plugin).
 - **Tests:** Vitest.
 - **Packaging:** electron-builder (target Windows; Star Citizen is Windows-only).
 
-Do not introduce a different framework, a native OCR binary, or a different overlay mechanism. If
+Do not introduce a different UI framework, a native OCR binary, a cloud OCR service, or a different
+overlay mechanism. OCR is locked to **PP-OCR via @gutenye/ocr-browser on ONNX Runtime Web** (WASM,
+in-renderer) after Tesseract.js and a small TrOCR model both proved unreliable on the HUD font. If
 you believe a locked choice genuinely cannot work, stop and flag it rather than swapping silently.
 
 ---
@@ -114,8 +124,10 @@ location filter, method filter, OCR-jitter tolerance, and no-match.
   under a path the renderer can load.
 - **`src/core/`** — pure, framework-free logic: data types, the matcher, a validator
   (plausibility + N-frame temporal voting to kill OCR flicker), table loader + location grouping.
-  Plus renderer-only helpers: canvas preprocessing (crop→upscale→grayscale→threshold) and the
-  Tesseract wrapper.
+  Plus renderer-only helpers: a crop+upscale step (`src/control/preprocess.ts`) and the OCR wrapper
+  (`src/control/ocr.ts`, PP-OCR via @gutenye/ocr-browser). PP-OCR reads the raw color crop and
+  localizes the digits, so no binarization is needed; `bestReading` in `src/core/parse.ts` picks the
+  digit run from the detected lines.
 - **`src/control/`** — control window UI: capture-source picker, region picker (drag a box, store
   **normalized** 0..1 coords), location dropdown (System → location, plus "Anywhere"), and the loop
   that ties capture → preprocess → OCR → validate → match → push-to-overlay.
@@ -141,9 +153,10 @@ mode. Capture frames ~every 0.5–1s (not 60fps); skip OCR when the cropped regi
 ## Two human-in-the-loop checkpoints — build, then STOP and ask
 
 These cannot be completed autonomously. Build the mechanism, then request what you need:
-- **OCR threshold tuning (Phase 1):** the binarization constants depend on the user's actual HUD,
-  resolution, and colors. Build a tuning/debug view, then ask the human for real screenshots and
-  iterate. Do not claim it works without confirmed reads on real images.
+- **OCR verification (Phase 1):** PP-OCR needs no threshold tuning, but reads must be confirmed on
+  the user's real HUD. Build the debug view, then ask the human for real screenshots / an in-app run
+  and confirm all digits 0–9 read correctly across background colors. Do not claim it works without
+  confirmed reads on real images.
 - **Overlay-over-game behavior (Phase 3):** always-on-top + click-through over a running game is
   OS/version sensitive. Implement it, then ask the human to confirm in-game and note any
   platform-specific tweaks.

@@ -29,3 +29,9 @@ export type {
 
 export { loadSignatureTable, groupLocations } from './table';
 export type { SystemGroup } from './table';
+
+export { binarize, hashPixels, luminance } from './image';
+export type { PixelBuffer, BinarizeParams } from './image';
+
+export { parseReading, bestReading } from './parse';
+export type { OcrCandidate } from './parse';

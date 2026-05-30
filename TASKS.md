@@ -46,11 +46,13 @@ verified domain knowledge, and the matcher spec live there.
   Citizen window/screen; render a still frame.
 - Region picker: user drags a rectangle over the RS number; store it as **normalized** (0..1)
   coordinates so it survives resolution changes.
-- Capture loop: sample a frame every ~0.5–1s, crop to the region, preprocess
-  (upscale → grayscale → threshold, optional invert), and OCR with Tesseract.js **restricted to
-  digits**. Skip OCR when the cropped region is unchanged.
-- Add a visible **debug view** showing the binarized crop + raw OCR text + parsed value, so
-  threshold tuning is observable.
+- Capture loop: sample a frame every ~0.5–1s, crop+upscale the region, and run **PP-OCR**
+  (detection + recognition, @gutenye/ocr-browser on ONNX Runtime Web) on the raw color crop; take
+  the detected line whose token has the most digits as the reading. Skip OCR when the cropped region
+  is unchanged. (Models bundled under `public/models`; the ONNX Runtime WASM loads from a CDN in dev
+  — bundling it for offline use is deferred to Phase 4.)
+- Add a visible **debug view** showing the crop + PP-OCR's detected lines + the parsed value, so
+  reads are observable.
 
 **Acceptance**
 - Given a real SC scanner screenshot with a known RS value, the control window reads that exact

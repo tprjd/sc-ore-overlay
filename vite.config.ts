@@ -8,6 +8,8 @@ import electron from 'vite-plugin-electron';
 export default defineConfig({
   plugins: [
     react(),
+    // Package is CommonJS, so the plugin emits CJS main + preload (a sandboxed
+    // preload must be CommonJS). The renderer is still bundled as ESM by Vite.
     electron([
       { entry: 'electron/main.ts' },
       {
@@ -16,4 +18,12 @@ export default defineConfig({
       },
     ]),
   ],
+  // Pre-bundle @gutenye/ocr-browser so its CommonJS deps (e.g. js-clipper) get
+  // proper ESM-default interop. Keep onnxruntime-web out (it ships WASM) and
+  // deduped, so we can set its wasm paths from a single instance.
+  optimizeDeps: {
+    include: ['@gutenye/ocr-browser'],
+    exclude: ['onnxruntime-web'],
+  },
+  resolve: { dedupe: ['onnxruntime-web'] },
 });

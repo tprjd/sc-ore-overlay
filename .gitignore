@@ -6,3 +6,11 @@ release/
 .cache/
 *.log
 .DS_Store
+
+# PP-OCR models — copied from @gutenye/ocr-models at predev/prebuild
+public/models/
+
+# local debug + plugin artifacts (not project source)
+screenshot/
+.agents/
+skills-lock.json

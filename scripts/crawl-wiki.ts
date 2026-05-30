@@ -19,7 +19,6 @@
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import type {
   ClusterParam,
@@ -80,8 +79,8 @@ const API_BASE = 'https://api.star-citizen.wiki/api';
 const USER_AGENT =
   'sc-ore-overlay/0.1 (build-time signature crawler; +https://api.star-citizen.wiki)';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.join(here, '..');
+// npm scripts run with the package root as cwd.
+const repoRoot = process.cwd();
 const CACHE_DIR = path.join(repoRoot, '.cache', 'wiki');
 
 const argv = process.argv.slice(2);

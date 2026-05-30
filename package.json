@@ -2,13 +2,15 @@
   "name": "sc-ore-overlay",
   "private": true,
   "version": "0.1.0",
-  "type": "module",
   "description": "Non-obstructive desktop overlay that identifies Star Citizen ship-mining ores from the scanner Radar Signature (RS) reading.",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "setup:models": "node scripts/copy-models.mjs",
+    "predev": "npm run setup:models",
+    "prebuild": "npm run setup:models",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -16,9 +18,10 @@
     "dist": "npm run build && electron-builder"
   },
   "dependencies": {
+    "@gutenye/ocr-browser": "^1.4.8",
+    "onnxruntime-web": "^1.17.3",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "tesseract.js": "^5.1.1"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
