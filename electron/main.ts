@@ -31,6 +31,7 @@ app.disableHardwareAcceleration();
 let controlWin: BrowserWindow | null = null;
 let overlayWin: BrowserWindow | null = null;
 let detailWin: BrowserWindow | null = null;
+let ownerWin: BrowserWindow | null = null;
 let editing = false;
 
 /** The transparent boxes (overlay + detail) that currently exist. */
@@ -99,6 +100,25 @@ function loadPage(win: BrowserWindow, page: 'index' | 'overlay' | 'detail'): voi
   }
 }
 
+function createOwnerWindow(): BrowserWindow {
+  // Hidden owner: the overlay boxes are parented to it so Windows treats them as
+  // owned tool windows and excludes them from the Alt+Tab switcher. It's never
+  // shown, so minimizing the control window doesn't hide the overlays.
+  const win = new BrowserWindow({
+    width: 1,
+    height: 1,
+    show: false,
+    frame: false,
+    skipTaskbar: true,
+    focusable: false,
+    transparent: true,
+  });
+  win.on('closed', () => {
+    ownerWin = null;
+  });
+  return win;
+}
+
 function createControlWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1100,
@@ -138,6 +158,7 @@ function createOverlayWindow(): BrowserWindow {
     focusable: false,
     hasShadow: false,
     fullscreenable: false,
+    parent: ownerWin ?? undefined,
     webPreferences: {
       preload: PRELOAD,
       contextIsolation: true,
@@ -185,6 +206,7 @@ function createDetailWindow(): BrowserWindow {
     focusable: false,
     hasShadow: false,
     fullscreenable: false,
+    parent: ownerWin ?? undefined,
     webPreferences: {
       preload: PRELOAD,
       contextIsolation: true,
@@ -279,6 +301,7 @@ ipcMain.handle(
 
 void app.whenReady().then(() => {
   controlWin = createControlWindow();
+  ownerWin = createOwnerWindow();
   overlayWin = createOverlayWindow();
   detailWin = createDetailWindow();
   applyHotkeys(currentHotkeys());
@@ -286,6 +309,7 @@ void app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       controlWin = createControlWindow();
+      ownerWin = createOwnerWindow();
       overlayWin = createOverlayWindow();
       detailWin = createDetailWindow();
     }
