@@ -40,10 +40,22 @@ export interface OverlayConfig {
   /** Idle fade-out delay in ms; 0 = never fade. */
   idleMs: number;
   scale: OverlayScale;
+  /** CSS font-family for the overlay text. */
+  fontFamily: string;
+  /** Card background color (hex, e.g. "#0d0f12"). */
+  bgColor: string;
+  /** Card background opacity, 0..1. */
+  bgOpacity: number;
 }
 
 /** Default overlay appearance. */
-export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = { idleMs: 10_000, scale: 'normal' };
+export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
+  idleMs: 10_000,
+  scale: 'normal',
+  fontFamily: 'system-ui, sans-serif',
+  bgColor: '#0d0f12',
+  bgOpacity: 0.55,
+};
 
 /** A rebindable global-hotkey action. */
 export type HotkeyAction = 'toggleOverlay' | 'pause' | 'recalibrate' | 'editOverlay';
@@ -78,8 +90,7 @@ export interface AppSettings {
   quorum?: number;
   activePatch?: string;
   hotkeys?: Partial<HotkeyMap>;
-  overlayIdleMs?: number;
-  overlayScale?: OverlayScale;
+  overlay?: Partial<OverlayConfig>;
   overlayBounds?: { x: number; y: number; width: number; height: number };
 }
 
@@ -107,4 +118,6 @@ export interface ScoBridge {
   setOverlayConfig(config: OverlayConfig): void;
   /** Overlay: receive appearance config. Returns an unsubscribe fn. */
   onOverlayConfig(cb: (config: OverlayConfig) => void): () => void;
+  /** Overlay → main: resize the overlay window to the given content size. */
+  resizeOverlay(size: { width: number; height: number }): void;
 }

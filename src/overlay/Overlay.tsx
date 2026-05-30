@@ -1,10 +1,12 @@
 // The transparent, click-through overlay. Receives matches over IPC and renders
-// "Ore ×N" (stacked on overlap). Appearance (idle fade-out delay + size preset)
-// is live-configurable from the control window; the window itself is resizable
-// (drag the edges in "edit overlay" mode) and the card fills it.
+// "Ore ×N" (stacked on overlap). Appearance (idle fade, size preset, font,
+// background color + opacity) is live-configurable from the control window. In
+// "edit overlay" mode the window is interactive: drag to move, and drag the
+// bottom-right grip to resize (reliable on frameless/transparent windows where
+// OS edge-resize often isn't).
 
 import { useEffect, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { DEFAULT_OVERLAY_CONFIG } from '../shared/bridge';
 import type { OverlayConfig, OverlayPayload, OverlayScale } from '../shared/bridge';
 
@@ -17,6 +19,14 @@ const SCALE: Record<OverlayScale, { font: number; gap: number; pad: number; mute
   large: { font: 32, gap: 18, pad: 16, muted: 18 },
 };
 
+/** "#rrggbb" + alpha → "rgba(r,g,b,a)". */
+function hexToRgba(hex: string, alpha: number): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return `rgba(13,15,18,${alpha})`;
+  const n = Number.parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
 export function Overlay() {
   const [payload, setPayload] = useState<OverlayPayload>(EMPTY);
   const [editing, setEditing] = useState(false);
@@ -25,12 +35,12 @@ export function Overlay() {
 
   const idleMsRef = useRef(DEFAULT_OVERLAY_CONFIG.idleMs);
   const idleTimer = useRef<number | null>(null);
+  const resizeStart = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
 
   useEffect(() => {
     const sco = window.sco;
     if (!sco) return;
 
-    // (Re)start the idle timer using the latest configured delay.
     const armIdle = (): void => {
       if (idleTimer.current) window.clearTimeout(idleTimer.current);
       setIdle(false);
@@ -39,10 +49,7 @@ export function Overlay() {
     };
 
     void sco.getSettings().then((s) => {
-      const cfg: OverlayConfig = {
-        idleMs: s.overlayIdleMs ?? DEFAULT_OVERLAY_CONFIG.idleMs,
-        scale: s.overlayScale ?? DEFAULT_OVERLAY_CONFIG.scale,
-      };
+      const cfg: OverlayConfig = { ...DEFAULT_OVERLAY_CONFIG, ...(s.overlay ?? {}) };
       idleMsRef.current = cfg.idleMs;
       setConfig(cfg);
     });
@@ -66,15 +73,34 @@ export function Overlay() {
     };
   }, []);
 
+  // Resize grip → drive the window size from pointer drag (screen-space deltas).
+  const onGripDown = (e: ReactPointerEvent<HTMLDivElement>): void => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    resizeStart.current = { x: e.screenX, y: e.screenY, w: window.innerWidth, h: window.innerHeight };
+  };
+  const onGripMove = (e: ReactPointerEvent<HTMLDivElement>): void => {
+    const start = resizeStart.current;
+    if (!start) return;
+    window.sco?.resizeOverlay?.({
+      width: Math.max(140, start.w + (e.screenX - start.x)),
+      height: Math.max(70, start.h + (e.screenY - start.y)),
+    });
+  };
+  const onGripUp = (): void => {
+    resizeStart.current = null;
+  };
+
   const { reading, candidates } = payload;
   const sz = SCALE[config.scale];
-  // Never fade when idleMs <= 0; otherwise fade once idle (unless editing).
   const visible = editing || config.idleMs <= 0 || !idle;
+  const cardBg = hexToRgba(config.bgColor, config.bgOpacity);
 
   return (
-    <div style={{ ...S.root, opacity: visible ? 1 : 0 }}>
-      {editing && <div style={DRAG}>⠿ drag to move · resize edges · Alt+Shift+E to lock</div>}
-      <div style={{ ...S.card, padding: sz.pad, gap: sz.gap, ...(editing ? S.cardEditing : null) }}>
+    <div style={{ ...S.root, opacity: visible ? 1 : 0, fontFamily: config.fontFamily }}>
+      {editing && <div style={DRAG}>⠿ drag to move · grip to resize · Alt+Shift+E to lock</div>}
+      <div
+        style={{ ...S.card, padding: sz.pad, gap: sz.gap, background: cardBg, ...(editing ? S.cardEditing : null) }}
+      >
         {candidates.length > 0 ? (
           candidates.map((c, i) => (
             <div key={c.name} style={{ ...S.row, gap: sz.gap, opacity: i === 0 ? 1 : 0.85 }}>
@@ -88,13 +114,19 @@ export function Overlay() {
           </div>
         )}
       </div>
+      {editing && (
+        <div
+          style={GRIP}
+          onPointerDown={onGripDown}
+          onPointerMove={onGripMove}
+          onPointerUp={onGripUp}
+        />
+      )}
     </div>
   );
 }
 
-// `-webkit-app-region: drag` moves the frameless window (only reachable in edit
-// mode, when the window is interactive). Cast because React.CSSProperties
-// doesn't type the non-standard property.
+// `-webkit-app-region` isn't typed on React.CSSProperties — cast.
 const DRAG = {
   WebkitAppRegion: 'drag',
   fontSize: 11,
@@ -106,8 +138,22 @@ const DRAG = {
   flex: '0 0 auto',
 } as unknown as CSSProperties;
 
+const GRIP = {
+  WebkitAppRegion: 'no-drag',
+  position: 'absolute',
+  right: 2,
+  bottom: 2,
+  width: 16,
+  height: 16,
+  cursor: 'nwse-resize',
+  borderRight: '3px solid rgba(79,209,255,0.9)',
+  borderBottom: '3px solid rgba(79,209,255,0.9)',
+  borderBottomRightRadius: 6,
+} as unknown as CSSProperties;
+
 const S: Record<string, CSSProperties> = {
   root: {
+    position: 'relative',
     width: '100%',
     height: '100%',
     boxSizing: 'border-box',
@@ -120,7 +166,6 @@ const S: Record<string, CSSProperties> = {
   card: {
     flex: 1,
     minHeight: 0,
-    background: 'rgba(13,15,18,0.55)',
     border: '1px solid rgba(79,209,255,0.25)',
     borderRadius: 10,
     display: 'flex',

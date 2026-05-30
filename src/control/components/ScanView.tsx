@@ -373,7 +373,38 @@ export function ScanView({
                 <option value="large">Large</option>
               </select>
             </label>
-            <p style={S.dim}>Drag the overlay edges to resize it in edit mode (Alt+Shift+E).</p>
+            <label style={S.selectRow}>
+              <span style={S.sliderLabel}>Font</span>
+              <select
+                style={S.select}
+                value={overlayConfig.fontFamily}
+                onChange={(e) => onOverlayConfigChange({ ...overlayConfig, fontFamily: e.target.value })}
+              >
+                <option value="system-ui, sans-serif">System</option>
+                <option value="'Segoe UI', sans-serif">Segoe UI</option>
+                <option value="Arial, sans-serif">Arial</option>
+                <option value="Georgia, serif">Georgia</option>
+                <option value="'Courier New', ui-monospace, monospace">Monospace</option>
+              </select>
+            </label>
+            <label style={S.selectRow}>
+              <span style={S.sliderLabel}>Background</span>
+              <input
+                type="color"
+                style={S.color}
+                value={overlayConfig.bgColor}
+                onChange={(e) => onOverlayConfigChange({ ...overlayConfig, bgColor: e.target.value })}
+              />
+            </label>
+            <Slider
+              label="Opacity"
+              min={0}
+              max={100}
+              value={Math.round(overlayConfig.bgOpacity * 100)}
+              onChange={(v) => onOverlayConfigChange({ ...overlayConfig, bgOpacity: v / 100 })}
+              suffix="%"
+            />
+            <p style={S.dim}>In edit mode (Alt+Shift+E): drag to move, drag the corner grip to resize.</p>
           </Section>
         </div>
       </div>
@@ -563,4 +594,5 @@ const S: Record<string, CSSProperties> = {
   hotkeyErr: { fontSize: 11, color: '#ffb4bd' },
   keyBtn: { flex: 1, background: '#0d0f12', color: '#e6e6e6', border: '1px solid #3a4150', borderRadius: 6, padding: '5px 8px', fontSize: 12, fontFamily: 'ui-monospace, monospace', cursor: 'pointer', textAlign: 'left' },
   keyBtnActive: { borderColor: '#4fd1ff', color: '#4fd1ff' },
+  color: { width: 48, height: 28, padding: 0, background: 'transparent', border: '1px solid #3a4150', borderRadius: 6, cursor: 'pointer' },
 };

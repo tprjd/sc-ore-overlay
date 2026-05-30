@@ -92,9 +92,9 @@ window's **Hotkeys** panel — bindings persist):
 
 The overlay passes all clicks through to the game except in edit mode, and only
 draws over **borderless/windowed** games (see above). From the control window's
-**Overlay** panel, set the fade-out delay (or **Never**) and the size (compact /
-normal / large); resize the overlay by dragging its edges in edit mode. Position,
-size, and these settings persist.
+**Overlay** panel, set the fade-out delay (or **Never**), size (compact / normal
+/ large), font, background color, and opacity. In edit mode (`Alt+Shift+E`) drag
+to move and drag the corner grip to resize. Position, size, and settings persist.
 
 ## Settings
 

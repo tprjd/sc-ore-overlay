@@ -74,8 +74,11 @@ ipcMain.on('sco:set-settings', (_e: IpcMainEvent, patch: Partial<AppSettings>) =
   writeSettings({ ...readSettings(), ...patch });
 });
 ipcMain.on('sco:overlay-config', (_e: IpcMainEvent, config: OverlayConfig) => {
-  writeSettings({ ...readSettings(), overlayIdleMs: config.idleMs, overlayScale: config.scale });
+  writeSettings({ ...readSettings(), overlay: config });
   overlayWin?.webContents.send('sco:overlay-config', config);
+});
+ipcMain.on('sco:overlay-resize', (_e: IpcMainEvent, size: { width: number; height: number }) => {
+  overlayWin?.setSize(Math.max(140, Math.round(size.width)), Math.max(70, Math.round(size.height)));
 });
 
 // --- Windows -----------------------------------------------------------------

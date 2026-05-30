@@ -67,10 +67,7 @@ export function App() {
         }));
         if (s.activePatch && tables[s.activePatch]) setActivePatch(s.activePatch);
         if (s.hotkeys) setHotkeys({ ...DEFAULT_HOTKEYS, ...s.hotkeys });
-        setOverlayConfig({
-          idleMs: s.overlayIdleMs ?? DEFAULT_OVERLAY_CONFIG.idleMs,
-          scale: s.overlayScale ?? DEFAULT_OVERLAY_CONFIG.scale,
-        });
+        setOverlayConfig({ ...DEFAULT_OVERLAY_CONFIG, ...(s.overlay ?? {}) });
         lastSource.current = { id: s.sourceId, name: s.sourceName };
       })
       .finally(finish);
