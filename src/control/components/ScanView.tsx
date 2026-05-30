@@ -1,14 +1,17 @@
-// Step 2: calibrate the RS region and watch OCR. Drag a box over the scanner
-// number (stored as normalized 0..1 coords), tune the binarization live, and
-// observe the binarized crop + raw OCR + parsed value + voter-accepted reading.
+// Step 2: calibrate the RS region and watch the live read. Drag a box over the
+// scanner number (stored as normalized 0..1 coords); the crop is read with
+// PP-OCR, validated, then matched to ore(s) shown as "Ore ×N". The location
+// dropdown narrows overlapping-signature matches.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 
 import { useCaptureLoop } from '../useCaptureLoop';
 import type { LoopParams } from '../useCaptureLoop';
 import type { DrawableSource, NormRegion } from '../preprocess';
 import type { PickedSource } from './SourcePicker';
+import { matchOre, groupLocations } from '../../core';
+import type { SignatureTable } from '../../core';
 
 export interface ScanViewProps {
   source: PickedSource;
@@ -16,6 +19,9 @@ export interface ScanViewProps {
   onRegionChange: (r: NormRegion | null) => void;
   params: LoopParams;
   onParamsChange: (p: LoopParams) => void;
+  table: SignatureTable;
+  location: string | null;
+  onLocationChange: (location: string | null) => void;
   onBack: () => void;
 }
 
@@ -43,6 +49,9 @@ export function ScanView({
   onRegionChange,
   params,
   onParamsChange,
+  table,
+  location,
+  onLocationChange,
   onBack,
 }: ScanViewProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -64,6 +73,17 @@ export function ScanView({
   }, [source]);
 
   const loop = useCaptureLoop(mediaRef, region, params, !paused);
+
+  // Phase 2: feed the accepted reading into the matcher (method "Ship" + the
+  // selected location). Overlapping signatures surface as multiple candidates.
+  const systemGroups = useMemo(() => groupLocations(table), [table]);
+  const matches = useMemo(
+    () =>
+      loop.stable != null
+        ? matchOre(loop.stable, table, { method: 'Ship' }, { location })
+        : [],
+    [loop.stable, table, location],
+  );
 
   // ---- region drag (normalized to the displayed media box) ----
   const toNorm = (clientX: number, clientY: number): { x: number; y: number } => {
@@ -166,11 +186,51 @@ export function ScanView({
             </div>
           </div>
 
+          <Section title="Match">
+            <label style={S.selectRow}>
+              <span style={S.sliderLabel}>Location</span>
+              <select
+                style={S.select}
+                value={location ?? ''}
+                onChange={(e) => onLocationChange(e.target.value || null)}
+              >
+                <option value="">Anywhere</option>
+                {systemGroups.map((g) => (
+                  <optgroup key={g.system} label={g.system}>
+                    {g.locations.map((loc) => (
+                      <option key={`${g.system}:${loc}`} value={loc}>
+                        {loc}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
+            {loop.stable == null ? (
+              <p style={S.dim}>Waiting for a stable reading…</p>
+            ) : matches.length === 0 ? (
+              <p style={S.dim}>
+                No ore matches {loop.stable}
+                {location ? ` at ${location}` : ''}.
+              </p>
+            ) : (
+              <ul style={S.candList}>
+                {matches.map((c) => (
+                  <li key={c.name} style={S.candRow}>
+                    <span style={S.candName}>{c.name}</span>
+                    <span style={S.candNodes}>×{c.nodes}</span>
+                    <span style={S.candScore}>{Math.round(c.score * 100)}%</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Section>
+
           <Section title="Debug">
             <div style={S.debugRow}>
               <div style={S.cropWrap}>
                 {loop.dataUrl ? (
-                  <img src={loop.dataUrl} alt="binarized crop" style={S.crop} />
+                  <img src={loop.dataUrl} alt="region crop" style={S.crop} />
                 ) : (
                   <span style={S.dim}>no crop yet</span>
                 )}
@@ -332,4 +392,11 @@ const S: Record<string, CSSProperties> = {
   btn: { background: '#2a2f3a', color: '#e6e6e6', border: '1px solid #3a4150', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontSize: 13 },
   badge: { fontSize: 10, textTransform: 'uppercase', background: '#2c323d', borderRadius: 4, padding: '2px 5px', opacity: 0.8 },
   error: { marginTop: 8, background: '#3a1f24', border: '1px solid #7a3b44', color: '#ffb4bd', padding: '6px 10px', borderRadius: 6, fontSize: 12 },
+  selectRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 },
+  select: { flex: 1, background: '#0d0f12', color: '#e6e6e6', border: '1px solid #3a4150', borderRadius: 6, padding: '6px 8px', fontSize: 13 },
+  candList: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 },
+  candRow: { display: 'flex', alignItems: 'baseline', gap: 8, background: '#1d2128', border: '1px solid #2c323d', borderRadius: 6, padding: '8px 10px' },
+  candName: { flex: 1, fontSize: 16, fontWeight: 600 },
+  candNodes: { fontSize: 16, color: '#4fd1ff', fontVariantNumeric: 'tabular-nums' },
+  candScore: { fontSize: 11, opacity: 0.5, width: 40, textAlign: 'right' },
 };
