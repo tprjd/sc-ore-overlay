@@ -14,8 +14,13 @@ import type {
   SignatureTable,
 } from './types';
 
-/** Default relative tolerance: the reading must divide to within 0.5%. */
-export const DEFAULT_REL_TOL = 0.005;
+// Adjacent ores' signatures differ by only ~15 (≈0.35%), and RS = signature ×
+// nodes is an exact integer, so the true ore divides with ~zero error while a
+// neighbour sits ~0.35% off. Keep the tolerance below that, with a little slack,
+// to avoid false neighbour matches. (PP-OCR reads exact digits — no analog
+// jitter to absorb.)
+/** Default relative tolerance: the reading must divide to within 0.2%. */
+export const DEFAULT_REL_TOL = 0.002;
 
 /**
  * Probability weight in (0, 1] that a deposit produces exactly `nodes` rocks.

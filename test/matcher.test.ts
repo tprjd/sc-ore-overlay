@@ -69,13 +69,13 @@ describe('matchOre', () => {
     expect(fps[0]).toMatchObject({ name: 'Diamond', nodes: 2 });
   });
 
-  it('tolerates OCR jitter within relTol but rejects beyond it', () => {
-    // 21400 is within 0.5% of 4270 × 5 = 21350.
-    const near = matchOre(21400, fixtureTable, ship);
+  it('tolerates small error within relTol but rejects beyond it', () => {
+    // 21380 is within 0.2% of 4270 × 5 = 21350.
+    const near = matchOre(21380, fixtureTable, ship);
     expect(near).toHaveLength(1);
     expect(near[0]).toMatchObject({ name: 'Iron', nodes: 5 });
 
-    // 21550 is ~0.93% off — beyond the default 0.5% tolerance.
+    // 21550 is ~0.93% off — beyond the default tolerance.
     expect(matchOre(21550, fixtureTable, ship)).toHaveLength(0);
 
     // ...but a looser tolerance accepts it.

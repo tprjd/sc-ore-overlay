@@ -103,7 +103,7 @@ matchOre(reading, table, opts, context):
         n = round(reading / deposit.signature)
         if n < 1: skip
         relErr = |reading - n*deposit.signature| / reading
-        if relErr > opts.relTol (default 0.005): skip          # must divide cleanly
+        if relErr > opts.relTol (default 0.002): skip          # must divide cleanly (exact divisor wins; ~0.35%-apart neighbours excluded)
         if n < cluster.min_size or n > cluster.max_size: skip  # valid cluster size
         score = (1 - relErr) * clusterProb(deposit, n) * (locationProb if context.location else 1)
         emit { name, nodes: n, score }

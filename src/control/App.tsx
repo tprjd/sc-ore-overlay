@@ -42,6 +42,7 @@ export function App() {
   const [hotkeys, setHotkeys] = useState<HotkeyMap>(DEFAULT_HOTKEYS);
   const [hotkeyStatus, setHotkeyStatus] = useState<Partial<Record<HotkeyAction, boolean>>>({});
   const [overlayConfig, setOverlayConfig] = useState<OverlayConfig>(DEFAULT_OVERLAY_CONFIG);
+  const [autoReconnect, setAutoReconnect] = useState(true);
   const lastSource = useRef<{ id?: string; name?: string }>({});
 
   // Restore persisted settings once (Electron userData).
@@ -97,6 +98,7 @@ export function App() {
   }, [activePatch, loaded]);
 
   const handlePick = (picked: PickedSource): void => {
+    setAutoReconnect(false);
     setSource(picked);
     if (picked.kind === 'desktop') {
       window.sco?.setSettings?.({ sourceId: picked.sourceId, sourceName: picked.label });
@@ -115,6 +117,7 @@ export function App() {
   };
 
   const handleBack = (): void => {
+    setAutoReconnect(false); // explicit "← Sources" — don't auto-reconnect again
     source?.stream?.getTracks().forEach((t) => t.stop());
     if (source?.imageUrl) URL.revokeObjectURL(source.imageUrl);
     setSource(null);
@@ -132,7 +135,12 @@ export function App() {
     );
   }
   if (!source) {
-    return <SourcePicker onPick={handlePick} lastSourceId={lastSource.current.id} />;
+    return (
+      <SourcePicker
+        onPick={handlePick}
+        lastSourceId={autoReconnect ? lastSource.current.id : undefined}
+      />
+    );
   }
   return (
     <ScanView
