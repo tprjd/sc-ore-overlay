@@ -119,7 +119,42 @@ Implement, then ask the human to confirm in-game; document any platform-specific
 
 ---
 
-## Phase 5 — Multiple mining methods (deferred from v1)
+## Phase 5 — Ore quality detail (second overlay box)
+
+A second, independent overlay box showing richer info about the matched ore at the
+selected location — the deposit's composition and the **possible qualities and their
+likelihood** (the wiki's per-material "Quality" / "Received" data: quality min–max,
+mean, std-dev, and the quantized quality values, plus instability/resistance).
+
+**Tasks**
+- Extend the crawl to capture, per `locations[].resources[].materials[]`: the
+  composition range (`min_percentage`–`max_percentage`), quality fields
+  (`quality_min`/`quality_max`/`quality_mean`/`quality_stddev`), the quantized quality
+  values (`quality_quantized_values` — the "Received" column), `instability`, and
+  `resistance`; plus per-location `group_probability` (Spawn %) and
+  `relative_probability` (Occurrence %), and the per-deposit cluster probability. Write
+  it to a richer table (or a companion file) the renderer can load without bloating the
+  hot-path matcher.
+- Core (pure, tested): quality/material types + a helper that, for a matched ore +
+  location, returns its quality breakdown — the possible quantized qualities and a
+  likelihood per quality (from mean/std-dev and the material's relative probability).
+- A second overlay window (transparent, click-through, separately positioned/sized,
+  reusing the overlay config + hotkeys) that renders, for the top match + selected
+  location: deposit signature + cluster, and the material quality table (possible
+  qualities and the chance of each).
+- Control: a toggle to enable the detail box; it updates live with the matched ore +
+  location.
+
+**Acceptance**
+- For a known ore at a known location (e.g. Aluminum at Glaciem Ring), the detail box
+  shows the deposit signature/cluster and the material quality breakdown (possible
+  qualities + per-quality likelihood) matching the wiki.
+
+**Human verification:** none beyond eyeballing against the wiki page.
+
+---
+
+## Phase 6 — Multiple mining methods (deferred from v1)
 
 **Tasks**
 - Relax the ship-only filter in the crawl (method is already recorded per row).
@@ -133,7 +168,7 @@ Implement, then ask the human to confirm in-game; document any platform-specific
 
 ---
 
-## Phase 6 (optional) — Browser-only build
+## Phase 7 (optional) — Browser-only build
 
 **Tasks**
 - A standalone web entry using `getDisplayMedia` for capture, reusing the pure `src/core` logic.
