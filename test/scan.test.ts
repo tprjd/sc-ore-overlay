@@ -46,6 +46,26 @@ describe('parseScanResult', () => {
     expect(r.composition[2].scu).toBeCloseTo(7.21, 2); // 19.23% of 37.51
   });
 
+  it('reads rows with the quality glued to the material, and a no-number row', () => {
+    const text = [
+      'SCAN RESULTS',
+      'ASLARITE (RAW) [CF]',
+      'COMPOSITION 34.31 SCU',
+      '61.66% ASLARITE(RAW)[CF]287',
+      '3.18% AGRICIUM(ORE)[CF]667',
+      '4.53% TITANIUM(ORE)[CF] 516',
+      '25.85% INERTMATERIALS',
+    ].join('\n');
+    const r = parseScanResult(text)!;
+    expect(r.ore).toBe('Aslarite');
+    expect(r.composition).toHaveLength(4);
+    expect(r.composition[0]).toMatchObject({ percent: 61.66, material: 'ASLARITE(RAW)[CF]', quality: 287 });
+    expect(r.composition[1]).toMatchObject({ percent: 3.18, material: 'AGRICIUM(ORE)[CF]', quality: 667 });
+    expect(r.composition[2]).toMatchObject({ percent: 4.53, material: 'TITANIUM(ORE)[CF]', quality: 516 });
+    expect(r.composition[3]).toMatchObject({ percent: 25.85, material: 'INERTMATERIALS', quality: 0 });
+    expect(r.composition[0].scu).toBeCloseTo(21.15, 1); // 61.66% of 34.31
+  });
+
   it('works when the panel title is not captured; SCU undefined without a total', () => {
     const r = parseScanResult('QUANTANIUM (ORE)\nMASS: 1200\n45.0% QUANTANIUM (ORE) 90')!;
     expect(r.ore).toBe('Quantanium');

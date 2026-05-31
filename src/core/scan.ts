@@ -100,16 +100,24 @@ export function parseScanResult(text: string): ScanResult | null {
   const scuTotal = matchNum(text, /([\d.]+)\s*scu/i);
   const composition: ScanComposition[] = [];
   for (const l of lines) {
-    const m = /^([\d.,]+)\s*%\s*(.+?)\s+([\d.,]+)\s*$/.exec(l);
-    if (m) {
-      const percent = num(m[1]);
-      composition.push({
-        percent,
-        material: m[2].trim(),
-        quality: num(m[3]),
-        scu: scuTotal != null ? (percent / 100) * scuTotal : undefined,
-      });
-    }
+    // A composition row is "<pct>% <material> <quality>". The quality is the
+    // trailing digit run, which OCR often glues to the material (e.g.
+    // "ASLARITE(RAW)[CF]287") — so don't require a separator. Rows whose quality
+    // wasn't read (e.g. "INERT MATERIALS") are kept with quality 0.
+    const m = /^([\d.,]+)\s*%\s*(.+)$/.exec(l);
+    if (!m) continue;
+    const percent = num(m[1]);
+    if (!Number.isFinite(percent)) continue;
+    const rest = m[2].trim();
+    const q = /(\d[\d.,]*)\s*$/.exec(rest);
+    const quality = q ? num(q[1]) : 0;
+    const material = (q ? rest.slice(0, q.index) : rest).trim();
+    composition.push({
+      percent,
+      material,
+      quality,
+      scu: scuTotal != null ? (percent / 100) * scuTotal : undefined,
+    });
   }
 
   return {
