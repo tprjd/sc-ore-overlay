@@ -8,13 +8,19 @@ import type { CSSProperties, ReactNode } from 'react';
 
 import { CapturePreview } from './CapturePreview';
 import type { PreviewRegion } from './CapturePreview';
+import { SurveyMap } from './SurveyMap';
 import type { PickedSource } from './SourcePicker';
 import { useSurveyCapture } from '../useSurveyCapture';
 import type { ActiveSurveyRegion } from '../useSurveyCapture';
 import type { LoopParams } from '../useCaptureLoop';
 import type { DrawableSource, NormRegion } from '../preprocess';
-import type { SignatureTable } from '../../core';
+import { DEBUG_SHIP, debugEntries } from '../survey-debug';
+import { scanImage } from '../scanImage';
+import type { SimScan } from '../scanImage';
+import type { AxisPlane, SignatureTable, SurveyEntry, Vec3 } from '../../core';
 import type { SurveyRegionSetting, SurveyRole } from '../../shared/bridge';
+
+type LeftMode = 'preview' | 'map';
 
 export interface SurveyViewProps {
   source: PickedSource;
@@ -39,15 +45,54 @@ function newId(): string {
 
 const km = (m: number): string => (m / 1000).toLocaleString(undefined, { maximumFractionDigits: 2 });
 
+/** Mean position of a set of entries (map center fallback when not flying). */
+function centroid(entries: SurveyEntry[]): Vec3 | null {
+  if (entries.length === 0) return null;
+  const s = entries.reduce((a, e) => ({ x: a.x + e.pos.x, y: a.y + e.pos.y, z: a.z + e.pos.z }), {
+    x: 0,
+    y: 0,
+    z: 0,
+  });
+  return { x: s.x / entries.length, y: s.y / entries.length, z: s.z / entries.length };
+}
+
 export function SurveyView({ source, table, params, regions, onRegionsChange, onBack }: SurveyViewProps) {
   const mediaRef = useRef<DrawableSource | null>(null);
   const [activeId, setActiveId] = useState<string | null>(regions[0]?.id ?? null);
+  const [leftMode, setLeftMode] = useState<LeftMode>('preview');
+  const [debugMode, setDebugMode] = useState(false);
+  const [plane, setPlane] = useState<AxisPlane>('xy');
+  const [simScans, setSimScans] = useState<SimScan[]>([]);
+  const [simBusy, setSimBusy] = useState(false);
 
   const active: ActiveSurveyRegion[] = useMemo(
     () => regions.filter((r) => r.enabled).map((r) => ({ id: r.id, role: r.role, rect: r.rect })),
     [regions],
   );
   const readout = useSurveyCapture(mediaRef, active, params, true, table);
+
+  const debugList = useMemo(() => debugEntries(), []);
+  const simEntries = useMemo(
+    () => simScans.map((s) => s.entry).filter((e): e is SurveyEntry => e != null),
+    [simScans],
+  );
+  const mapEntries = useMemo(
+    () => [...(debugMode ? debugList : []), ...simEntries],
+    [debugMode, debugList, simEntries],
+  );
+  const mapShip: Vec3 | null = debugMode ? DEBUG_SHIP : (readout.pos ?? centroid(simEntries));
+
+  const onSimFiles = async (files: FileList | null): Promise<void> => {
+    if (!files || files.length === 0) return;
+    setSimBusy(true);
+    let n = 0;
+    for (const file of Array.from(files)) {
+      const scout = file.name.replace(/\.[^.]+$/, '') || `Scout ${++n}`;
+      const res = await scanImage(file, active, table, scout, params.scale);
+      setSimScans((prev) => [...prev, res]);
+    }
+    setSimBusy(false);
+  };
 
   const previewRegions: PreviewRegion[] = regions.map((r) => ({
     id: r.id,
@@ -85,17 +130,39 @@ export function SurveyView({ source, table, params, regions, onRegionsChange, on
       </header>
 
       <div style={S.body}>
-        <CapturePreview
-          source={source}
-          mediaRef={mediaRef}
-          regions={previewRegions}
-          onDraw={onDraw}
-          hint={
-            activeId
-              ? 'Drag a box over the selected field. Zoom + scroll to refine.'
-              : 'Add a region below, then drag a box over the value on the HUD.'
-          }
-        />
+        <div style={S.leftCol}>
+          <div style={S.segmented}>
+            <button
+              style={{ ...S.segBtn, ...(leftMode === 'preview' ? S.segBtnActive : null) }}
+              onClick={() => setLeftMode('preview')}
+            >
+              Preview
+            </button>
+            <button
+              style={{ ...S.segBtn, ...(leftMode === 'map' ? S.segBtnActive : null) }}
+              onClick={() => setLeftMode('map')}
+            >
+              Map
+            </button>
+          </div>
+          {leftMode === 'preview' ? (
+            <CapturePreview
+              source={source}
+              mediaRef={mediaRef}
+              regions={previewRegions}
+              onDraw={onDraw}
+              hint={
+                activeId
+                  ? 'Drag a box over the selected field. Zoom + scroll to refine.'
+                  : 'Add a region below, then drag a box over the value on the HUD.'
+              }
+            />
+          ) : (
+            <div style={S.mapWrap}>
+              <SurveyMap ship={mapShip} entries={mapEntries} plane={plane} />
+            </div>
+          )}
+        </div>
 
         <div style={S.panel}>
           <Card title="Live readout">
@@ -136,6 +203,89 @@ export function SurveyView({ source, table, params, regions, onRegionsChange, on
               </ul>
             )}
             {readout.error && <div style={S.error}>{readout.error}</div>}
+          </Card>
+
+          <Card title="Map">
+            <label style={S.checkRow}>
+              <input type="checkbox" checked={debugMode} onChange={(e) => setDebugMode(e.target.checked)} />
+              Debug values (synthetic field)
+            </label>
+            <div style={{ ...S.kv, marginTop: 8 }}>
+              <span style={S.k}>Plane</span>
+              <select style={S.select} value={plane} onChange={(e) => setPlane(e.target.value as AxisPlane)}>
+                <option value="xy">X / Y (Z depth)</option>
+                <option value="xz">X / Z (Y depth)</option>
+                <option value="yz">Y / Z (X depth)</option>
+              </select>
+            </div>
+            <div style={{ ...S.kv, marginTop: 4 }}>
+              <span style={S.k}>Points</span>
+              <span style={S.v}>{mapEntries.length}</span>
+            </div>
+            <p style={S.dim}>
+              Open the <b>Map</b> view on the left. Ship is centered; hover a point for details.
+              {debugMode ? '' : ' Real logging arrives in S3 — use Debug values to preview.'}
+            </p>
+          </Card>
+
+          <Card title="Simulated scans">
+            <p style={S.dim}>
+              Upload screenshots (debug overlay visible, same HUD layout as your regions). Each is
+              OCR&apos;d through the regions and added as a peer scan — a stand-in for networked scouts.
+            </p>
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              style={S.file}
+              disabled={simBusy}
+              onChange={(e) => {
+                void onSimFiles(e.target.files);
+                e.target.value = '';
+              }}
+            />
+            <div style={{ ...S.kv, marginTop: 8 }}>
+              <span style={S.k}>
+                {simBusy ? 'scanning…' : `${simEntries.length}/${simScans.length} placed`}
+              </span>
+              <button style={S.delBtn} disabled={!simScans.length} onClick={() => setSimScans([])}>
+                Clear
+              </button>
+            </div>
+            {active.every((r) => r.role !== 'shipPos') && (
+              <p style={S.dim}>Add a “Ship Pos” region first, or scans can’t be placed.</p>
+            )}
+            {simScans.length > 0 && (
+              <div style={S.simList}>
+                {simScans.map((s, i) => (
+                  <div key={i} style={S.simCard}>
+                    <div style={S.simHead}>
+                      <span style={S.simName}>{s.name}</span>
+                      <span style={{ fontSize: 11, color: s.entry ? '#6ee7b7' : '#ffb4bd' }}>
+                        {s.entry ? 'placed' : (s.error ?? 'failed')}
+                      </span>
+                    </div>
+                    {s.regions.map((r, j) => (
+                      <div key={j} style={S.regionBody}>
+                        <div style={S.cropWrap}>
+                          {r.dataUrl ? (
+                            <img src={r.dataUrl} alt="crop" style={S.crop} />
+                          ) : (
+                            <span style={S.dim}>—</span>
+                          )}
+                        </div>
+                        <div style={S.regionMeta}>
+                          <div style={{ ...S.parsed, color: r.ok ? '#6ee7b7' : '#9fb3c8' }}>
+                            {ROLE_META[r.role].label}: {r.parsed}
+                          </div>
+                          <div style={S.raw}>{r.rawText}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
 
           <Card title="Regions">
@@ -237,6 +387,17 @@ const S: Record<string, CSSProperties> = {
   srcLabel: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, opacity: 0.9 },
   spacer: { flex: 1 },
   body: { display: 'flex', flex: 1, minHeight: 0 },
+  leftCol: { flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 },
+  segmented: { display: 'flex', gap: 4, padding: '10px 14px 0' },
+  segBtn: { background: 'none', color: '#9fb3c8', border: '1px solid #3a4150', borderRadius: 6, padding: '4px 14px', cursor: 'pointer', fontSize: 12 },
+  segBtnActive: { background: '#1d2128', color: '#e6e6e6', borderColor: '#4fd1ff' },
+  mapWrap: { flex: 1, minHeight: 0, padding: '8px 14px 14px' },
+  checkRow: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 },
+  file: { width: '100%', fontSize: 12, color: '#9fb3c8' },
+  simList: { display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 },
+  simCard: { background: '#0d0f12', border: '1px solid #2c323d', borderRadius: 6, padding: 8 },
+  simHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 },
+  simName: { fontSize: 13, fontWeight: 600, wordBreak: 'break-all' },
   panel: { width: 380, borderLeft: '1px solid #2c323d', padding: 14, overflowY: 'auto', boxSizing: 'border-box' },
   card: { background: '#1d2128', border: '1px solid #2c323d', borderRadius: 8, padding: 12, marginBottom: 14 },
   cardTitle: { fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.6, margin: '0 0 10px' },
