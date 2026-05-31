@@ -237,7 +237,9 @@ export function SurveyView({
               Map
             </button>
           </div>
-          {leftMode === 'preview' ? (
+          {/* CapturePreview stays mounted in both views so the capture <video>
+              keeps feeding the live OCR loop; the Map is drawn over it. */}
+          <div style={S.leftBody}>
             <CapturePreview
               source={source}
               mediaRef={mediaRef}
@@ -249,11 +251,12 @@ export function SurveyView({
                   : 'Add a region below, then drag a box over the value on the HUD.'
               }
             />
-          ) : (
-            <div style={S.mapWrap}>
-              <SurveyMap ship={mapShip} entries={mapEntries} plane={plane} />
-            </div>
-          )}
+            {leftMode === 'map' && (
+              <div style={S.mapOverlay}>
+                <SurveyMap ship={mapShip} entries={mapEntries} plane={plane} />
+              </div>
+            )}
+          </div>
         </div>
 
         <ScanResults entries={resultsEntries} onRemove={removeResult} />
@@ -574,7 +577,8 @@ const S: Record<string, CSSProperties> = {
   segmented: { display: 'flex', gap: 4, padding: '10px 14px 0' },
   segBtn: { background: 'none', color: '#9fb3c8', border: '1px solid #3a4150', borderRadius: 6, padding: '4px 14px', cursor: 'pointer', fontSize: 12 },
   segBtnActive: { background: '#1d2128', color: '#e6e6e6', borderColor: '#4fd1ff' },
-  mapWrap: { flex: 1, minHeight: 0, padding: '8px 14px 14px' },
+  leftBody: { position: 'relative', flex: 1, minHeight: 0, display: 'flex' },
+  mapOverlay: { position: 'absolute', inset: 0, padding: '8px 14px 14px', boxSizing: 'border-box', background: '#16181d' },
   checkRow: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 },
   file: { width: '100%', fontSize: 12, color: '#9fb3c8' },
   logBtn: { width: '100%', marginTop: 10, background: '#1f6f4a', color: '#eafff3', border: '1px solid #2e9a68', borderRadius: 6, padding: '8px 10px', cursor: 'pointer', fontSize: 14, fontWeight: 600 },
