@@ -64,6 +64,8 @@ export interface OverlayConfig {
   showPlaceholder: boolean;
   /** Show the second "ore detail" overlay box. */
   showDetail: boolean;
+  /** Show the "scanned rock" overlay box (SCU-per-quality from the scan). */
+  showScan: boolean;
 }
 
 /** Default overlay appearance. */
@@ -78,6 +80,7 @@ export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
   border: true,
   showPlaceholder: true,
   showDetail: false,
+  showScan: false,
 };
 
 /** A rebindable global-hotkey action. */
@@ -129,6 +132,7 @@ export interface AppSettings {
   overlay?: Partial<OverlayConfig>;
   overlayBounds?: { x: number; y: number; width: number; height: number };
   detailBounds?: { x: number; y: number; width: number; height: number };
+  scanBounds?: { x: number; y: number; width: number; height: number };
   /** Mining tab: persisted capture regions (RS + scan-result) + their roles. */
   mining?: { regions?: SurveyRegionSetting[] };
   /** Survey Mode: persisted capture regions + their roles, and the scout name. */
@@ -165,6 +169,8 @@ export interface ScoBridge {
   onToggleVisible(cb: () => void): () => void;
   /** Detail box → main: resize the detail window to the given content size. */
   resizeDetail(size: { width: number; height: number }): void;
+  /** Scan box → main: resize the scanned-rock window to the given content size. */
+  resizeScan(size: { width: number; height: number }): void;
   /** Survey Mode: load the persisted scan log (separate file from settings). */
   getSurveyLog(): Promise<SurveyEntry[]>;
   /** Survey Mode: persist the full scan log (append-only, managed in renderer). */

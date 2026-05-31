@@ -36,6 +36,7 @@ export default defineConfig({
         index: resolvePath('index.html'),
         overlay: resolvePath('overlay.html'),
         detail: resolvePath('detail.html'),
+        scan: resolvePath('scan.html'),
       },
     },
   },

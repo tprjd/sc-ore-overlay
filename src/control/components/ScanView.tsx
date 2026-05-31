@@ -397,6 +397,16 @@ export function ScanView({
               />
               Show ore detail box
             </label>
+            <label style={S.checkRow}>
+              <input
+                type="checkbox"
+                checked={overlayConfig.showScan}
+                onChange={(e) =>
+                  onOverlayConfigChange({ ...overlayConfig, showScan: e.target.checked })
+                }
+              />
+              Show scanned-rock box (SCU per quality)
+            </label>
             <p style={S.dim}>In edit mode (Alt+Shift+E): drag to move, drag the corner grip to resize.</p>
           </Section>
 

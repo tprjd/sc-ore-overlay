@@ -57,6 +57,7 @@ const api: ScoBridge = {
     return () => ipcRenderer.off('sco:overlay-toggle', handler);
   },
   resizeDetail: (size) => ipcRenderer.send('sco:detail-resize', size),
+  resizeScan: (size) => ipcRenderer.send('sco:scan-resize', size),
 
   getSurveyLog: () => ipcRenderer.invoke('sco:get-survey-log') as Promise<SurveyEntry[]>,
   saveSurveyLog: (entries) => ipcRenderer.send('sco:save-survey-log', entries),

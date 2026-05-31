@@ -34,12 +34,13 @@ if (process.platform === 'linux') app.disableHardwareAcceleration();
 let controlWin: BrowserWindow | null = null;
 let overlayWin: BrowserWindow | null = null;
 let detailWin: BrowserWindow | null = null;
+let scanWin: BrowserWindow | null = null;
 let ownerWin: BrowserWindow | null = null;
 let editing = false;
 
-/** The transparent boxes (overlay + detail) that currently exist. */
+/** The transparent boxes (overlay + detail + scan) that currently exist. */
 const overlayWindows = (): BrowserWindow[] =>
-  [overlayWin, detailWin].filter((w): w is BrowserWindow => w !== null);
+  [overlayWin, detailWin, scanWin].filter((w): w is BrowserWindow => w !== null);
 
 // --- IPC ---------------------------------------------------------------------
 ipcMain.handle('sco:get-capture-sources', async (): Promise<CaptureSource[]> => {
@@ -92,6 +93,9 @@ ipcMain.on('sco:overlay-resize', (_e: IpcMainEvent, size: { width: number; heigh
 ipcMain.on('sco:detail-resize', (_e: IpcMainEvent, size: { width: number; height: number }) => {
   detailWin?.setSize(Math.max(160, Math.round(size.width)), Math.max(80, Math.round(size.height)));
 });
+ipcMain.on('sco:scan-resize', (_e: IpcMainEvent, size: { width: number; height: number }) => {
+  scanWin?.setSize(Math.max(160, Math.round(size.width)), Math.max(80, Math.round(size.height)));
+});
 
 // Survey scan log — its own file (it can grow large; kept out of settings.json).
 const surveyLogFile = (): string => path.join(app.getPath('userData'), 'survey-log.json');
@@ -114,7 +118,7 @@ ipcMain.on('sco:save-survey-log', (_e: IpcMainEvent, entries: SurveyEntry[]) => 
 });
 
 // --- Windows -----------------------------------------------------------------
-function loadPage(win: BrowserWindow, page: 'index' | 'overlay' | 'detail'): void {
+function loadPage(win: BrowserWindow, page: 'index' | 'overlay' | 'detail' | 'scan'): void {
   if (DEV_SERVER_URL) {
     const url = page === 'index' ? DEV_SERVER_URL : new URL(`${page}.html`, DEV_SERVER_URL).href;
     void win.loadURL(url);
@@ -257,6 +261,52 @@ function createDetailWindow(): BrowserWindow {
   return win;
 }
 
+function createScanWindow(): BrowserWindow {
+  const saved = readSettings().scanBounds;
+  const win = new BrowserWindow({
+    width: saved?.width ?? 320,
+    height: saved?.height ?? 220,
+    x: saved?.x ?? 40,
+    y: saved?.y ?? 480,
+    minWidth: 160,
+    minHeight: 80,
+    transparent: true,
+    frame: false,
+    resizable: true,
+    movable: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    focusable: false,
+    hasShadow: false,
+    fullscreenable: false,
+    parent: ownerWin ?? undefined,
+    webPreferences: {
+      preload: PRELOAD,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  win.setAlwaysOnTop(true, 'screen-saver');
+  win.setIgnoreMouseEvents(true, { forward: true });
+  loadPage(win, 'scan');
+
+  let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  const persistBounds = (): void => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      if (scanWin) writeSettings({ ...readSettings(), scanBounds: scanWin.getBounds() });
+    }, 400);
+  };
+  win.on('move', persistBounds);
+  win.on('resize', persistBounds);
+
+  win.on('closed', () => {
+    scanWin = null;
+  });
+  return win;
+}
+
 // "Edit overlay" mode: make both boxes interactive so they can be dragged/
 // resized, then lock them back to click-through.
 function setEditMode(on: boolean): void {
@@ -327,6 +377,7 @@ void app.whenReady().then(() => {
   ownerWin = createOwnerWindow();
   overlayWin = createOverlayWindow();
   detailWin = createDetailWindow();
+  scanWin = createScanWindow();
   applyHotkeys(currentHotkeys());
 
   app.on('activate', () => {
@@ -335,6 +386,7 @@ void app.whenReady().then(() => {
       ownerWin = createOwnerWindow();
       overlayWin = createOverlayWindow();
       detailWin = createDetailWindow();
+      scanWin = createScanWindow();
     }
   });
 });
