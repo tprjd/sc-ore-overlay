@@ -50,12 +50,14 @@ function niceStep(rough: number): number {
 
 export function SurveyMap({ ship, entries, plane = 'xy' }: SurveyMapProps) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [canvasEl, setCanvasEl] = useState<HTMLCanvasElement | null>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [view, setView] = useState<View>({ ppm: 0.02, panX: 0, panY: 0 });
   const [hover, setHover] = useState<Hover | null>(null);
   const [fitNonce, setFitNonce] = useState(0);
   const drag = useRef<{ x: number; y: number } | null>(null);
+  const sizeRef = useRef(size);
+  sizeRef.current = size;
 
   // Track the rendered size (css px), DPR-aware drawing below.
   useEffect(() => {
@@ -86,16 +88,15 @@ export function SurveyMap({ ship, entries, plane = 'xy' }: SurveyMapProps) {
 
   // Draw.
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || size.w < 2 || size.h < 2) return;
+    if (!canvasEl || size.w < 2 || size.h < 2) return;
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.round(size.w * dpr);
-    canvas.height = Math.round(size.h * dpr);
-    const ctx = canvas.getContext('2d');
+    canvasEl.width = Math.round(size.w * dpr);
+    canvasEl.height = Math.round(size.h * dpr);
+    const ctx = canvasEl.getContext('2d');
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     draw(ctx, size.w, size.h, view, entries, ship, plane, hover?.entry.id ?? null);
-  }, [size, view, entries, ship, plane, hover]);
+  }, [canvasEl, size, view, entries, ship, plane, hover]);
 
   const center = (): { cx: number; cy: number } => ({ cx: size.w / 2, cy: size.h / 2 });
   const shipScreen = (): { sx: number; sy: number } => {
@@ -103,32 +104,30 @@ export function SurveyMap({ ship, entries, plane = 'xy' }: SurveyMapProps) {
     return { sx: cx + view.panX, sy: cy + view.panY };
   };
 
-  const onWheel = (e: WheelEvent): void => {
-    e.preventDefault();
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    setView((v) => {
-      const { cx, cy } = center();
-      const sx = cx + v.panX;
-      const sy = cy + v.panY;
-      const wx = (mx - sx) / v.ppm;
-      const wy = (sy - my) / v.ppm;
-      const ppm = Math.min(5, Math.max(1e-5, v.ppm * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
-      return { ppm, panX: mx - cx - wx * ppm, panY: my - cy + wy * ppm };
-    });
-  };
-
-  // Non-passive wheel listener so preventDefault works.
+  // Cursor-anchored wheel zoom. Bound to the canvas element itself so it (re)binds
+  // whenever the canvas mounts — e.g. when a ship position first becomes available.
+  // Reads size via a ref and view via the functional update, so it stays current.
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.addEventListener('wheel', onWheel, { passive: false });
-    return () => canvas.removeEventListener('wheel', onWheel);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [size]);
+    if (!canvasEl) return;
+    const handler = (e: WheelEvent): void => {
+      e.preventDefault();
+      const rect = canvasEl.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const cx = sizeRef.current.w / 2;
+      const cy = sizeRef.current.h / 2;
+      setView((v) => {
+        const sx = cx + v.panX;
+        const sy = cy + v.panY;
+        const wx = (mx - sx) / v.ppm;
+        const wy = (sy - my) / v.ppm;
+        const ppm = Math.min(5, Math.max(1e-5, v.ppm * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
+        return { ppm, panX: mx - cx - wx * ppm, panY: my - cy + wy * ppm };
+      });
+    };
+    canvasEl.addEventListener('wheel', handler, { passive: false });
+    return () => canvasEl.removeEventListener('wheel', handler);
+  }, [canvasEl]);
 
   const hitTest = (mx: number, my: number): Hover | null => {
     if (!ship) return null;
@@ -182,7 +181,7 @@ export function SurveyMap({ ship, entries, plane = 'xy' }: SurveyMapProps) {
     <div ref={wrapRef} style={S.wrap}>
       {ship ? (
         <canvas
-          ref={canvasRef}
+          ref={setCanvasEl}
           style={{ width: '100%', height: '100%', display: 'block', cursor: drag.current ? 'grabbing' : 'crosshair' }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -237,31 +236,33 @@ function draw(
   const stepM = niceStep(80 / view.ppm); // ~80px target spacing
   const stepPx = stepM * view.ppm;
 
-  // Faint square grid.
-  ctx.strokeStyle = 'rgba(120,140,160,0.08)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  for (let x = sx % stepPx; x < w; x += stepPx) {
-    ctx.moveTo(Math.round(x) + 0.5, 0);
-    ctx.lineTo(Math.round(x) + 0.5, h);
-  }
-  for (let y = sy % stepPx; y < h; y += stepPx) {
-    ctx.moveTo(0, Math.round(y) + 0.5);
-    ctx.lineTo(w, Math.round(y) + 0.5);
-  }
-  ctx.stroke();
-
-  // Concentric range rings + km labels.
-  const maxRingPx = Math.hypot(Math.max(sx, w - sx), Math.max(sy, h - sy));
-  ctx.strokeStyle = 'rgba(120,140,160,0.18)';
-  ctx.fillStyle = 'rgba(159,179,200,0.6)';
-  ctx.font = '10px ui-monospace, monospace';
-  for (let k = 1; k * stepPx < maxRingPx; k++) {
-    const r = k * stepPx;
+  // Grid + range rings — only when the step is a sane positive size (guards
+  // against an infinite loop if ppm/step ever degenerate).
+  if (Number.isFinite(stepPx) && stepPx > 0.5) {
+    ctx.strokeStyle = 'rgba(120,140,160,0.08)';
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    for (let x = sx % stepPx; x < w; x += stepPx) {
+      ctx.moveTo(Math.round(x) + 0.5, 0);
+      ctx.lineTo(Math.round(x) + 0.5, h);
+    }
+    for (let y = sy % stepPx; y < h; y += stepPx) {
+      ctx.moveTo(0, Math.round(y) + 0.5);
+      ctx.lineTo(w, Math.round(y) + 0.5);
+    }
     ctx.stroke();
-    ctx.fillText(`${km(k * stepM)} km`, sx + r + 3, sy - 2);
+
+    const maxRingPx = Math.hypot(Math.max(sx, w - sx), Math.max(sy, h - sy));
+    ctx.strokeStyle = 'rgba(120,140,160,0.18)';
+    ctx.fillStyle = 'rgba(159,179,200,0.6)';
+    ctx.font = '10px ui-monospace, monospace';
+    for (let k = 1; k * stepPx < maxRingPx; k++) {
+      const r = k * stepPx;
+      ctx.beginPath();
+      ctx.arc(sx, sy, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillText(`${km(k * stepM)} km`, sx + r + 3, sy - 2);
+    }
   }
 
   // Axes through the ship.

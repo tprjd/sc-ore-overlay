@@ -72,6 +72,11 @@ describe('parsePosLine', () => {
     expect(r!.pos).toEqual({ x: 1000, y: 2000, z: 3000 });
   });
 
+  it('applies each axis unit independently (km / m / km on one line)', () => {
+    const r = parsePosLine('Zone: SolarSystem_1 Pos: 1km 500m 2km')!;
+    expect(r.pos).toEqual({ x: 1000, y: 500, z: 2000 });
+  });
+
   it('reads numbers-only text (no anchor) using unit-bearing tokens', () => {
     const r = parsePosLine('-14215974.6126km -4787767.8108km 734.87m');
     expect(r!.zone).toBe('');

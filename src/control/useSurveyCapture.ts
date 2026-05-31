@@ -71,9 +71,9 @@ interface Cached {
   scan: ScanResult | null;
 }
 
-/** Format a position vector in km for the debug line. */
+/** Format a position vector in km for the debug line (full precision). */
 function fmtKm(p: Vec3): string {
-  const km = (m: number): string => (m / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 });
+  const km = (m: number): string => (m / 1000).toLocaleString(undefined, { maximumFractionDigits: 4 });
   return `${km(p.x)}, ${km(p.y)}, ${km(p.z)} km`;
 }
 

@@ -9,7 +9,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { CapturePreview } from './CapturePreview';
 import type { PreviewRegion } from './CapturePreview';
 import { SurveyMap } from './SurveyMap';
-import { OreReference } from './OreReference';
+import { ScanResults } from './ScanResults';
 import type { PickedSource } from './SourcePicker';
 import { useSurveyCapture } from '../useSurveyCapture';
 import type { ActiveSurveyRegion } from '../useSurveyCapture';
@@ -48,7 +48,9 @@ function newId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `r-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-const km = (m: number): string => (m / 1000).toLocaleString(undefined, { maximumFractionDigits: 2 });
+// Full precision (km) so the readout matches the HUD digit-for-digit — coordinate
+// decimals are meaningful, so don't round to 2 places.
+const km = (m: number): string => (m / 1000).toLocaleString(undefined, { maximumFractionDigits: 6 });
 
 /** Mean position of a set of entries (map center fallback when not flying). */
 function centroid(entries: SurveyEntry[]): Vec3 | null {
@@ -153,7 +155,11 @@ export function SurveyView({
     });
     setLog((prev) => [entry, ...prev]);
   };
-  const removeEntry = (id: string): void => setLog((prev) => prev.filter((e) => e.id !== id));
+  const removeResult = (id: string): void => {
+    setLog((prev) => prev.filter((e) => e.id !== id));
+    setSimScans((prev) => prev.filter((s) => s.entry?.id !== id));
+  };
+  const resultsEntries = useMemo(() => [...log, ...simEntries], [log, simEntries]);
 
   const exportLog = (kind: 'json' | 'csv'): void => {
     if (kind === 'json') {
@@ -259,7 +265,7 @@ export function SurveyView({
           )}
         </div>
 
-        <OreReference table={table} />
+        <ScanResults entries={resultsEntries} onRemove={removeResult} />
 
         <div style={S.panel}>
           <Card title="Live readout">
@@ -369,24 +375,7 @@ export function SurveyView({
                 </button>
               </span>
             </div>
-            {log.length > 0 && (
-              <div style={S.logList}>
-                {log.map((e) => (
-                  <div key={e.id} style={S.logRow}>
-                    <span style={{ ...S.dot, background: 'hsl(200 70% 60%)' }} />
-                    <span style={S.logOre}>
-                      {e.ore ?? '—'}
-                      {e.nodes ? <span style={S.logNodes}> ×{e.nodes}</span> : null}
-                    </span>
-                    <span style={S.logRs}>{e.rs}</span>
-                    <span style={S.logScout}>{e.scout}</span>
-                    <button style={S.delBtn} onClick={() => removeEntry(e.id)}>
-                      ✕
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+            <p style={S.dim}>Entries appear in the Scan results column (right).</p>
           </Card>
 
           <Card title="Map">
