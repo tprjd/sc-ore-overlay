@@ -3,7 +3,7 @@
 // PP-OCR, validated, then matched to ore(s) shown as "Ore ×N". The location
 // dropdown narrows overlapping-signature matches.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
@@ -80,6 +80,14 @@ export function ScanView({
   const imgRef = useRef<HTMLImageElement | null>(null);
   const mediaRef = useRef<DrawableSource | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const areaRef = useRef<HTMLDivElement | null>(null);
+  const pendingZoom = useRef<{
+    ratio: number;
+    cx: number;
+    cy: number;
+    contentX: number;
+    contentY: number;
+  } | null>(null);
 
   const [paused, setPaused] = useState(false);
   const [drag, setDrag] = useState<DragBox | null>(null);
@@ -94,6 +102,37 @@ export function ScanView({
       void video.play().catch(() => undefined);
     }
   }, [source]);
+
+  // Wheel = zoom centered on the cursor; keep the point under the cursor fixed.
+  useEffect(() => {
+    const area = areaRef.current;
+    if (!area) return;
+    const onWheel = (e: WheelEvent): void => {
+      e.preventDefault();
+      const rect = area.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+      const contentX = area.scrollLeft + cx;
+      const contentY = area.scrollTop + cy;
+      setZoom((z) => {
+        const nz = Math.min(6, Math.max(1, z * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
+        pendingZoom.current = { ratio: nz / z, cx, cy, contentX, contentY };
+        return nz;
+      });
+    };
+    area.addEventListener('wheel', onWheel, { passive: false });
+    return () => area.removeEventListener('wheel', onWheel);
+  }, []);
+
+  // After a wheel-zoom re-renders, adjust scroll so the cursor point holds.
+  useLayoutEffect(() => {
+    const p = pendingZoom.current;
+    const area = areaRef.current;
+    if (!p || !area) return;
+    area.scrollLeft = p.contentX * p.ratio - p.cx;
+    area.scrollTop = p.contentY * p.ratio - p.cy;
+    pendingZoom.current = null;
+  }, [zoom]);
 
   const loop = useCaptureLoop(mediaRef, region, params, !paused, table);
 
@@ -194,7 +233,7 @@ export function ScanView({
             />
             <span style={S.sliderValue}>{zoom.toFixed(1)}×</span>
           </label>
-          <div style={S.previewArea}>
+          <div ref={areaRef} style={S.previewArea}>
             <div
               ref={wrapRef}
               style={{ ...S.preview, width: `${zoom * 100}%` }}
