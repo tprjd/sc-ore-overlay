@@ -13,6 +13,7 @@ import type {
   OverlayPayload,
   ScoBridge,
 } from '../src/shared/bridge';
+import type { SurveyEntry } from '../src/core/survey';
 
 const api: ScoBridge = {
   getCaptureSources: () =>
@@ -56,6 +57,9 @@ const api: ScoBridge = {
     return () => ipcRenderer.off('sco:overlay-toggle', handler);
   },
   resizeDetail: (size) => ipcRenderer.send('sco:detail-resize', size),
+
+  getSurveyLog: () => ipcRenderer.invoke('sco:get-survey-log') as Promise<SurveyEntry[]>,
+  saveSurveyLog: (entries) => ipcRenderer.send('sco:save-survey-log', entries),
 };
 
 contextBridge.exposeInMainWorld('sco', api);

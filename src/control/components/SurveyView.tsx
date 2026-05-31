@@ -3,7 +3,7 @@
 // the debug-overlay coordinate read working and verified; logging + the map come
 // in S2/S3. Reuses the shared CapturePreview and the existing OCR pipeline.
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 
 import { CapturePreview } from './CapturePreview';
@@ -17,6 +17,7 @@ import type { DrawableSource, NormRegion } from '../preprocess';
 import { DEBUG_SHIP, debugEntries } from '../survey-debug';
 import { scanImage } from '../scanImage';
 import type { SimScan } from '../scanImage';
+import { makeEntry, mergeEntries } from '../../core';
 import type { AxisPlane, SignatureTable, SurveyEntry, Vec3 } from '../../core';
 import type { SurveyRegionSetting, SurveyRole } from '../../shared/bridge';
 
@@ -28,6 +29,8 @@ export interface SurveyViewProps {
   params: LoopParams;
   regions: SurveyRegionSetting[];
   onRegionsChange: (regions: SurveyRegionSetting[]) => void;
+  scout: string;
+  onScoutChange: (scout: string) => void;
   onBack: () => void;
 }
 
@@ -56,7 +59,30 @@ function centroid(entries: SurveyEntry[]): Vec3 | null {
   return { x: s.x / entries.length, y: s.y / entries.length, z: s.z / entries.length };
 }
 
-export function SurveyView({ source, table, params, regions, onRegionsChange, onBack }: SurveyViewProps) {
+/** Trigger a client-side file download. */
+function download(name: string, mime: string, text: string): void {
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Quote a CSV field. */
+const csv = (s: string): string => `"${String(s).replace(/"/g, '""')}"`;
+
+export function SurveyView({
+  source,
+  table,
+  params,
+  regions,
+  onRegionsChange,
+  scout,
+  onScoutChange,
+  onBack,
+}: SurveyViewProps) {
   const mediaRef = useRef<DrawableSource | null>(null);
   const [activeId, setActiveId] = useState<string | null>(regions[0]?.id ?? null);
   const [leftMode, setLeftMode] = useState<LeftMode>('preview');
@@ -71,16 +97,82 @@ export function SurveyView({ source, table, params, regions, onRegionsChange, on
   );
   const readout = useSurveyCapture(mediaRef, active, params, true, table);
 
+  // Persisted scan log (separate userData file). Loaded once, saved on change.
+  const [log, setLog] = useState<SurveyEntry[]>([]);
+  const logLoaded = useRef(false);
+  useEffect(() => {
+    let alive = true;
+    const p = window.sco?.getSurveyLog?.();
+    if (!p) {
+      logLoaded.current = true;
+      return;
+    }
+    void p
+      .then((e) => {
+        if (alive) setLog(Array.isArray(e) ? e : []);
+      })
+      .finally(() => {
+        logLoaded.current = true;
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (logLoaded.current) window.sco?.saveSurveyLog?.(log);
+  }, [log]);
+
   const debugList = useMemo(() => debugEntries(), []);
   const simEntries = useMemo(
     () => simScans.map((s) => s.entry).filter((e): e is SurveyEntry => e != null),
     [simScans],
   );
   const mapEntries = useMemo(
-    () => [...(debugMode ? debugList : []), ...simEntries],
-    [debugMode, debugList, simEntries],
+    () => [...log, ...(debugMode ? debugList : []), ...simEntries],
+    [log, debugMode, debugList, simEntries],
   );
-  const mapShip: Vec3 | null = debugMode ? DEBUG_SHIP : (readout.pos ?? centroid(simEntries));
+  const mapShip: Vec3 | null = debugMode
+    ? DEBUG_SHIP
+    : (readout.pos ?? centroid([...log, ...simEntries]));
+
+  const canLog = readout.pos != null;
+  const logScan = (): void => {
+    if (!readout.pos) return;
+    const entry = makeEntry({
+      id: newId(),
+      ts: Date.now(),
+      scout: scout.trim() || 'Me',
+      system: readout.system ?? 'Unknown',
+      pos: readout.pos,
+      rs: readout.rs ?? 0,
+      candidates: readout.candidates,
+      source: 'local',
+    });
+    setLog((prev) => [entry, ...prev]);
+  };
+  const removeEntry = (id: string): void => setLog((prev) => prev.filter((e) => e.id !== id));
+
+  const exportLog = (kind: 'json' | 'csv'): void => {
+    if (kind === 'json') {
+      download('survey-log.json', 'application/json', JSON.stringify(log, null, 2));
+    } else {
+      const head = 'ts,iso,scout,system,ore,nodes,rs,x,y,z';
+      const rows = log.map((e) =>
+        [e.ts, new Date(e.ts).toISOString(), csv(e.scout), csv(e.system), csv(e.ore ?? ''), e.nodes ?? '', e.rs, e.pos.x, e.pos.y, e.pos.z].join(','),
+      );
+      download('survey-log.csv', 'text/csv', [head, ...rows].join('\n'));
+    }
+  };
+  const importLog = async (files: FileList | null): Promise<void> => {
+    const file = files?.[0];
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text()) as SurveyEntry[];
+      if (Array.isArray(parsed)) setLog((prev) => mergeEntries(prev, parsed));
+    } catch {
+      // ignore malformed import
+    }
+  };
 
   const onSimFiles = async (files: FileList | null): Promise<void> => {
     if (!files || files.length === 0) return;
@@ -203,6 +295,66 @@ export function SurveyView({ source, table, params, regions, onRegionsChange, on
               </ul>
             )}
             {readout.error && <div style={S.error}>{readout.error}</div>}
+            <button style={{ ...S.logBtn, ...(canLog ? null : S.logBtnOff) }} disabled={!canLog} onClick={logScan}>
+              + Log scan
+            </button>
+            {!canLog && <p style={S.dim}>Need a ship position to log (box a Ship Pos region).</p>}
+          </Card>
+
+          <Card title="Log">
+            <label style={S.kv}>
+              <span style={S.k}>Scout</span>
+              <input
+                style={S.input}
+                value={scout}
+                placeholder="your callsign"
+                onChange={(e) => onScoutChange(e.target.value)}
+              />
+            </label>
+            <div style={{ ...S.kv, marginTop: 6 }}>
+              <span style={S.k}>{log.length} logged</span>
+              <span style={S.logActions}>
+                <button style={S.miniBtn} disabled={!log.length} onClick={() => exportLog('json')}>
+                  JSON
+                </button>
+                <button style={S.miniBtn} disabled={!log.length} onClick={() => exportLog('csv')}>
+                  CSV
+                </button>
+                <label style={S.miniBtn}>
+                  Import
+                  <input
+                    type="file"
+                    accept="application/json"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      void importLog(e.target.files);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+                <button style={S.miniBtn} disabled={!log.length} onClick={() => setLog([])}>
+                  Clear
+                </button>
+              </span>
+            </div>
+            {log.length > 0 && (
+              <div style={S.logList}>
+                {log.map((e) => (
+                  <div key={e.id} style={S.logRow}>
+                    <span style={{ ...S.dot, background: 'hsl(200 70% 60%)' }} />
+                    <span style={S.logOre}>
+                      {e.ore ?? '—'}
+                      {e.nodes ? <span style={S.logNodes}> ×{e.nodes}</span> : null}
+                    </span>
+                    <span style={S.logRs}>{e.rs}</span>
+                    <span style={S.logScout}>{e.scout}</span>
+                    <button style={S.delBtn} onClick={() => removeEntry(e.id)}>
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
 
           <Card title="Map">
@@ -394,6 +546,17 @@ const S: Record<string, CSSProperties> = {
   mapWrap: { flex: 1, minHeight: 0, padding: '8px 14px 14px' },
   checkRow: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 },
   file: { width: '100%', fontSize: 12, color: '#9fb3c8' },
+  logBtn: { width: '100%', marginTop: 10, background: '#1f6f4a', color: '#eafff3', border: '1px solid #2e9a68', borderRadius: 6, padding: '8px 10px', cursor: 'pointer', fontSize: 14, fontWeight: 600 },
+  logBtnOff: { background: '#23272e', color: '#6b7480', border: '1px solid #2c323d', cursor: 'not-allowed' },
+  input: { flex: 1, background: '#0d0f12', color: '#e6e6e6', border: '1px solid #3a4150', borderRadius: 6, padding: '5px 8px', fontSize: 13 },
+  logActions: { display: 'flex', gap: 4 },
+  miniBtn: { background: '#2a2f3a', color: '#e6e6e6', border: '1px solid #3a4150', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontSize: 11 },
+  logList: { display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8, maxHeight: 240, overflowY: 'auto' },
+  logRow: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '3px 0' },
+  logOre: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  logNodes: { color: '#4fd1ff' },
+  logRs: { fontFamily: 'ui-monospace, monospace', opacity: 0.7, width: 56, textAlign: 'right' },
+  logScout: { opacity: 0.5, width: 64, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   simList: { display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 },
   simCard: { background: '#0d0f12', border: '1px solid #2c323d', borderRadius: 6, padding: 8 },
   simHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 },

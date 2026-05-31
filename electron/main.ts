@@ -19,6 +19,7 @@ import type {
   OverlayConfig,
   OverlayPayload,
 } from '../src/shared/bridge';
+import type { SurveyEntry } from '../src/core/survey';
 
 const dirname = __dirname;
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
@@ -88,6 +89,26 @@ ipcMain.on('sco:overlay-resize', (_e: IpcMainEvent, size: { width: number; heigh
 });
 ipcMain.on('sco:detail-resize', (_e: IpcMainEvent, size: { width: number; height: number }) => {
   detailWin?.setSize(Math.max(160, Math.round(size.width)), Math.max(80, Math.round(size.height)));
+});
+
+// Survey scan log — its own file (it can grow large; kept out of settings.json).
+const surveyLogFile = (): string => path.join(app.getPath('userData'), 'survey-log.json');
+function readSurveyLog(): SurveyEntry[] {
+  try {
+    const data = JSON.parse(readFileSync(surveyLogFile(), 'utf8')) as SurveyEntry[];
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+ipcMain.handle('sco:get-survey-log', (): SurveyEntry[] => readSurveyLog());
+ipcMain.on('sco:save-survey-log', (_e: IpcMainEvent, entries: SurveyEntry[]) => {
+  try {
+    mkdirSync(path.dirname(surveyLogFile()), { recursive: true });
+    writeFileSync(surveyLogFile(), JSON.stringify(entries));
+  } catch {
+    // ignore write errors
+  }
 });
 
 // --- Windows -----------------------------------------------------------------

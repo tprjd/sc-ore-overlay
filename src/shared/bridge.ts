@@ -3,6 +3,7 @@
 // (renderer) TypeScript projects can reference it without leaking globals.
 
 import type { QualityDetail } from '../core/quality';
+import type { SurveyEntry } from '../core/survey';
 
 /** A screen or window the user can capture, as enumerated by desktopCapturer. */
 export interface CaptureSource {
@@ -123,8 +124,8 @@ export interface AppSettings {
   overlay?: Partial<OverlayConfig>;
   overlayBounds?: { x: number; y: number; width: number; height: number };
   detailBounds?: { x: number; y: number; width: number; height: number };
-  /** Survey Mode: persisted capture regions + their roles. */
-  survey?: { regions?: SurveyRegionSetting[] };
+  /** Survey Mode: persisted capture regions + their roles, and the scout name. */
+  survey?: { regions?: SurveyRegionSetting[]; scout?: string };
 }
 
 /** The typed, sandboxed API exposed to the renderer as `window.sco`. */
@@ -157,4 +158,8 @@ export interface ScoBridge {
   onToggleVisible(cb: () => void): () => void;
   /** Detail box → main: resize the detail window to the given content size. */
   resizeDetail(size: { width: number; height: number }): void;
+  /** Survey Mode: load the persisted scan log (separate file from settings). */
+  getSurveyLog(): Promise<SurveyEntry[]>;
+  /** Survey Mode: persist the full scan log (append-only, managed in renderer). */
+  saveSurveyLog(entries: SurveyEntry[]): void;
 }

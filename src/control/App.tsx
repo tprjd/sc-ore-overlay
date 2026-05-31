@@ -54,6 +54,7 @@ export function App() {
   const [autoReconnect, setAutoReconnect] = useState(true);
   const [tab, setTab] = useState<Tab>('mining');
   const [surveyRegions, setSurveyRegions] = useState<SurveyRegionSetting[]>([]);
+  const [surveyScout, setSurveyScout] = useState<string>('');
   const lastSource = useRef<{ id?: string; name?: string }>({});
 
   // Restore persisted settings once (Electron userData).
@@ -81,6 +82,7 @@ export function App() {
         if (s.hotkeys) setHotkeys({ ...DEFAULT_HOTKEYS, ...s.hotkeys });
         setOverlayConfig({ ...DEFAULT_OVERLAY_CONFIG, ...(s.overlay ?? {}) });
         if (s.survey?.regions) setSurveyRegions(s.survey.regions);
+        if (s.survey?.scout) setSurveyScout(s.survey.scout);
         lastSource.current = { id: s.sourceId, name: s.sourceName };
       })
       .finally(finish);
@@ -109,8 +111,8 @@ export function App() {
     if (loaded) window.sco?.setSettings?.({ activePatch });
   }, [activePatch, loaded]);
   useEffect(() => {
-    if (loaded) window.sco?.setSettings?.({ survey: { regions: surveyRegions } });
-  }, [surveyRegions, loaded]);
+    if (loaded) window.sco?.setSettings?.({ survey: { regions: surveyRegions, scout: surveyScout } });
+  }, [surveyRegions, surveyScout, loaded]);
 
   const handlePick = (picked: PickedSource): void => {
     setAutoReconnect(false);
@@ -201,6 +203,8 @@ export function App() {
             params={params}
             regions={surveyRegions}
             onRegionsChange={setSurveyRegions}
+            scout={surveyScout}
+            onScoutChange={setSurveyScout}
             onBack={handleBack}
           />
         )}
