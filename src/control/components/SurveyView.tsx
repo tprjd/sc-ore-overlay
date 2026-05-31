@@ -88,7 +88,9 @@ export function SurveyView({
     () => regions.filter((r) => r.enabled).map((r) => ({ id: r.id, role: r.role, rect: r.rect, scale: r.scale })),
     [regions],
   );
-  const readout = useSurveyCapture(mediaRef, active, params, true, table);
+  // Pause the live OCR loop while batch-scanning uploads — they share one
+  // single-threaded OCR engine, and competing for it tanks performance.
+  const readout = useSurveyCapture(mediaRef, active, params, !simBusy, table);
 
   // Persisted scan log (separate userData file). Loaded once, saved on change.
   const [log, setLog] = useState<SurveyEntry[]>([]);
@@ -174,12 +176,13 @@ export function SurveyView({
   const onSimFiles = async (files: FileList | null): Promise<void> => {
     if (!files || files.length === 0) return;
     setSimBusy(true);
-    let n = 0;
+    const results: SimScan[] = [];
     for (const file of Array.from(files)) {
-      const scout = file.name.replace(/\.[^.]+$/, '') || `Scout ${++n}`;
-      const res = await scanImage(file, active, table, scout, params.scale);
-      setSimScans((prev) => [...prev, res]);
+      const scout = file.name.replace(/\.[^.]+$/, '') || 'Scout';
+      results.push(await scanImage(file, active, table, scout, params.scale));
     }
+    // One state update for the whole batch → one re-render / map redraw.
+    setSimScans((prev) => [...prev, ...results]);
     setSimBusy(false);
   };
 

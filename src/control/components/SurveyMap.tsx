@@ -31,18 +31,22 @@ interface Hover {
 
 const km = (m: number): string => (m / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 });
 
-function centroidVec(entries: SurveyEntry[]): Vec3 {
-  let x = 0;
-  let y = 0;
-  let z = 0;
-  for (const e of entries) {
-    x += e.pos.x;
-    y += e.pos.y;
-    z += e.pos.z;
-  }
-  const n = entries.length;
-  return { x: x / n, y: y / n, z: z / n };
+/** Per-axis median — a center robust to a stray garbage coordinate. */
+function medianVec(entries: SurveyEntry[]): Vec3 {
+  const med = (xs: number[]): number => {
+    const s = [...xs].sort((a, b) => a - b);
+    const m = s.length >> 1;
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  };
+  return {
+    x: med(entries.map((e) => e.pos.x)),
+    y: med(entries.map((e) => e.pos.y)),
+    z: med(entries.map((e) => e.pos.z)),
+  };
 }
+
+/** Implausible distance between two same-system points (≈ 100,000 km). */
+const FAR = 1e8;
 
 function oreHue(name: string): number {
   let h = 0;
@@ -68,10 +72,10 @@ export function SurveyMap({ ship, entries, plane = 'xy' }: SurveyMapProps) {
   const sizeRef = useRef(size);
   sizeRef.current = size;
 
-  // Map origin: the field's own centroid (so spacing is correct even when the
-  // ship is far away), or the ship when there's nothing logged yet.
+  // Map origin: the field's own median (robust to a stray bad coordinate), or
+  // the ship when there's nothing logged yet.
   const origin = useMemo<Vec3 | null>(
-    () => (entries.length ? centroidVec(entries) : ship),
+    () => (entries.length ? medianVec(entries) : ship),
     [entries, ship],
   );
 
@@ -89,12 +93,19 @@ export function SurveyMap({ ship, entries, plane = 'xy' }: SurveyMapProps) {
   const originKey = origin ? `${origin.x},${origin.y},${origin.z}` : 'none';
   useLayoutEffect(() => {
     if (!origin || size.w < 2 || size.h < 2) return;
-    let maxR = 0;
-    for (const e of entries) {
-      const p = project(e.pos, origin, plane);
-      maxR = Math.max(maxR, Math.hypot(p.x, p.y));
+    // Fit to the cluster, not the farthest point: use the 90th-percentile radius
+    // so one stray coordinate can't shrink everything to a dot.
+    const radii = entries
+      .map((e) => {
+        const p = project(e.pos, origin, plane);
+        return Math.hypot(p.x, p.y);
+      })
+      .sort((a, b) => a - b);
+    let span = 10_000; // ~10 km default when empty/single
+    if (radii.length) {
+      const idx = Math.min(radii.length - 1, Math.floor(radii.length * 0.9));
+      span = Math.max(radii[idx], 1_000) * 1.2;
     }
-    const span = maxR > 0 ? maxR * 1.1 : 10_000; // pad a touch; default ~10 km when single/empty
     const ppm = (Math.min(size.w, size.h) * 0.42) / span;
     setView({ ppm, panX: 0, panY: 0 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -183,8 +194,12 @@ export function SurveyMap({ ship, entries, plane = 'xy' }: SurveyMapProps) {
   const hoverInfo = hover
     ? (() => {
         const e = hover.entry;
-        const ref = ship ?? origin!;
-        return { e, depth: project(e.pos, ref, plane).depth, dist: distance(e.pos, ref) };
+        // Measure from the ship only when it's a plausible same-area position;
+        // otherwise from the field center (so a garbage live read can't show
+        // "99,999,993 km away").
+        const shipOk = ship != null && origin != null && distance(ship, origin) < FAR;
+        const ref = shipOk ? ship! : origin!;
+        return { e, fromShip: shipOk, depth: project(e.pos, ref, plane).depth, dist: distance(e.pos, ref) };
       })()
     : null;
 
@@ -215,7 +230,8 @@ export function SurveyMap({ ship, entries, plane = 'xy' }: SurveyMapProps) {
             {hoverInfo.e.scan?.scu != null ? ` · ${hoverInfo.e.scan.scu.toFixed(1)} SCU` : ''}
           </div>
           <div style={S.tipRow}>
-            {km(hoverInfo.dist)} km {ship ? 'from ship' : 'from center'} · depth {km(hoverInfo.depth)} km
+            {km(hoverInfo.dist)} km {hoverInfo.fromShip ? 'from ship' : 'from center'} · depth{' '}
+            {km(hoverInfo.depth)} km
           </div>
           <div style={S.tipDim}>{hoverInfo.e.scout}</div>
         </div>
@@ -301,8 +317,9 @@ function draw(
   }
 
   // Ship marker (cyan plus), at its offset from the origin — clamped to the
-  // edge with a ring when it's off-screen so you can still tell where it is.
-  if (ship) {
+  // edge with a ring when off-screen. Hidden when the ship reads implausibly far
+  // (a garbage live coordinate), so it isn't a misleading dot.
+  if (ship && distance(ship, origin) < FAR) {
     const sp = project(ship, origin, plane);
     let sx = ox + sp.x * view.ppm;
     let sy = oy - sp.y * view.ppm;
