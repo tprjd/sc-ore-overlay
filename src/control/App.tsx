@@ -3,16 +3,25 @@
 // signature tables for every crawled patch are bundled and switchable.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 
 import { SourcePicker } from './components/SourcePicker';
 import type { PickedSource } from './components/SourcePicker';
 import { ScanView } from './components/ScanView';
+import { SurveyView } from './components/SurveyView';
 import type { NormRegion } from './preprocess';
 import type { LoopParams } from './useCaptureLoop';
 import { loadSignatureTable } from '../core';
 import type { SignatureTable } from '../core';
 import { DEFAULT_HOTKEYS, DEFAULT_OVERLAY_CONFIG } from '../shared/bridge';
-import type { HotkeyAction, HotkeyMap, OverlayConfig } from '../shared/bridge';
+import type {
+  HotkeyAction,
+  HotkeyMap,
+  OverlayConfig,
+  SurveyRegionSetting,
+} from '../shared/bridge';
+
+type Tab = 'mining' | 'survey';
 
 // PP-OCR reads raw color text and localizes it, so there is nothing to tune but
 // the crop upscale and the loop cadence.
@@ -43,6 +52,8 @@ export function App() {
   const [hotkeyStatus, setHotkeyStatus] = useState<Partial<Record<HotkeyAction, boolean>>>({});
   const [overlayConfig, setOverlayConfig] = useState<OverlayConfig>(DEFAULT_OVERLAY_CONFIG);
   const [autoReconnect, setAutoReconnect] = useState(true);
+  const [tab, setTab] = useState<Tab>('mining');
+  const [surveyRegions, setSurveyRegions] = useState<SurveyRegionSetting[]>([]);
   const lastSource = useRef<{ id?: string; name?: string }>({});
 
   // Restore persisted settings once (Electron userData).
@@ -69,6 +80,7 @@ export function App() {
         if (s.activePatch && tables[s.activePatch]) setActivePatch(s.activePatch);
         if (s.hotkeys) setHotkeys({ ...DEFAULT_HOTKEYS, ...s.hotkeys });
         setOverlayConfig({ ...DEFAULT_OVERLAY_CONFIG, ...(s.overlay ?? {}) });
+        if (s.survey?.regions) setSurveyRegions(s.survey.regions);
         lastSource.current = { id: s.sourceId, name: s.sourceName };
       })
       .finally(finish);
@@ -96,6 +108,9 @@ export function App() {
   useEffect(() => {
     if (loaded) window.sco?.setSettings?.({ activePatch });
   }, [activePatch, loaded]);
+  useEffect(() => {
+    if (loaded) window.sco?.setSettings?.({ survey: { regions: surveyRegions } });
+  }, [surveyRegions, loaded]);
 
   const handlePick = (picked: PickedSource): void => {
     setAutoReconnect(false);
@@ -143,24 +158,71 @@ export function App() {
     );
   }
   return (
-    <ScanView
-      source={source}
-      region={region}
-      onRegionChange={setRegion}
-      params={params}
-      onParamsChange={setParams}
-      table={table}
-      location={location}
-      onLocationChange={setLocation}
-      patches={patches}
-      activePatch={activePatch}
-      onPatchChange={setActivePatch}
-      hotkeys={hotkeys}
-      hotkeyStatus={hotkeyStatus}
-      onHotkeysChange={handleHotkeys}
-      overlayConfig={overlayConfig}
-      onOverlayConfigChange={handleOverlayConfig}
-      onBack={handleBack}
-    />
+    <div style={shell.root}>
+      <nav style={shell.tabs}>
+        <button
+          style={{ ...shell.tab, ...(tab === 'mining' ? shell.tabActive : null) }}
+          onClick={() => setTab('mining')}
+        >
+          Mining
+        </button>
+        <button
+          style={{ ...shell.tab, ...(tab === 'survey' ? shell.tabActive : null) }}
+          onClick={() => setTab('survey')}
+        >
+          Survey
+        </button>
+      </nav>
+      <div style={shell.view}>
+        {tab === 'mining' ? (
+          <ScanView
+            source={source}
+            region={region}
+            onRegionChange={setRegion}
+            params={params}
+            onParamsChange={setParams}
+            table={table}
+            location={location}
+            onLocationChange={setLocation}
+            patches={patches}
+            activePatch={activePatch}
+            onPatchChange={setActivePatch}
+            hotkeys={hotkeys}
+            hotkeyStatus={hotkeyStatus}
+            onHotkeysChange={handleHotkeys}
+            overlayConfig={overlayConfig}
+            onOverlayConfigChange={handleOverlayConfig}
+            onBack={handleBack}
+          />
+        ) : (
+          <SurveyView
+            source={source}
+            table={table}
+            params={params}
+            regions={surveyRegions}
+            onRegionsChange={setSurveyRegions}
+            onBack={handleBack}
+          />
+        )}
+      </div>
+    </div>
   );
 }
+
+const shell: Record<string, CSSProperties> = {
+  root: { display: 'flex', flexDirection: 'column', height: '100vh' },
+  tabs: { display: 'flex', gap: 2, padding: '6px 10px 0', background: '#16181d', borderBottom: '1px solid #2c323d' },
+  tab: {
+    background: 'none',
+    color: '#9fb3c8',
+    border: '1px solid transparent',
+    borderBottom: 'none',
+    borderTopLeftRadius: 7,
+    borderTopRightRadius: 7,
+    padding: '7px 16px',
+    cursor: 'pointer',
+    fontSize: 13,
+  },
+  tabActive: { background: '#1d2128', color: '#e6e6e6', border: '1px solid #2c323d', borderBottom: '1px solid #1d2128' },
+  view: { flex: 1, minHeight: 0 },
+};

@@ -98,6 +98,17 @@ export interface PersistedRegion {
   h: number;
 }
 
+/** What a Survey-Mode capture region reads (see SURVEY-MODE.md). */
+export type SurveyRole = 'rs' | 'shipPos' | 'system';
+
+/** One persisted Survey-Mode capture region + the field it reads. */
+export interface SurveyRegionSetting {
+  id: string;
+  role: SurveyRole;
+  rect: PersistedRegion;
+  enabled: boolean;
+}
+
 /** User settings persisted to Electron userData (survive restart). */
 export interface AppSettings {
   sourceId?: string;
@@ -112,6 +123,8 @@ export interface AppSettings {
   overlay?: Partial<OverlayConfig>;
   overlayBounds?: { x: number; y: number; width: number; height: number };
   detailBounds?: { x: number; y: number; width: number; height: number };
+  /** Survey Mode: persisted capture regions + their roles. */
+  survey?: { regions?: SurveyRegionSetting[] };
 }
 
 /** The typed, sandboxed API exposed to the renderer as `window.sco`. */

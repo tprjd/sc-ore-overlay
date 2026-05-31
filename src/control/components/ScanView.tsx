@@ -644,7 +644,7 @@ function KeyCapture({ value, onChange }: { value: string; onChange: (accel: stri
 }
 
 const S: Record<string, CSSProperties> = {
-  page: { display: 'flex', flexDirection: 'column', height: '100vh', color: '#e6e6e6', boxSizing: 'border-box' },
+  page: { display: 'flex', flexDirection: 'column', height: '100%', color: '#e6e6e6', boxSizing: 'border-box' },
   header: { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid #2c323d' },
   srcLabel: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, opacity: 0.9 },
   spacer: { flex: 1 },

@@ -60,7 +60,7 @@ const INITIAL: LoopState = {
  * (e.g. a misread 27080) that divides no signature cleanly is dropped. Returns
  * null when nothing matches.
  */
-function pickReading(lines: OcrLine[], table: SignatureTable): number | null {
+export function pickReading(lines: OcrLine[], table: SignatureTable): number | null {
   const numbers = new Set<number>();
   for (const line of lines) {
     for (const token of line.text.split(/\s+/)) {
