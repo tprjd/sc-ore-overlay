@@ -9,7 +9,7 @@ import { SourcePicker } from './components/SourcePicker';
 import type { PickedSource } from './components/SourcePicker';
 import { ScanView } from './components/ScanView';
 import { SurveyView } from './components/SurveyView';
-import type { NormRegion } from './preprocess';
+import { newRegionId } from './components/roles';
 import type { LoopParams } from './useCaptureLoop';
 import { loadSignatureTable } from '../core';
 import type { SignatureTable } from '../core';
@@ -43,7 +43,7 @@ export function App() {
   const patches = useMemo(() => Object.keys(tables).sort(), [tables]);
 
   const [source, setSource] = useState<PickedSource | null>(null);
-  const [region, setRegion] = useState<NormRegion | null>(null);
+  const [miningRegions, setMiningRegions] = useState<SurveyRegionSetting[]>([]);
   const [location, setLocation] = useState<string | null>(null);
   const [params, setParams] = useState<LoopParams>(DEFAULT_PARAMS);
   const [activePatch, setActivePatch] = useState<string>(() => patches[0] ?? 'unknown');
@@ -71,7 +71,11 @@ export function App() {
     void pending
       .then((s) => {
         if (!alive || !s) return;
-        if (s.region) setRegion(s.region);
+        if (s.mining?.regions) setMiningRegions(s.mining.regions);
+        else if (s.region) {
+          // Migrate the legacy single RS region to the new region list.
+          setMiningRegions([{ id: newRegionId(), role: 'rs', rect: s.region, enabled: true }]);
+        }
         if (s.location != null) setLocation(s.location);
         setParams((prev) => ({
           scale: s.scale ?? prev.scale,
@@ -93,8 +97,8 @@ export function App() {
 
   // Persist changes after the initial restore.
   useEffect(() => {
-    if (loaded) window.sco?.setSettings?.({ region: region ?? null });
-  }, [region, loaded]);
+    if (loaded) window.sco?.setSettings?.({ mining: { regions: miningRegions } });
+  }, [miningRegions, loaded]);
   useEffect(() => {
     if (loaded) window.sco?.setSettings?.({ location: location ?? null });
   }, [location, loaded]);
@@ -179,8 +183,8 @@ export function App() {
         {tab === 'mining' ? (
           <ScanView
             source={source}
-            region={region}
-            onRegionChange={setRegion}
+            regions={miningRegions}
+            onRegionsChange={setMiningRegions}
             params={params}
             onParamsChange={setParams}
             table={table}

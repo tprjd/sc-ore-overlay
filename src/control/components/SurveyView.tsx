@@ -10,6 +10,8 @@ import { CapturePreview } from './CapturePreview';
 import type { PreviewRegion } from './CapturePreview';
 import { SurveyMap } from './SurveyMap';
 import { ScanResults } from './ScanResults';
+import { RegionList } from './RegionList';
+import { ROLE_META, newRegionId } from './roles';
 import type { PickedSource } from './SourcePicker';
 import { useSurveyCapture } from '../useSurveyCapture';
 import type { ActiveSurveyRegion } from '../useSurveyCapture';
@@ -20,7 +22,7 @@ import { scanImage } from '../scanImage';
 import type { SimScan } from '../scanImage';
 import { isStablePos, makeEntry, mergeEntries } from '../../core';
 import type { AxisPlane, SignatureTable, SurveyEntry, Vec3 } from '../../core';
-import type { SurveyRegionSetting, SurveyRole } from '../../shared/bridge';
+import type { SurveyRegionSetting } from '../../shared/bridge';
 
 type LeftMode = 'preview' | 'map';
 
@@ -33,19 +35,6 @@ export interface SurveyViewProps {
   scout: string;
   onScoutChange: (scout: string) => void;
   onBack: () => void;
-}
-
-const ROLE_META: Record<SurveyRole, { label: string; color: string }> = {
-  scanResult: { label: 'Scan Result', color: '#f0abfc' },
-  shipPos: { label: 'Ship Pos', color: '#6ee7b7' },
-  rs: { label: 'RS', color: '#4fd1ff' },
-  system: { label: 'System', color: '#fbbf24' },
-};
-
-const DEFAULT_RECT: NormRegion = { x: 0.4, y: 0.45, w: 0.2, h: 0.06 };
-
-function newId(): string {
-  return globalThis.crypto?.randomUUID?.() ?? `r-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 // Full precision (km) so the readout matches the HUD digit-for-digit — coordinate
@@ -150,7 +139,7 @@ export function SurveyView({
     }
     setLogWarn(null);
     const entry = makeEntry({
-      id: newId(),
+      id: newRegionId(),
       ts: Date.now(),
       scout: scout.trim() || 'Me',
       system: readout.system ?? 'Unknown',
@@ -211,19 +200,8 @@ export function SurveyView({
     label: ROLE_META[r.role].label,
   }));
 
-  const addRegion = (role: SurveyRole): void => {
-    const id = newId();
-    onRegionsChange([...regions, { id, role, rect: DEFAULT_RECT, enabled: true }]);
-    setActiveId(id);
-  };
-  const updateRegion = (id: string, patch: Partial<SurveyRegionSetting>): void =>
-    onRegionsChange(regions.map((r) => (r.id === id ? { ...r, ...patch } : r)));
-  const removeRegion = (id: string): void => {
-    onRegionsChange(regions.filter((r) => r.id !== id));
-    if (activeId === id) setActiveId(null);
-  };
   const onDraw = (rect: NormRegion): void => {
-    if (activeId) updateRegion(activeId, { rect });
+    if (activeId) onRegionsChange(regions.map((r) => (r.id === activeId ? { ...r, rect } : r)));
   };
 
   return (
@@ -474,101 +452,21 @@ export function SurveyView({
           </Card>
 
           <Card title="Regions">
-            <div style={S.addRow}>
-              <span style={S.dim}>Add:</span>
-              {(Object.keys(ROLE_META) as SurveyRole[]).map((role) => (
-                <button key={role} style={S.addBtn} onClick={() => addRegion(role)}>
-                  + {ROLE_META[role].label}
-                </button>
-              ))}
-            </div>
-            {regions.length === 0 ? (
-              <p style={S.dim}>No regions yet. Add one to start reading the HUD.</p>
-            ) : (
-              <div style={S.regionList}>
-                {regions.map((r) => {
-                  const dbg = readout.regions[r.id];
-                  return (
-                    <div
-                      key={r.id}
-                      style={{ ...S.regionCard, ...(r.id === activeId ? S.regionCardActive : null) }}
-                      onClick={() => setActiveId(r.id)}
-                    >
-                      <div style={S.regionTop}>
-                        <span style={{ ...S.dot, background: ROLE_META[r.role].color }} />
-                        <select
-                          style={S.select}
-                          value={r.role}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => updateRegion(r.id, { role: e.target.value as SurveyRole })}
-                        >
-                          {(Object.keys(ROLE_META) as SurveyRole[]).map((role) => (
-                            <option key={role} value={role}>
-                              {ROLE_META[role].label}
-                            </option>
-                          ))}
-                        </select>
-                        <label
-                          style={S.scaleLabel}
-                          title="upscale — raise for small/blurry text (high FOV)"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <input
-                            type="number"
-                            min={1}
-                            max={12}
-                            value={r.scale ?? params.scale}
-                            onChange={(e) =>
-                              updateRegion(r.id, {
-                                scale: Math.max(1, Math.min(12, Math.round(Number(e.target.value)) || 1)),
-                              })
-                            }
-                            style={S.scaleInput}
-                          />
-                          ×
-                        </label>
-                        <label style={S.enableLabel} onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            checked={r.enabled}
-                            onChange={(e) => updateRegion(r.id, { enabled: e.target.checked })}
-                          />
-                          on
-                        </label>
-                        <button
-                          style={S.delBtn}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeRegion(r.id);
-                          }}
-                        >
-                          ✕
-                        </button>
-                      </div>
-                      <div style={S.regionBody}>
-                        <div style={S.cropWrap}>
-                          {dbg?.dataUrl ? (
-                            <img src={dbg.dataUrl} alt="crop" style={S.crop} />
-                          ) : (
-                            <span style={S.dim}>{r.enabled ? '…' : 'off'}</span>
-                          )}
-                        </div>
-                        <div style={S.regionMeta}>
-                          <div style={{ ...S.parsed, color: dbg?.ok ? '#6ee7b7' : '#9fb3c8' }}>
-                            {dbg?.parsed ?? '—'}
-                          </div>
-                          <div style={S.raw}>{dbg?.rawText ?? '(waiting)'}</div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            <p style={S.dim}>
-              Enable SC&apos;s debug overlay (the <code>Zone … Pos</code> readout) and box the{' '}
-              <b>SolarSystem</b> line for absolute coordinates.
-            </p>
+            <RegionList
+              regions={regions}
+              onRegionsChange={onRegionsChange}
+              activeId={activeId}
+              onActiveChange={setActiveId}
+              debug={readout.regions}
+              roles={['scanResult', 'shipPos', 'rs', 'system']}
+              defaultScale={params.scale}
+              hint={
+                <>
+                  Enable SC&apos;s debug overlay (the <code>Zone … Pos</code> readout) and box the{' '}
+                  <b>SolarSystem</b> line for absolute coordinates.
+                </>
+              }
+            />
           </Card>
         </div>
       </div>

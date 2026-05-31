@@ -1,28 +1,39 @@
-// Step 2: calibrate the RS region and watch the live read. Drag a box over the
-// scanner number (stored as normalized 0..1 coords); the crop is read with
-// PP-OCR, validated, then matched to ore(s) shown as "Ore ×N". The location
-// dropdown narrows overlapping-signature matches.
+// Mining tab: draw capture regions (the RS number + the SCAN RESULTS panel),
+// read them live, match the RS to ore(s), and push to the overlay. The RS is
+// temporally voted for a stable overlay value; the scanned rock's composition
+// (with per-material SCU) feeds the detail/scan overlay. Reuses the shared
+// CapturePreview + RegionList + capture loop.
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
-  PointerEvent as ReactPointerEvent,
   ReactNode,
 } from 'react';
 
-import { useCaptureLoop } from '../useCaptureLoop';
+import { CapturePreview } from './CapturePreview';
+import type { PreviewRegion } from './CapturePreview';
+import { RegionList } from './RegionList';
+import { ROLE_META } from './roles';
+import type { PickedSource } from './SourcePicker';
+import { useSurveyCapture } from '../useSurveyCapture';
+import type { ActiveSurveyRegion } from '../useSurveyCapture';
 import type { LoopParams } from '../useCaptureLoop';
 import type { DrawableSource, NormRegion } from '../preprocess';
-import type { PickedSource } from './SourcePicker';
-import { matchOre, groupLocations, getQualityDetail } from '../../core';
-import type { SignatureTable } from '../../core';
-import type { HotkeyAction, HotkeyMap, OverlayConfig, OverlayScale } from '../../shared/bridge';
+import { createVoter, matchOre, groupLocations, getQualityDetail } from '../../core';
+import type { SignatureTable, Voter } from '../../core';
+import type {
+  HotkeyAction,
+  HotkeyMap,
+  OverlayConfig,
+  OverlayScale,
+  SurveyRegionSetting,
+} from '../../shared/bridge';
 
 export interface ScanViewProps {
   source: PickedSource;
-  region: NormRegion | null;
-  onRegionChange: (r: NormRegion | null) => void;
+  regions: SurveyRegionSetting[];
+  onRegionsChange: (regions: SurveyRegionSetting[]) => void;
   params: LoopParams;
   onParamsChange: (p: LoopParams) => void;
   table: SignatureTable;
@@ -39,28 +50,10 @@ export interface ScanViewProps {
   onBack: () => void;
 }
 
-interface DragBox {
-  x0: number;
-  y0: number;
-  x1: number;
-  y1: number;
-}
-
-const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
-
-function dragToRegion(d: DragBox): NormRegion {
-  return {
-    x: Math.min(d.x0, d.x1),
-    y: Math.min(d.y0, d.y1),
-    w: Math.abs(d.x1 - d.x0),
-    h: Math.abs(d.y1 - d.y0),
-  };
-}
-
 export function ScanView({
   source,
-  region,
-  onRegionChange,
+  regions,
+  onRegionsChange,
   params,
   onParamsChange,
   table,
@@ -76,127 +69,63 @@ export function ScanView({
   onOverlayConfigChange,
   onBack,
 }: ScanViewProps) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const imgRef = useRef<HTMLImageElement | null>(null);
   const mediaRef = useRef<DrawableSource | null>(null);
-  const wrapRef = useRef<HTMLDivElement | null>(null);
-  const areaRef = useRef<HTMLDivElement | null>(null);
-  const pendingZoom = useRef<{
-    ratio: number;
-    cx: number;
-    cy: number;
-    contentX: number;
-    contentY: number;
-  } | null>(null);
-
   const [paused, setPaused] = useState(false);
-  const [drag, setDrag] = useState<DragBox | null>(null);
-  const [zoom, setZoom] = useState(1);
+  const [activeId, setActiveId] = useState<string | null>(regions[0]?.id ?? null);
 
-  // Attach the live stream to the <video> element.
+  const active: ActiveSurveyRegion[] = useMemo(
+    () => regions.filter((r) => r.enabled).map((r) => ({ id: r.id, role: r.role, rect: r.rect, scale: r.scale })),
+    [regions],
+  );
+  const readout = useSurveyCapture(mediaRef, active, params, !paused, table);
+
+  // Temporal voting on the RS reading → a stable value for the overlay. The
+  // capture loop emits a fresh readout each tick, so push every tick.
+  const voter = useRef<Voter>(createVoter({ quorum: params.quorum }));
   useEffect(() => {
-    if (source.kind === 'desktop' && source.stream && videoRef.current) {
-      const video = videoRef.current;
-      video.srcObject = source.stream;
-      mediaRef.current = video;
-      void video.play().catch(() => undefined);
-    }
-  }, [source]);
-
-  // Wheel = zoom centered on the cursor; keep the point under the cursor fixed.
+    voter.current = createVoter({ quorum: params.quorum });
+  }, [params.quorum]);
+  const [stableRs, setStableRs] = useState<number | null>(null);
   useEffect(() => {
-    const area = areaRef.current;
-    if (!area) return;
-    const onWheel = (e: WheelEvent): void => {
-      e.preventDefault();
-      const rect = area.getBoundingClientRect();
-      const cx = e.clientX - rect.left;
-      const cy = e.clientY - rect.top;
-      const contentX = area.scrollLeft + cx;
-      const contentY = area.scrollTop + cy;
-      setZoom((z) => {
-        const nz = Math.min(6, Math.max(1, z * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
-        pendingZoom.current = { ratio: nz / z, cx, cy, contentX, contentY };
-        return nz;
-      });
-    };
-    area.addEventListener('wheel', onWheel, { passive: false });
-    return () => area.removeEventListener('wheel', onWheel);
-  }, []);
+    setStableRs(voter.current.push(readout.rs));
+  }, [readout]);
 
-  // After a wheel-zoom re-renders, adjust scroll so the cursor point holds.
-  useLayoutEffect(() => {
-    const p = pendingZoom.current;
-    const area = areaRef.current;
-    if (!p || !area) return;
-    area.scrollLeft = p.contentX * p.ratio - p.cx;
-    area.scrollTop = p.contentY * p.ratio - p.cy;
-    pendingZoom.current = null;
-  }, [zoom]);
-
-  const loop = useCaptureLoop(mediaRef, region, params, !paused, table);
-
-  // Phase 2: feed the accepted reading into the matcher (method "Ship" + the
-  // selected location). Overlapping signatures surface as multiple candidates.
   const systemGroups = useMemo(() => groupLocations(table), [table]);
   const matches = useMemo(
-    () =>
-      loop.stable != null
-        ? matchOre(loop.stable, table, { method: 'Ship' }, { location })
-        : [],
-    [loop.stable, table, location],
+    () => (stableRs != null ? matchOre(stableRs, table, { method: 'Ship' }, { location }) : []),
+    [stableRs, table, location],
   );
 
-  // Push current matches + top-candidate quality detail to the overlay boxes
-  // (no-op outside Electron).
+  // Push matches + top-candidate quality + the scanned rock to the overlay boxes.
   useEffect(() => {
     const top = matches[0];
     const detail = top ? getQualityDetail(table, top.name, top.signature, location) : null;
     window.sco?.sendMatches?.({
-      reading: loop.stable,
+      reading: stableRs,
       candidates: matches.map((c) => ({ name: c.name, nodes: c.nodes, score: c.score })),
       detail,
+      scan: readout.scan ?? null,
     });
-  }, [loop.stable, matches, table, location]);
+  }, [stableRs, matches, table, location, readout.scan]);
 
-  // Respond to global-hotkey commands relayed from the main process.
+  // Global-hotkey commands relayed from the main process.
   useEffect(() => {
     return window.sco?.onCommand?.((command) => {
       if (command === 'pause') setPaused((p) => !p);
-      else if (command === 'recalibrate') onRegionChange(null);
+      else if (command === 'recalibrate') onRegionsChange([]);
     });
-  }, [onRegionChange]);
+  }, [onRegionsChange]);
 
-  // ---- region drag (normalized to the displayed media box) ----
-  const toNorm = (clientX: number, clientY: number): { x: number; y: number } => {
-    const media = mediaRef.current;
-    if (!media) return { x: 0, y: 0 };
-    const r = media.getBoundingClientRect();
-    if (r.width < 1 || r.height < 1) return { x: 0, y: 0 };
-    return { x: clamp01((clientX - r.left) / r.width), y: clamp01((clientY - r.top) / r.height) };
+  const previewRegions: PreviewRegion[] = regions.map((r) => ({
+    id: r.id,
+    rect: r.rect,
+    color: ROLE_META[r.role].color,
+    active: r.id === activeId,
+    label: ROLE_META[r.role].label,
+  }));
+  const onDraw = (rect: NormRegion): void => {
+    if (activeId) onRegionsChange(regions.map((r) => (r.id === activeId ? { ...r, rect } : r)));
   };
-
-  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>): void => {
-    e.currentTarget.setPointerCapture(e.pointerId);
-    const p = toNorm(e.clientX, e.clientY);
-    setDrag({ x0: p.x, y0: p.y, x1: p.x, y1: p.y });
-  };
-  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>): void => {
-    setDrag((d) => {
-      if (!d) return d;
-      const p = toNorm(e.clientX, e.clientY);
-      return { ...d, x1: p.x, y1: p.y };
-    });
-  };
-  const onPointerUp = (): void => {
-    if (drag) {
-      const r = dragToRegion(drag);
-      if (r.w > 0.004 && r.h > 0.004) onRegionChange(r);
-      setDrag(null);
-    }
-  };
-
-  const shownRegion = drag ? dragToRegion(drag) : region;
   const set = <K extends keyof LoopParams>(key: K, val: LoopParams[K]): void =>
     onParamsChange({ ...params, [key]: val });
 
@@ -212,86 +141,34 @@ export function ScanView({
         <button style={S.btn} onClick={() => setPaused((p) => !p)}>
           {paused ? 'Resume' : 'Pause'}
         </button>
-        <button style={S.btn} onClick={() => onRegionChange(null)} disabled={!region}>
-          Clear region
-        </button>
       </header>
 
       <div style={S.body}>
-        {/* Preview + region overlay */}
-        <div style={S.previewCol}>
-          <label style={S.zoomRow}>
-            <span style={S.sliderLabel}>Zoom</span>
-            <input
-              type="range"
-              min={100}
-              max={600}
-              step={10}
-              value={Math.round(zoom * 100)}
-              onChange={(e) => setZoom(Number(e.target.value) / 100)}
-              style={S.range}
-            />
-            <span style={S.sliderValue}>{zoom.toFixed(1)}×</span>
-          </label>
-          <div ref={areaRef} style={S.previewArea}>
-            <div
-              ref={wrapRef}
-              style={{ ...S.preview, width: `${zoom * 100}%` }}
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-            >
-              {source.kind === 'desktop' ? (
-                <video ref={videoRef} muted playsInline style={S.media} />
-              ) : (
-                <img
-                  ref={imgRef}
-                  src={source.imageUrl}
-                  alt="capture source"
-                  style={S.media}
-                  onLoad={() => {
-                    mediaRef.current = imgRef.current;
-                  }}
-                />
-              )}
-              {shownRegion && (
-                <div
-                  style={{
-                    ...S.regionBox,
-                    left: `${shownRegion.x * 100}%`,
-                    top: `${shownRegion.y * 100}%`,
-                    width: `${shownRegion.w * 100}%`,
-                    height: `${shownRegion.h * 100}%`,
-                  }}
-                />
-              )}
-            </div>
-          </div>
-          <p style={S.hint}>
-            {region
-              ? 'Drag again to re-draw the region. Zoom + scroll to refine.'
-              : 'Drag a box over the Radar Signature number — zoom in for precision.'}
-          </p>
-        </div>
+        <CapturePreview
+          source={source}
+          mediaRef={mediaRef}
+          regions={previewRegions}
+          onDraw={onDraw}
+          hint={
+            activeId
+              ? 'Drag a box over the selected field. Zoom + scroll to refine.'
+              : 'Add a region (RS or Scan Result), then drag a box over it on the HUD.'
+          }
+        />
 
-        {/* Tuning + debug */}
         <div style={S.panel}>
           <div style={S.readout}>
             <div style={S.readoutLabel}>Accepted reading</div>
-            <div style={S.readoutValue}>{loop.stable ?? '—'}</div>
+            <div style={S.readoutValue}>{stableRs ?? '—'}</div>
             <div style={S.readoutMeta}>
-              {paused ? 'paused' : `every ${params.intervalMs} ms · quorum ${params.quorum} · OCR ×${loop.ocrRuns}`}
+              {paused ? 'paused' : `every ${params.intervalMs} ms · quorum ${params.quorum}`}
             </div>
           </div>
 
           <Section title="Match">
             <label style={S.selectRow}>
               <span style={S.sliderLabel}>Patch</span>
-              <select
-                style={S.select}
-                value={activePatch}
-                onChange={(e) => onPatchChange(e.target.value)}
-              >
+              <select style={S.select} value={activePatch} onChange={(e) => onPatchChange(e.target.value)}>
                 {patches.map((p) => (
                   <option key={p} value={p}>
                     {p}
@@ -318,11 +195,11 @@ export function ScanView({
                 ))}
               </select>
             </label>
-            {loop.stable == null ? (
+            {stableRs == null ? (
               <p style={S.dim}>Waiting for a stable reading…</p>
             ) : matches.length === 0 ? (
               <p style={S.dim}>
-                No ore matches {loop.stable}
+                No ore matches {stableRs}
                 {location ? ` at ${location}` : ''}.
               </p>
             ) : (
@@ -338,24 +215,35 @@ export function ScanView({
             )}
           </Section>
 
-          <Section title="Debug">
-            <div style={S.debugRow}>
-              <div style={S.cropWrap}>
-                {loop.dataUrl ? (
-                  <img src={loop.dataUrl} alt="region crop" style={S.crop} />
-                ) : (
-                  <span style={S.dim}>no crop yet</span>
-                )}
+          {readout.scan && (
+            <Section title="Scanned rock">
+              <div style={S.scanBlock}>
+                <div style={S.scanOre}>
+                  {readout.scan.ore}
+                  {readout.scan.scu != null && <span style={S.dim}> · {readout.scan.scu} SCU</span>}
+                </div>
+                <div style={S.scanMeta}>
+                  {readout.scan.mass != null && <span>mass {readout.scan.mass.toLocaleString()}</span>}
+                  {readout.scan.resistance != null && <span>res {readout.scan.resistance}%</span>}
+                  {readout.scan.instability != null && <span>inst {readout.scan.instability}</span>}
+                </div>
+                <div style={S.compHead}>
+                  <span style={S.compPct}>%</span>
+                  <span style={S.compMat}>content</span>
+                  <span style={S.compVal}>qual</span>
+                  <span style={S.compScu}>SCU</span>
+                </div>
+                {readout.scan.composition.map((c, i) => (
+                  <div key={i} style={S.compRow}>
+                    <span style={S.compPct}>{c.percent}%</span>
+                    <span style={S.compMat}>{c.material}</span>
+                    <span style={S.compVal}>{c.quality}</span>
+                    <span style={S.compScu}>{c.scu != null ? c.scu.toFixed(2) : '—'}</span>
+                  </div>
+                ))}
               </div>
-              <dl style={S.dl}>
-                <Row k="detected" v={loop.rawText || '—'} />
-                <Row k="parsed" v={loop.value === null ? 'null' : String(loop.value)} />
-                <Row k="plausible" v={loop.plausible ? 'yes' : 'no'} />
-                <Row k="frame" v={loop.skipped ? 'unchanged (skipped)' : 'changed'} />
-              </dl>
-            </div>
-            {loop.error && <div style={S.error}>{loop.error}</div>}
-          </Section>
+            </Section>
+          )}
 
           <Section title="Capture" defaultOpen={false}>
             <Slider
@@ -366,6 +254,7 @@ export function ScanView({
               onChange={(v) => set('scale', v)}
               suffix="×"
             />
+            <p style={S.dim}>Default upscale; override per region in the Regions panel.</p>
           </Section>
 
           <Section title="Timing">
@@ -480,7 +369,7 @@ export function ScanView({
               onChange={(v) => onOverlayConfigChange({ ...overlayConfig, gap: v })}
               suffix=" px"
             />
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginBottom: 8 }}>
+            <label style={S.checkRow}>
               <input
                 type="checkbox"
                 checked={overlayConfig.border}
@@ -488,7 +377,7 @@ export function ScanView({
               />
               Border
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginBottom: 8 }}>
+            <label style={S.checkRow}>
               <input
                 type="checkbox"
                 checked={overlayConfig.showPlaceholder}
@@ -498,7 +387,7 @@ export function ScanView({
               />
               Show “scanning” placeholder
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginBottom: 8 }}>
+            <label style={S.checkRow}>
               <input
                 type="checkbox"
                 checked={overlayConfig.showDetail}
@@ -509,6 +398,19 @@ export function ScanView({
               Show ore detail box
             </label>
             <p style={S.dim}>In edit mode (Alt+Shift+E): drag to move, drag the corner grip to resize.</p>
+          </Section>
+
+          <Section title="Regions">
+            <RegionList
+              regions={regions}
+              onRegionsChange={onRegionsChange}
+              activeId={activeId}
+              onActiveChange={setActiveId}
+              debug={readout.regions}
+              roles={['rs', 'scanResult']}
+              defaultScale={params.scale}
+              hint="Box the RS number and the SCAN RESULTS panel."
+            />
           </Section>
         </div>
       </div>
@@ -534,15 +436,6 @@ function Section({
       </button>
       {open && children}
     </section>
-  );
-}
-
-function Row({ k, v }: { k: string; v: string }) {
-  return (
-    <div style={S.row}>
-      <dt style={S.dt}>{k}</dt>
-      <dd style={S.dd}>{v}</dd>
-    </div>
   );
 }
 
@@ -643,61 +536,29 @@ function KeyCapture({ value, onChange }: { value: string; onChange: (accel: stri
   );
 }
 
+const text: CSSProperties = { color: '#e6e6e6' };
 const S: Record<string, CSSProperties> = {
   page: { display: 'flex', flexDirection: 'column', height: '100%', color: '#e6e6e6', boxSizing: 'border-box' },
   header: { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid #2c323d' },
   srcLabel: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, opacity: 0.9 },
   spacer: { flex: 1 },
   body: { display: 'flex', flex: 1, minHeight: 0 },
-  previewCol: { flex: 1, display: 'flex', flexDirection: 'column', padding: 14, minWidth: 0 },
-  zoomRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 },
-  previewArea: { flex: 1, minHeight: 0, overflow: 'auto', background: '#000', borderRadius: 8 },
-  preview: {
-    position: 'relative',
-    display: 'inline-block',
-    verticalAlign: 'top',
-    lineHeight: 0,
-    touchAction: 'none',
-    cursor: 'crosshair',
-  },
-  media: { display: 'block', width: '100%', height: 'auto', userSelect: 'none', pointerEvents: 'none' },
-  regionBox: { position: 'absolute', border: '2px solid #4fd1ff', background: 'rgba(79,209,255,0.12)', pointerEvents: 'none' },
-  hint: { margin: '10px 2px 0', fontSize: 12, opacity: 0.6 },
-  panel: { width: 360, borderLeft: '1px solid #2c323d', padding: 14, overflowY: 'auto', boxSizing: 'border-box' },
+  panel: { width: 380, borderLeft: '1px solid #2c323d', padding: 14, overflowY: 'auto', boxSizing: 'border-box' },
   readout: { background: '#1d2128', border: '1px solid #2c323d', borderRadius: 8, padding: 12, marginBottom: 14, textAlign: 'center' },
   readoutLabel: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.6 },
   readoutValue: { fontSize: 40, fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1, color: '#4fd1ff' },
   readoutMeta: { fontSize: 11, opacity: 0.55 },
   section: { marginBottom: 16 },
-  h2: { fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.6, margin: '0 0 8px' },
   sectionHeader: { display: 'flex', alignItems: 'center', gap: 6, width: '100%', background: 'none', border: 'none', padding: 0, margin: '0 0 8px', cursor: 'pointer', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5, color: '#e6e6e6', opacity: 0.65, textAlign: 'left' },
   caret: { fontSize: 10, width: 10, display: 'inline-block' },
-  debugRow: { display: 'flex', gap: 10, alignItems: 'flex-start' },
-  cropWrap: {
-    minWidth: 120,
-    minHeight: 48,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: '#0d0f12',
-    border: '1px solid #2c323d',
-    borderRadius: 4,
-    padding: 4,
-  },
-  crop: { maxWidth: 160, imageRendering: 'pixelated' },
-  dl: { margin: 0, flex: 1, fontSize: 12 },
-  row: { display: 'flex', justifyContent: 'space-between', gap: 8, padding: '2px 0' },
-  dt: { opacity: 0.6 },
-  dd: { margin: 0, fontFamily: 'ui-monospace, monospace', textAlign: 'right', wordBreak: 'break-all' },
-  dim: { opacity: 0.4, fontSize: 12 },
+  dim: { opacity: 0.45, fontSize: 12 },
   sliderRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 },
   sliderLabel: { width: 82, fontSize: 12, opacity: 0.8 },
   range: { flex: 1 },
   sliderValue: { width: 56, textAlign: 'right', fontSize: 12, fontVariantNumeric: 'tabular-nums' },
-  checkRow: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9 },
+  checkRow: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginBottom: 8 },
   btn: { background: '#2a2f3a', color: '#e6e6e6', border: '1px solid #3a4150', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontSize: 13 },
   badge: { fontSize: 10, textTransform: 'uppercase', background: '#2c323d', borderRadius: 4, padding: '2px 5px', opacity: 0.8 },
-  error: { marginTop: 8, background: '#3a1f24', border: '1px solid #7a3b44', color: '#ffb4bd', padding: '6px 10px', borderRadius: 6, fontSize: 12 },
   selectRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 },
   select: { flex: 1, background: '#0d0f12', color: '#e6e6e6', border: '1px solid #3a4150', borderRadius: 6, padding: '6px 8px', fontSize: 13 },
   candList: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 },
@@ -710,4 +571,13 @@ const S: Record<string, CSSProperties> = {
   keyBtn: { flex: 1, background: '#0d0f12', color: '#e6e6e6', border: '1px solid #3a4150', borderRadius: 6, padding: '5px 8px', fontSize: 12, fontFamily: 'ui-monospace, monospace', cursor: 'pointer', textAlign: 'left' },
   keyBtnActive: { borderColor: '#4fd1ff', color: '#4fd1ff' },
   color: { width: 48, height: 28, padding: 0, background: 'transparent', border: '1px solid #3a4150', borderRadius: 6, cursor: 'pointer' },
+  scanBlock: { padding: '8px 10px', background: '#160f18', border: '1px solid #5b3a63', borderRadius: 6 },
+  scanOre: { ...text, fontSize: 16, fontWeight: 700, color: '#f0abfc' },
+  scanMeta: { display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 11, opacity: 0.7, margin: '2px 0 6px', fontVariantNumeric: 'tabular-nums' },
+  compHead: { display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.4, opacity: 0.4, marginBottom: 2 },
+  compRow: { display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 12, padding: '1px 0' },
+  compPct: { width: 44, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#f0abfc' },
+  compMat: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  compVal: { width: 40, textAlign: 'right', fontVariantNumeric: 'tabular-nums', opacity: 0.7 },
+  compScu: { width: 48, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#6ee7b7' },
 };

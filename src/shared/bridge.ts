@@ -3,6 +3,7 @@
 // (renderer) TypeScript projects can reference it without leaking globals.
 
 import type { QualityDetail } from '../core/quality';
+import type { ScanResult } from '../core/scan';
 import type { SurveyEntry } from '../core/survey';
 
 /** A screen or window the user can capture, as enumerated by desktopCapturer. */
@@ -32,6 +33,8 @@ export interface OverlayPayload {
   candidates: OverlayCandidate[];
   /** Quality detail for the top candidate (for the detail box); null = none. */
   detail?: QualityDetail | null;
+  /** The scanned rock's SCAN RESULTS reading (for the scan overlay); null = none. */
+  scan?: ScanResult | null;
 }
 
 /** Commands raised by global hotkeys in the main process. */
@@ -126,6 +129,8 @@ export interface AppSettings {
   overlay?: Partial<OverlayConfig>;
   overlayBounds?: { x: number; y: number; width: number; height: number };
   detailBounds?: { x: number; y: number; width: number; height: number };
+  /** Mining tab: persisted capture regions (RS + scan-result) + their roles. */
+  mining?: { regions?: SurveyRegionSetting[] };
   /** Survey Mode: persisted capture regions + their roles, and the scout name. */
   survey?: { regions?: SurveyRegionSetting[]; scout?: string };
 }
