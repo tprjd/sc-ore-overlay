@@ -295,13 +295,15 @@ export function SurveyView({
                 <div style={S.compHead}>
                   <span style={S.compPct}>%</span>
                   <span style={S.compMat}>content</span>
-                  <span style={S.compVal}>quality</span>
+                  <span style={S.compVal}>qual</span>
+                  <span style={S.compScu}>SCU</span>
                 </div>
                 {readout.scan.composition.map((c, i) => (
                   <div key={i} style={S.compRow}>
                     <span style={S.compPct}>{c.percent}%</span>
                     <span style={S.compMat}>{c.material}</span>
                     <span style={S.compVal}>{c.quality}</span>
+                    <span style={S.compScu}>{c.scu != null ? c.scu.toFixed(2) : '—'}</span>
                   </div>
                 ))}
               </div>
@@ -600,9 +602,10 @@ const S: Record<string, CSSProperties> = {
   scanMeta: { display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 11, opacity: 0.7, margin: '2px 0 6px', fontVariantNumeric: 'tabular-nums' },
   compHead: { display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.4, opacity: 0.4, marginBottom: 2 },
   compRow: { display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 12, padding: '1px 0' },
-  compPct: { width: 48, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#f0abfc' },
+  compPct: { width: 44, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#f0abfc' },
   compMat: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  compVal: { width: 48, textAlign: 'right', fontVariantNumeric: 'tabular-nums', opacity: 0.7 },
+  compVal: { width: 40, textAlign: 'right', fontVariantNumeric: 'tabular-nums', opacity: 0.7 },
+  compScu: { width: 48, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#6ee7b7' },
   coordTitle: { fontSize: 11, opacity: 0.6, marginBottom: 6 },
   coordGrid: { display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 8px', alignItems: 'baseline' },
   axis: { fontSize: 11, opacity: 0.5 },

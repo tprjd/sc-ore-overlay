@@ -32,18 +32,26 @@ describe('parseScanResult', () => {
 
   it('reads the composition rows (percent, material, quality)', () => {
     const r = parseScanResult(SAMPLE)!;
-    expect(r.composition).toEqual([
+    expect(r.composition.map((c) => ({ percent: c.percent, material: c.material, quality: c.quality }))).toEqual([
       { percent: 12.55, material: 'IRON (ORE) [CF]', quality: 664 },
       { percent: 68.2, material: 'IRON (ORE) [CF]', quality: 325 },
       { percent: 19.23, material: 'INERT MATERIALS', quality: 0 },
     ]);
   });
 
-  it('works when the panel title is not captured', () => {
+  it('derives each row’s SCU from its percent of the total SCU', () => {
+    const r = parseScanResult(SAMPLE)!;
+    expect(r.composition[0].scu).toBeCloseTo(4.71, 2); // 12.55% of 37.51
+    expect(r.composition[1].scu).toBeCloseTo(25.58, 2); // 68.20% of 37.51
+    expect(r.composition[2].scu).toBeCloseTo(7.21, 2); // 19.23% of 37.51
+  });
+
+  it('works when the panel title is not captured; SCU undefined without a total', () => {
     const r = parseScanResult('QUANTANIUM (ORE)\nMASS: 1200\n45.0% QUANTANIUM (ORE) 90')!;
     expect(r.ore).toBe('Quantanium');
     expect(r.mass).toBe(1200);
     expect(r.composition).toHaveLength(1);
+    expect(r.composition[0].scu).toBeUndefined();
   });
 
   it('returns null when there is no ore line', () => {

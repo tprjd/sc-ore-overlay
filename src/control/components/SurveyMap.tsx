@@ -200,7 +200,10 @@ export function SurveyMap({ ship, entries, plane = 'xy' }: SurveyMapProps) {
           <div style={S.tipTitle}>
             {hoverInfo.e.ore ?? '—'} <span style={S.tipNodes}>×{hoverInfo.e.nodes ?? '?'}</span>
           </div>
-          <div style={S.tipRow}>RS {hoverInfo.e.rs}</div>
+          <div style={S.tipRow}>
+            RS {hoverInfo.e.rs}
+            {hoverInfo.e.scan?.scu != null ? ` · ${hoverInfo.e.scan.scu.toFixed(1)} SCU` : ''}
+          </div>
           <div style={S.tipRow}>
             {km(hoverInfo.dist)} km away · depth {km(hoverInfo.depth)} km
           </div>

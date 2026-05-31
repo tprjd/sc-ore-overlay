@@ -24,6 +24,8 @@ export interface ScanComposition {
   percent: number;
   /** Per-material quality (the trailing number on the row). */
   quality: number;
+  /** This material's volume in SCU (percent × total SCU); set when SCU is known. */
+  scu?: number;
 }
 
 /**
@@ -95,10 +97,19 @@ export function parseScanResult(text: string): ScanResult | null {
   }
   if (!oreRaw) return null;
 
+  const scuTotal = matchNum(text, /([\d.]+)\s*scu/i);
   const composition: ScanComposition[] = [];
   for (const l of lines) {
     const m = /^([\d.,]+)\s*%\s*(.+?)\s+([\d.,]+)\s*$/.exec(l);
-    if (m) composition.push({ percent: num(m[1]), material: m[2].trim(), quality: num(m[3]) });
+    if (m) {
+      const percent = num(m[1]);
+      composition.push({
+        percent,
+        material: m[2].trim(),
+        quality: num(m[3]),
+        scu: scuTotal != null ? (percent / 100) * scuTotal : undefined,
+      });
+    }
   }
 
   return {
@@ -107,7 +118,7 @@ export function parseScanResult(text: string): ScanResult | null {
     mass: matchNum(text, /mass\s*:?\s*([\d,.]+)/i),
     resistance: matchNum(text, /resistance\s*:?\s*([\d.]+)\s*%?/i),
     instability: matchNum(text, /instability\s*:?\s*([\d.]+)/i),
-    scu: matchNum(text, /([\d.]+)\s*scu/i),
+    scu: scuTotal,
     composition,
   };
 }
