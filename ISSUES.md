@@ -27,15 +27,12 @@ is the main remaining main-thread cost.
 - **Files:** `src/control/preprocess.ts`, `src/control/ocr.ts`,
   `src/control/ocr.worker.ts`, callers in `useCaptureLoop.ts` / `useSurveyCapture.ts` / `scanImage.ts`.
 
-### 🔲 2. ORT execution provider is WASM single-thread
-`numThreads=1`, CPU WASM (no cross-origin isolation). On a real GPU (Windows),
-onnxruntime-web's **WebGPU** execution provider is much faster for detection +
-recognition.
-- **Fix:** pass `executionProviders:['webgpu']` (with WASM fallback) when creating
-  the ORT sessions. Note `electron/main.ts` currently calls
-  `app.disableHardwareAcceleration()` for WSL — gate that off on real hardware.
-- **Files:** `src/control/ocr.worker.ts`, `electron/main.ts`. Investigate first;
-  potentially the largest inference speedup.
+### ✅ 2. ORT execution provider is WASM single-thread
+**Resolved** (`9ed56ce`): the worker imports `onnxruntime-web/webgpu` and creates
+the sessions with `executionProviders:['webgpu']`, falling back to WASM if WebGPU
+can't initialize; `disableHardwareAcceleration()` is now Linux-only so the Windows
+target keeps the GPU. Logs the active backend (`[ocr] backend: webgpu`/`wasm`).
+- **Verify on Windows** (WSL dev logs `wasm` — HW-accel disabled there, expected).
 
 ### ✅ 3. Map redraws the whole canvas on every hover
 **Resolved** (`48b7e1b`): resize the canvas backing store only when the size
@@ -99,7 +96,7 @@ libs — locked stack; CSV libs — hand-rolled export is fine.
    a focused step with in-app verification.
 2. ~~Map redraw throttle~~ — ✅ `48b7e1b`.
 3. ~~Plausibility-gate logging~~ — ✅ `48b7e1b` (live path; stability gate).
-4. WebGPU execution provider — **open**; investigate (needs a real GPU + in-app
-   test; big inference win).
+4. ~~WebGPU execution provider~~ — ✅ `9ed56ce` (WASM fallback; verify `webgpu`
+   on Windows).
 5. `comlink` cleanup — optional (adds a dep; touches the worker RPC).
 6. Production model paths — 💤 before packaging (Phase 4).
