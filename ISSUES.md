@@ -37,11 +37,10 @@ recognition.
 - **Files:** `src/control/ocr.worker.ts`, `electron/main.ts`. Investigate first;
   potentially the largest inference speedup.
 
-### 🔲 3. Map redraws the whole canvas on every hover
-`SurveyMap` resets `canvas.width` and redraws grid + rings + all dots on each
-mousemove (`hover` is a draw-effect dep). Janks with many points.
-- **Fix (zero-dep):** only resize the canvas when the size changes (not every
-  draw); throttle hover or paint the highlight on a separate overlay layer.
+### ✅ 3. Map redraws the whole canvas on every hover
+**Resolved** (`48b7e1b`): resize the canvas backing store only when the size
+changes (setting `canvas.width` reallocates + clears), and only update `hover`
+state when the hovered point changes — plain mouse movement no longer redraws.
 - **File:** `src/control/components/SurveyMap.tsx`.
 
 ### 🔲 4. Per-tick allocations / hashing
@@ -53,15 +52,12 @@ run every tick. Reuse one canvas; sample the hash instead of hashing all pixels.
 
 ## Correctness / robustness
 
-### 🔲 5. Garbage scans still get logged
-The map is now robust to a bad coordinate (median center, plausible-ship gating),
-but an implausible read (e.g. the `99,999,993 km` case) still **persists** in the
-log and exports.
-- **Fix:** plausibility-gate before logging — require all three axes parsed *with
-  units*, and reject a position far from the field median. Apply in the live log
-  path and in `scanImage`.
-- **Files:** `src/control/components/SurveyView.tsx` (logScan), `src/control/scanImage.ts`,
-  maybe a helper in `src/core/coords.ts` or `src/core/survey.ts`.
+### ✅ 5. Garbage scans still get logged
+**Resolved** (`48b7e1b`) for the live path: logging requires the recent ship
+positions to agree within 5 km (parked), so a one-frame misread isn't recorded
+(`isStablePos` in `src/core/survey.ts`, + tests). Uploaded-image scans still use
+parser-only validation (single shot, no temporal signal) — tighten later if
+needed (match ore to the table; near-duplicate collapse is #7/S5).
 
 ### 💤 6. Production model paths (`file://`)
 `/models/*.onnx` is fetched by URL — works in dev (http) but a packaged build
@@ -98,9 +94,12 @@ libs — locked stack; CSV libs — hand-rolled export is fine.
 ---
 
 ## Suggested order
-1. Pixels → worker (kills the PNG-encode stall) — zero-dep.
-2. Map redraw throttle — zero-dep.
-3. Plausibility-gate logging — zero-dep.
-4. WebGPU execution provider — investigate (big inference win).
-5. `comlink` cleanup.
-6. Production model paths — before packaging.
+1. ~~Pixels → worker (kills the PNG-encode stall)~~ — **open**; touches the OCR
+   worker path (unverifiable headless) + trades off the debug-crop preview. Do as
+   a focused step with in-app verification.
+2. ~~Map redraw throttle~~ — ✅ `48b7e1b`.
+3. ~~Plausibility-gate logging~~ — ✅ `48b7e1b` (live path; stability gate).
+4. WebGPU execution provider — **open**; investigate (needs a real GPU + in-app
+   test; big inference win).
+5. `comlink` cleanup — optional (adds a dep; touches the worker RPC).
+6. Production model paths — 💤 before packaging (Phase 4).
