@@ -3,7 +3,7 @@
 // PP-OCR, validated, then matched to ore(s) shown as "Ore ×N". The location
 // dropdown narrows overlapping-signature matches.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
@@ -83,6 +83,14 @@ export function ScanView({
 
   const [paused, setPaused] = useState(false);
   const [drag, setDrag] = useState<DragBox | null>(null);
+  // The displayed media's rect relative to the wrapper — the actual (letterboxed)
+  // image area, which the region box + drag math must use, not the container.
+  const [mediaRect, setMediaRect] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
 
   // Attach the live stream to the <video> element.
   useEffect(() => {
@@ -93,6 +101,40 @@ export function ScanView({
       void video.play().catch(() => undefined);
     }
   }, [source]);
+
+  const measure = useCallback(() => {
+    const media = mediaRef.current;
+    const wrap = wrapRef.current;
+    if (!media || !wrap) return;
+    const mr = media.getBoundingClientRect();
+    const wr = wrap.getBoundingClientRect();
+    if (mr.width < 1 || mr.height < 1) return;
+    const next = {
+      left: Math.round(mr.left - wr.left),
+      top: Math.round(mr.top - wr.top),
+      width: Math.round(mr.width),
+      height: Math.round(mr.height),
+    };
+    setMediaRect((prev) =>
+      prev && prev.left === next.left && prev.top === next.top && prev.width === next.width && prev.height === next.height
+        ? prev
+        : next,
+    );
+  }, []);
+
+  useEffect(() => {
+    measure();
+    const ro = new ResizeObserver(() => measure());
+    if (wrapRef.current) ro.observe(wrapRef.current);
+    if (mediaRef.current) ro.observe(mediaRef.current);
+    window.addEventListener('resize', measure);
+    const id = window.setInterval(measure, 500); // catch video-metadata/letterbox changes
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measure);
+      window.clearInterval(id);
+    };
+  }, [measure, source]);
 
   const loop = useCaptureLoop(mediaRef, region, params, !paused, table);
 
@@ -129,9 +171,10 @@ export function ScanView({
 
   // ---- region drag (normalized to the displayed media box) ----
   const toNorm = (clientX: number, clientY: number): { x: number; y: number } => {
-    const el = wrapRef.current;
-    if (!el) return { x: 0, y: 0 };
-    const r = el.getBoundingClientRect();
+    const media = mediaRef.current;
+    if (!media) return { x: 0, y: 0 };
+    const r = media.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) return { x: 0, y: 0 };
     return { x: clamp01((clientX - r.left) / r.width), y: clamp01((clientY - r.top) / r.height) };
   };
 
@@ -187,7 +230,7 @@ export function ScanView({
             onPointerUp={onPointerUp}
           >
             {source.kind === 'desktop' ? (
-              <video ref={videoRef} muted playsInline style={S.media} />
+              <video ref={videoRef} muted playsInline style={S.media} onLoadedMetadata={measure} />
             ) : (
               <img
                 ref={imgRef}
@@ -196,17 +239,18 @@ export function ScanView({
                 style={S.media}
                 onLoad={() => {
                   mediaRef.current = imgRef.current;
+                  measure();
                 }}
               />
             )}
-            {shownRegion && (
+            {shownRegion && mediaRect && (
               <div
                 style={{
                   ...S.regionBox,
-                  left: `${shownRegion.x * 100}%`,
-                  top: `${shownRegion.y * 100}%`,
-                  width: `${shownRegion.w * 100}%`,
-                  height: `${shownRegion.h * 100}%`,
+                  left: mediaRect.left + shownRegion.x * mediaRect.width,
+                  top: mediaRect.top + shownRegion.y * mediaRect.height,
+                  width: shownRegion.w * mediaRect.width,
+                  height: shownRegion.h * mediaRect.height,
                 }}
               />
             )}
