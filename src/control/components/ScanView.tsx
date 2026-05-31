@@ -3,7 +3,7 @@
 // PP-OCR, validated, then matched to ore(s) shown as "Ore ×N". The location
 // dropdown narrows overlapping-signature matches.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
@@ -83,14 +83,7 @@ export function ScanView({
 
   const [paused, setPaused] = useState(false);
   const [drag, setDrag] = useState<DragBox | null>(null);
-  // The displayed media's rect relative to the wrapper — the actual (letterboxed)
-  // image area, which the region box + drag math must use, not the container.
-  const [mediaRect, setMediaRect] = useState<{
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-  } | null>(null);
+  const [zoom, setZoom] = useState(1);
 
   // Attach the live stream to the <video> element.
   useEffect(() => {
@@ -101,40 +94,6 @@ export function ScanView({
       void video.play().catch(() => undefined);
     }
   }, [source]);
-
-  const measure = useCallback(() => {
-    const media = mediaRef.current;
-    const wrap = wrapRef.current;
-    if (!media || !wrap) return;
-    const mr = media.getBoundingClientRect();
-    const wr = wrap.getBoundingClientRect();
-    if (mr.width < 1 || mr.height < 1) return;
-    const next = {
-      left: Math.round(mr.left - wr.left),
-      top: Math.round(mr.top - wr.top),
-      width: Math.round(mr.width),
-      height: Math.round(mr.height),
-    };
-    setMediaRect((prev) =>
-      prev && prev.left === next.left && prev.top === next.top && prev.width === next.width && prev.height === next.height
-        ? prev
-        : next,
-    );
-  }, []);
-
-  useEffect(() => {
-    measure();
-    const ro = new ResizeObserver(() => measure());
-    if (wrapRef.current) ro.observe(wrapRef.current);
-    if (mediaRef.current) ro.observe(mediaRef.current);
-    window.addEventListener('resize', measure);
-    const id = window.setInterval(measure, 500); // catch video-metadata/letterbox changes
-    return () => {
-      ro.disconnect();
-      window.removeEventListener('resize', measure);
-      window.clearInterval(id);
-    };
-  }, [measure, source]);
 
   const loop = useCaptureLoop(mediaRef, region, params, !paused, table);
 
@@ -222,43 +181,57 @@ export function ScanView({
       <div style={S.body}>
         {/* Preview + region overlay */}
         <div style={S.previewCol}>
-          <div
-            ref={wrapRef}
-            style={S.preview}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-          >
-            {source.kind === 'desktop' ? (
-              <video ref={videoRef} muted playsInline style={S.media} onLoadedMetadata={measure} />
-            ) : (
-              <img
-                ref={imgRef}
-                src={source.imageUrl}
-                alt="capture source"
-                style={S.media}
-                onLoad={() => {
-                  mediaRef.current = imgRef.current;
-                  measure();
-                }}
-              />
-            )}
-            {shownRegion && mediaRect && (
-              <div
-                style={{
-                  ...S.regionBox,
-                  left: mediaRect.left + shownRegion.x * mediaRect.width,
-                  top: mediaRect.top + shownRegion.y * mediaRect.height,
-                  width: shownRegion.w * mediaRect.width,
-                  height: shownRegion.h * mediaRect.height,
-                }}
-              />
-            )}
+          <label style={S.zoomRow}>
+            <span style={S.sliderLabel}>Zoom</span>
+            <input
+              type="range"
+              min={100}
+              max={600}
+              step={10}
+              value={Math.round(zoom * 100)}
+              onChange={(e) => setZoom(Number(e.target.value) / 100)}
+              style={S.range}
+            />
+            <span style={S.sliderValue}>{zoom.toFixed(1)}×</span>
+          </label>
+          <div style={S.previewArea}>
+            <div
+              ref={wrapRef}
+              style={{ ...S.preview, width: `${zoom * 100}%` }}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+            >
+              {source.kind === 'desktop' ? (
+                <video ref={videoRef} muted playsInline style={S.media} />
+              ) : (
+                <img
+                  ref={imgRef}
+                  src={source.imageUrl}
+                  alt="capture source"
+                  style={S.media}
+                  onLoad={() => {
+                    mediaRef.current = imgRef.current;
+                  }}
+                />
+              )}
+              {shownRegion && (
+                <div
+                  style={{
+                    ...S.regionBox,
+                    left: `${shownRegion.x * 100}%`,
+                    top: `${shownRegion.y * 100}%`,
+                    width: `${shownRegion.w * 100}%`,
+                    height: `${shownRegion.h * 100}%`,
+                  }}
+                />
+              )}
+            </div>
           </div>
           <p style={S.hint}>
             {region
-              ? 'Drag again to re-draw the region over the RS number.'
-              : 'Drag a box over the Radar Signature number to start.'}
+              ? 'Drag again to re-draw the region. Zoom + scroll to refine.'
+              : 'Drag a box over the Radar Signature number — zoom in for precision.'}
           </p>
         </div>
 
@@ -638,20 +611,17 @@ const S: Record<string, CSSProperties> = {
   spacer: { flex: 1 },
   body: { display: 'flex', flex: 1, minHeight: 0 },
   previewCol: { flex: 1, display: 'flex', flexDirection: 'column', padding: 14, minWidth: 0 },
+  zoomRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 },
+  previewArea: { flex: 1, minHeight: 0, overflow: 'auto', background: '#000', borderRadius: 8 },
   preview: {
     position: 'relative',
-    flex: 1,
-    minHeight: 0,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: '#000',
-    borderRadius: 8,
-    overflow: 'hidden',
+    display: 'inline-block',
+    verticalAlign: 'top',
+    lineHeight: 0,
     touchAction: 'none',
     cursor: 'crosshair',
   },
-  media: { maxWidth: '100%', maxHeight: '100%', display: 'block', userSelect: 'none', pointerEvents: 'none' },
+  media: { display: 'block', width: '100%', height: 'auto', userSelect: 'none', pointerEvents: 'none' },
   regionBox: { position: 'absolute', border: '2px solid #4fd1ff', background: 'rgba(79,209,255,0.12)', pointerEvents: 'none' },
   hint: { margin: '10px 2px 0', fontSize: 12, opacity: 0.6 },
   panel: { width: 360, borderLeft: '1px solid #2c323d', padding: 14, overflowY: 'auto', boxSizing: 'border-box' },
