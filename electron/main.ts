@@ -26,8 +26,10 @@ const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 const RENDERER_DIST = path.join(dirname, '..', 'dist');
 const PRELOAD = path.join(dirname, 'preload.js');
 
-// WSL2 / headless GPU initialization often fails and leaves a blank window.
-app.disableHardwareAcceleration();
+// WSL2 / headless Linux GPU init often fails and leaves a blank window. On the
+// real target (Windows) keep hardware acceleration ON so the OCR worker can use
+// the WebGPU execution provider.
+if (process.platform === 'linux') app.disableHardwareAcceleration();
 
 let controlWin: BrowserWindow | null = null;
 let overlayWin: BrowserWindow | null = null;

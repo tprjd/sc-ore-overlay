@@ -7,10 +7,11 @@
 
 import Ocr, { registerBackend, ImageRawBase, FileUtilsBase } from '@gutenye/ocr-common';
 import { splitIntoLineImages } from '@gutenye/ocr-common/splitIntoLineImages';
-import { InferenceSession, env } from 'onnxruntime-web';
+// The WebGPU build: enables the GPU execution provider (falls back to WASM).
+import { InferenceSession, env } from 'onnxruntime-web/webgpu';
 
-// No cross-origin isolation in the renderer → single-thread WASM; ORT wasm from
-// a CDN matching the pinned version.
+// No cross-origin isolation in the renderer → single-thread WASM (the WebGPU EP
+// still needs the wasm/JSEP glue). ORT wasm from a CDN matching the pinned version.
 env.wasm.numThreads = 1;
 env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.3/dist/';
 
@@ -76,8 +77,29 @@ const MODELS = {
 interface Engine {
   detect(image: string): Promise<Array<{ text: string; mean: number }>>;
 }
+type CreateOpts = Parameters<typeof Ocr.create>[0];
+
+// Prefer the GPU (WebGPU EP) — large speedup on the real target where a GPU is
+// always present — and fall back to WASM if WebGPU can't initialize (e.g. dev on
+// WSL with hardware acceleration disabled).
+async function createEngine(): Promise<Engine> {
+  try {
+    const engine = await Ocr.create({
+      models: MODELS,
+      onnxOptions: { executionProviders: ['webgpu'] },
+    } as CreateOpts);
+    console.info('[ocr] backend: webgpu');
+    return engine as Engine;
+  } catch (err) {
+    console.warn('[ocr] webgpu unavailable, falling back to wasm:', err);
+    const engine = await Ocr.create({ models: MODELS });
+    console.info('[ocr] backend: wasm');
+    return engine as Engine;
+  }
+}
+
 let enginePromise: Promise<Engine> | null = null;
-const getEngine = (): Promise<Engine> => (enginePromise ??= Ocr.create({ models: MODELS }) as Promise<Engine>);
+const getEngine = (): Promise<Engine> => (enginePromise ??= createEngine());
 
 interface Req {
   id: number;
