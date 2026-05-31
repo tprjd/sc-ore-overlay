@@ -1,26 +1,24 @@
-// 2D top-down, ship-centered survey map (Phase S2). The ship sits at the origin;
-// each entry is plotted by its in-plane offset (project()), with depth shown on
-// hover. Faint grid + concentric range rings (labeled in km), pan by drag, zoom
-// by cursor-anchored wheel. Pure renderer — fed entries from the debug generator
-// in S2 and from the real log in S3.
+// 2D top-down survey map. Centers on the logged field itself (the centroid of
+// the displayed entries) so their mutual distances read correctly regardless of
+// where the live ship currently is; the ship is drawn as a marker. Falls back to
+// the ship as the origin when there are no entries yet. Faint grid + concentric
+// range rings (km), pan by drag, cursor-anchored wheel zoom, hover tooltip.
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 
 import { distance, project } from '../../core';
 import type { AxisPlane, SurveyEntry, Vec3 } from '../../core';
 
 export interface SurveyMapProps {
-  /** Map center (live ship position or the debug ship). */
+  /** Live ship position (drawn as a marker); may be null when not flying. */
   ship: Vec3 | null;
   entries: SurveyEntry[];
   plane?: AxisPlane;
 }
 
 interface View {
-  /** Pixels per meter. */
   ppm: number;
-  /** Pan offset of the ship from the canvas center, in css px. */
   panX: number;
   panY: number;
 }
@@ -33,14 +31,25 @@ interface Hover {
 
 const km = (m: number): string => (m / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 });
 
-/** Stable hue per ore name. */
+function centroidVec(entries: SurveyEntry[]): Vec3 {
+  let x = 0;
+  let y = 0;
+  let z = 0;
+  for (const e of entries) {
+    x += e.pos.x;
+    y += e.pos.y;
+    z += e.pos.z;
+  }
+  const n = entries.length;
+  return { x: x / n, y: y / n, z: z / n };
+}
+
 function oreHue(name: string): number {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
   return h % 360;
 }
 
-/** Round a rough meter span to a 1/2/5 × 10ⁿ "nice" step. */
 function niceStep(rough: number): number {
   const pow = Math.pow(10, Math.floor(Math.log10(rough)));
   const f = rough / pow;
@@ -59,32 +68,37 @@ export function SurveyMap({ ship, entries, plane = 'xy' }: SurveyMapProps) {
   const sizeRef = useRef(size);
   sizeRef.current = size;
 
-  // Track the rendered size (css px), DPR-aware drawing below.
+  // Map origin: the field's own centroid (so spacing is correct even when the
+  // ship is far away), or the ship when there's nothing logged yet.
+  const origin = useMemo<Vec3 | null>(
+    () => (entries.length ? centroidVec(entries) : ship),
+    [entries, ship],
+  );
+
   useEffect(() => {
     const wrap = wrapRef.current;
     if (!wrap) return;
-    const ro = new ResizeObserver(() => {
-      setSize({ w: wrap.clientWidth, h: wrap.clientHeight });
-    });
+    const ro = new ResizeObserver(() => setSize({ w: wrap.clientWidth, h: wrap.clientHeight }));
     ro.observe(wrap);
     setSize({ w: wrap.clientWidth, h: wrap.clientHeight });
     return () => ro.disconnect();
   }, []);
 
-  // Fit the view to the field whenever the data, plane, or canvas size changes.
-  const shipKey = ship ? `${ship.x},${ship.y},${ship.z}` : 'none';
+  // Fit to the entries' extent around the origin (ignore a far-away ship so it
+  // can't blow up the scale).
+  const originKey = origin ? `${origin.x},${origin.y},${origin.z}` : 'none';
   useLayoutEffect(() => {
-    if (!ship || size.w < 2 || size.h < 2) return;
+    if (!origin || size.w < 2 || size.h < 2) return;
     let maxR = 0;
     for (const e of entries) {
-      const p = project(e.pos, ship, plane);
+      const p = project(e.pos, origin, plane);
       maxR = Math.max(maxR, Math.hypot(p.x, p.y));
     }
-    const span = maxR > 0 ? maxR : 10_000; // default ~10 km radius when empty
+    const span = maxR > 0 ? maxR * 1.1 : 10_000; // pad a touch; default ~10 km when single/empty
     const ppm = (Math.min(size.w, size.h) * 0.42) / span;
     setView({ ppm, panX: 0, panY: 0 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shipKey, entries, plane, size.w, size.h, fitNonce]);
+  }, [originKey, entries, plane, size.w, size.h, fitNonce]);
 
   // Draw.
   useEffect(() => {
@@ -95,18 +109,11 @@ export function SurveyMap({ ship, entries, plane = 'xy' }: SurveyMapProps) {
     const ctx = canvasEl.getContext('2d');
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    draw(ctx, size.w, size.h, view, entries, ship, plane, hover?.entry.id ?? null);
-  }, [canvasEl, size, view, entries, ship, plane, hover]);
+    draw(ctx, size.w, size.h, view, entries, origin, ship, plane, hover?.entry.id ?? null);
+  }, [canvasEl, size, view, entries, origin, ship, plane, hover]);
 
-  const center = (): { cx: number; cy: number } => ({ cx: size.w / 2, cy: size.h / 2 });
-  const shipScreen = (): { sx: number; sy: number } => {
-    const { cx, cy } = center();
-    return { sx: cx + view.panX, sy: cy + view.panY };
-  };
-
-  // Cursor-anchored wheel zoom. Bound to the canvas element itself so it (re)binds
-  // whenever the canvas mounts — e.g. when a ship position first becomes available.
-  // Reads size via a ref and view via the functional update, so it stays current.
+  // Cursor-anchored wheel zoom, bound to the canvas element so it (re)binds when
+  // the canvas mounts. Reads size via a ref and view via the functional update.
   useEffect(() => {
     if (!canvasEl) return;
     const handler = (e: WheelEvent): void => {
@@ -129,15 +136,20 @@ export function SurveyMap({ ship, entries, plane = 'xy' }: SurveyMapProps) {
     return () => canvasEl.removeEventListener('wheel', handler);
   }, [canvasEl]);
 
+  const originScreen = (): { ox: number; oy: number } => ({
+    ox: size.w / 2 + view.panX,
+    oy: size.h / 2 + view.panY,
+  });
+
   const hitTest = (mx: number, my: number): Hover | null => {
-    if (!ship) return null;
-    const { sx, sy } = shipScreen();
+    if (!origin) return null;
+    const { ox, oy } = originScreen();
     let best: Hover | null = null;
-    let bestD = 10; // px threshold
+    let bestD = 10;
     for (const e of entries) {
-      const p = project(e.pos, ship, plane);
-      const x = sx + p.x * view.ppm;
-      const y = sy - p.y * view.ppm;
+      const p = project(e.pos, origin, plane);
+      const x = ox + p.x * view.ppm;
+      const y = oy - p.y * view.ppm;
       const d = Math.hypot(x - mx, y - my);
       if (d < bestD) {
         bestD = d;
@@ -166,20 +178,19 @@ export function SurveyMap({ ship, entries, plane = 'xy' }: SurveyMapProps) {
     drag.current = null;
   };
 
-  const fit = (): void => setFitNonce((n) => n + 1); // re-run the fit effect
+  const fit = (): void => setFitNonce((n) => n + 1);
 
   const hoverInfo = hover
     ? (() => {
         const e = hover.entry;
-        const depth = ship ? project(e.pos, ship, plane).depth : 0;
-        const dist = ship ? distance(e.pos, ship) : 0;
-        return { e, depth, dist };
+        const ref = ship ?? origin!;
+        return { e, depth: project(e.pos, ref, plane).depth, dist: distance(e.pos, ref) };
       })()
     : null;
 
   return (
     <div ref={wrapRef} style={S.wrap}>
-      {ship ? (
+      {origin ? (
         <canvas
           ref={setCanvasEl}
           style={{ width: '100%', height: '100%', display: 'block', cursor: drag.current ? 'grabbing' : 'crosshair' }}
@@ -189,7 +200,7 @@ export function SurveyMap({ ship, entries, plane = 'xy' }: SurveyMapProps) {
           onPointerLeave={() => setHover(null)}
         />
       ) : (
-        <div style={S.empty}>No ship position. Box a “Ship Pos” region, or turn on Debug values.</div>
+        <div style={S.empty}>No data yet. Log a scan, box a “Ship Pos” region, or turn on Debug values.</div>
       )}
       <button style={S.fitBtn} onClick={fit}>
         Fit
@@ -204,7 +215,7 @@ export function SurveyMap({ ship, entries, plane = 'xy' }: SurveyMapProps) {
             {hoverInfo.e.scan?.scu != null ? ` · ${hoverInfo.e.scan.scu.toFixed(1)} SCU` : ''}
           </div>
           <div style={S.tipRow}>
-            {km(hoverInfo.dist)} km away · depth {km(hoverInfo.depth)} km
+            {km(hoverInfo.dist)} km {ship ? 'from ship' : 'from center'} · depth {km(hoverInfo.depth)} km
           </div>
           <div style={S.tipDim}>{hoverInfo.e.scout}</div>
         </div>
@@ -219,6 +230,7 @@ function draw(
   h: number,
   view: View,
   entries: SurveyEntry[],
+  origin: Vec3 | null,
   ship: Vec3 | null,
   plane: AxisPlane,
   hoverId: string | null,
@@ -226,65 +238,60 @@ function draw(
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = '#0a0c10';
   ctx.fillRect(0, 0, w, h);
-  if (!ship) return;
+  if (!origin) return;
 
-  const cx = w / 2;
-  const cy = h / 2;
-  const sx = cx + view.panX;
-  const sy = cy + view.panY;
+  const ox = w / 2 + view.panX;
+  const oy = h / 2 + view.panY;
 
-  const stepM = niceStep(80 / view.ppm); // ~80px target spacing
+  const stepM = niceStep(80 / view.ppm);
   const stepPx = stepM * view.ppm;
 
-  // Grid + range rings — only when the step is a sane positive size (guards
-  // against an infinite loop if ppm/step ever degenerate).
   if (Number.isFinite(stepPx) && stepPx > 0.5) {
     ctx.strokeStyle = 'rgba(120,140,160,0.08)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    for (let x = sx % stepPx; x < w; x += stepPx) {
+    for (let x = ox % stepPx; x < w; x += stepPx) {
       ctx.moveTo(Math.round(x) + 0.5, 0);
       ctx.lineTo(Math.round(x) + 0.5, h);
     }
-    for (let y = sy % stepPx; y < h; y += stepPx) {
+    for (let y = oy % stepPx; y < h; y += stepPx) {
       ctx.moveTo(0, Math.round(y) + 0.5);
       ctx.lineTo(w, Math.round(y) + 0.5);
     }
     ctx.stroke();
 
-    const maxRingPx = Math.hypot(Math.max(sx, w - sx), Math.max(sy, h - sy));
+    const maxRingPx = Math.hypot(Math.max(ox, w - ox), Math.max(oy, h - oy));
     ctx.strokeStyle = 'rgba(120,140,160,0.18)';
     ctx.fillStyle = 'rgba(159,179,200,0.6)';
     ctx.font = '10px ui-monospace, monospace';
     for (let k = 1; k * stepPx < maxRingPx; k++) {
       const r = k * stepPx;
       ctx.beginPath();
-      ctx.arc(sx, sy, r, 0, Math.PI * 2);
+      ctx.arc(ox, oy, r, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.fillText(`${km(k * stepM)} km`, sx + r + 3, sy - 2);
+      ctx.fillText(`${km(k * stepM)} km`, ox + r + 3, oy - 2);
     }
   }
 
-  // Axes through the ship.
+  // Axes through the origin.
   ctx.strokeStyle = 'rgba(120,140,160,0.3)';
   ctx.beginPath();
-  ctx.moveTo(0, Math.round(sy) + 0.5);
-  ctx.lineTo(w, Math.round(sy) + 0.5);
-  ctx.moveTo(Math.round(sx) + 0.5, 0);
-  ctx.lineTo(Math.round(sx) + 0.5, h);
+  ctx.moveTo(0, Math.round(oy) + 0.5);
+  ctx.lineTo(w, Math.round(oy) + 0.5);
+  ctx.moveTo(Math.round(ox) + 0.5, 0);
+  ctx.lineTo(Math.round(ox) + 0.5, h);
   ctx.stroke();
 
   // Entries.
   for (const e of entries) {
-    const p = project(e.pos, ship, plane);
-    const x = sx + p.x * view.ppm;
-    const y = sy - p.y * view.ppm;
+    const p = project(e.pos, origin, plane);
+    const x = ox + p.x * view.ppm;
+    const y = oy - p.y * view.ppm;
     if (x < -20 || x > w + 20 || y < -20 || y > h + 20) continue;
     const hovered = e.id === hoverId;
-    const hue = oreHue(e.ore ?? 'ore');
     ctx.beginPath();
     ctx.arc(x, y, hovered ? 6 : 4, 0, Math.PI * 2);
-    ctx.fillStyle = `hsl(${hue} 70% 60%)`;
+    ctx.fillStyle = `hsl(${oreHue(e.ore ?? 'ore')} 70% 60%)`;
     ctx.fill();
     if (hovered) {
       ctx.strokeStyle = '#fff';
@@ -293,15 +300,29 @@ function draw(
     }
   }
 
-  // Ship marker (cyan plus).
-  ctx.strokeStyle = '#4fd1ff';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(sx - 8, sy);
-  ctx.lineTo(sx + 8, sy);
-  ctx.moveTo(sx, sy - 8);
-  ctx.lineTo(sx, sy + 8);
-  ctx.stroke();
+  // Ship marker (cyan plus), at its offset from the origin — clamped to the
+  // edge with a ring when it's off-screen so you can still tell where it is.
+  if (ship) {
+    const sp = project(ship, origin, plane);
+    let sx = ox + sp.x * view.ppm;
+    let sy = oy - sp.y * view.ppm;
+    const off = sx < 6 || sx > w - 6 || sy < 6 || sy > h - 6;
+    sx = Math.max(6, Math.min(w - 6, sx));
+    sy = Math.max(6, Math.min(h - 6, sy));
+    ctx.strokeStyle = '#4fd1ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(sx - 8, sy);
+    ctx.lineTo(sx + 8, sy);
+    ctx.moveTo(sx, sy - 8);
+    ctx.lineTo(sx, sy + 8);
+    ctx.stroke();
+    if (off) {
+      ctx.beginPath();
+      ctx.arc(sx, sy, 11, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
 }
 
 const S: Record<string, CSSProperties> = {

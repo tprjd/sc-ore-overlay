@@ -52,17 +52,6 @@ function newId(): string {
 // decimals are meaningful, so don't round to 2 places.
 const km = (m: number): string => (m / 1000).toLocaleString(undefined, { maximumFractionDigits: 6 });
 
-/** Mean position of a set of entries (map center fallback when not flying). */
-function centroid(entries: SurveyEntry[]): Vec3 | null {
-  if (entries.length === 0) return null;
-  const s = entries.reduce((a, e) => ({ x: a.x + e.pos.x, y: a.y + e.pos.y, z: a.z + e.pos.z }), {
-    x: 0,
-    y: 0,
-    z: 0,
-  });
-  return { x: s.x / entries.length, y: s.y / entries.length, z: s.z / entries.length };
-}
-
 /** Trigger a client-side file download. */
 function download(name: string, mime: string, text: string): void {
   const blob = new Blob([text], { type: mime });
@@ -135,9 +124,8 @@ export function SurveyView({
     () => [...log, ...(debugMode ? debugList : []), ...simEntries],
     [log, debugMode, debugList, simEntries],
   );
-  const mapShip: Vec3 | null = debugMode
-    ? DEBUG_SHIP
-    : (readout.pos ?? centroid([...log, ...simEntries]));
+  // The map centers on the logged field itself; the ship is just a marker.
+  const mapShip: Vec3 | null = debugMode ? DEBUG_SHIP : readout.pos;
 
   const canLog = readout.pos != null;
   const logScan = (): void => {
