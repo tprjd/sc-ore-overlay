@@ -39,3 +39,24 @@ export type { PixelBuffer, BinarizeParams } from './image';
 
 export { parseReading, bestReading } from './parse';
 export type { OcrCandidate } from './parse';
+
+export { parseDistanceToken, parsePosLine, parsePos, parseSystemName } from './coords';
+export type { Vec3, PosReading } from './coords';
+
+export {
+  makeEntry,
+  distance,
+  project,
+  dedupeEntries,
+  mergeEntries,
+  filterBySystem,
+} from './survey';
+export type {
+  SurveyEntry,
+  ScoutPresence,
+  PlanarPoint,
+  NewEntryInput,
+  EntrySource,
+  ScoutRole,
+  AxisPlane,
+} from './survey';
