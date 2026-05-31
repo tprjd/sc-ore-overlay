@@ -72,12 +72,15 @@ export function SurveyMap({ ship, entries, plane = 'xy' }: SurveyMapProps) {
   const sizeRef = useRef(size);
   sizeRef.current = size;
 
-  // Map origin: the field's own median (robust to a stray bad coordinate), or
-  // the ship when there's nothing logged yet.
-  const origin = useMemo<Vec3 | null>(
-    () => (entries.length ? medianVec(entries) : ship),
-    [entries, ship],
-  );
+  // Map origin (canvas center). Prefer the ship — radar-style, source at center —
+  // when it's a plausible same-area position. Fall back to the field's median
+  // (robust to a stray bad coordinate) when the ship is missing or reads garbage.
+  const origin = useMemo<Vec3 | null>(() => {
+    if (!entries.length) return ship;
+    const med = medianVec(entries);
+    if (!ship) return med;
+    return distance(ship, med) < FAR ? ship : med;
+  }, [entries, ship]);
 
   useEffect(() => {
     const wrap = wrapRef.current;
@@ -88,9 +91,10 @@ export function SurveyMap({ ship, entries, plane = 'xy' }: SurveyMapProps) {
     return () => ro.disconnect();
   }, []);
 
-  // Fit to the entries' extent around the origin (ignore a far-away ship so it
-  // can't blow up the scale).
-  const originKey = origin ? `${origin.x},${origin.y},${origin.z}` : 'none';
+  // Fit to the entries' extent. Deliberately does NOT depend on the ship/origin
+  // position, so flying (ship moving every tick) doesn't reset the zoom — the
+  // ship stays centered via the projection, the zoom only re-fits when the data,
+  // plane, size, or the Fit button change.
   useLayoutEffect(() => {
     if (!origin || size.w < 2 || size.h < 2) return;
     // Fit to the cluster, not the farthest point: use the 90th-percentile radius
@@ -109,7 +113,7 @@ export function SurveyMap({ ship, entries, plane = 'xy' }: SurveyMapProps) {
     const ppm = (Math.min(size.w, size.h) * 0.42) / span;
     setView({ ppm, panX: 0, panY: 0 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [originKey, entries, plane, size.w, size.h, fitNonce]);
+  }, [entries, plane, size.w, size.h, fitNonce]);
 
   // Draw.
   useEffect(() => {
