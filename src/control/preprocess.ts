@@ -63,9 +63,19 @@ export function preprocess(
   const cw = clamp(Math.round(region.w * sw), 1, sw - sx);
   const ch = clamp(Math.round(region.h * sh), 1, sh - sy);
 
+  // Upscale for legibility, but cap the longest side: OCR detection time grows
+  // with pixel count, and a high per-region upscale on a wide region otherwise
+  // produces a huge, very slow input for little accuracy gain.
   const scale = Math.max(1, Math.round(params.scale));
-  const dw = Math.max(1, cw * scale);
-  const dh = Math.max(1, ch * scale);
+  let dw = Math.max(1, cw * scale);
+  let dh = Math.max(1, ch * scale);
+  const MAX_SIDE = 1600;
+  const longest = Math.max(dw, dh);
+  if (longest > MAX_SIDE) {
+    const f = MAX_SIDE / longest;
+    dw = Math.max(1, Math.round(dw * f));
+    dh = Math.max(1, Math.round(dh * f));
+  }
 
   const canvas = document.createElement('canvas');
   canvas.width = dw;

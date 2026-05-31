@@ -19,11 +19,13 @@ export default defineConfig({
       },
     ]),
   ],
-  // Pre-bundle @gutenye/ocr-browser so its CommonJS deps (e.g. js-clipper) get
-  // proper ESM-default interop. Keep onnxruntime-web out (it ships WASM) and
-  // deduped, so we can set its wasm paths from a single instance.
+  // OCR now runs in a Web Worker (src/control/ocr.worker.ts). Emit ESM workers so
+  // the worker can import onnxruntime-web + @gutenye/ocr-common. Pre-bundle the
+  // OCR libs so their CommonJS deps (e.g. js-clipper) get ESM-default interop;
+  // keep onnxruntime-web out (it ships WASM) and deduped.
+  worker: { format: 'es' },
   optimizeDeps: {
-    include: ['@gutenye/ocr-browser'],
+    include: ['@gutenye/ocr-common', '@gutenye/ocr-common/splitIntoLineImages'],
     exclude: ['onnxruntime-web'],
   },
   resolve: { dedupe: ['onnxruntime-web'] },

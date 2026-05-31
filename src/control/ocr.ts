@@ -1,22 +1,8 @@
-// OCR via PP-OCR (PaddleOCR detection + recognition models) on ONNX Runtime
-// Web, in the renderer (@gutenye/ocr-browser).
-//
-// Why PP-OCR: it does text *detection* then *recognition*, so it localizes the
-// digits inside an imperfectly-drawn region (ignoring the pin icon / padding)
-// and reads the raw color text on any background — verified reading "17,080" at
-// 0.99 confidence on sloppy crops. No binarization/threshold tuning needed.
-//
-// The heavy libs (@gutenye/ocr-browser + onnxruntime-web, ~MBs of WASM) are
-// imported lazily on the first scan so the control UI renders instantly and a
-// load failure can't blank the whole window. Models are bundled under
-// /public/models; ONNX Runtime Web's WASM is fetched from a CDN in dev
-// (packaging bundles it locally — Phase 4).
-
-const MODELS = {
-  detectionPath: '/models/ch_PP-OCRv4_det_infer.onnx',
-  recognitionPath: '/models/ch_PP-OCRv4_rec_infer.onnx',
-  dictionaryPath: '/models/ppocr_keys_v1.txt',
-};
+// OCR client: talks to the OCR Web Worker so inference runs off the main thread
+// and never freezes the UI. PP-OCR (PaddleOCR detection + recognition) on ONNX
+// Runtime Web still does the work — see ocr.worker.ts — it just lives in a
+// worker now. The worker serializes jobs, so concurrent callers (the live loop
+// and image scans) can't corrupt a shared ORT session.
 
 /** One detected text line and its mean confidence (0..1). */
 export interface OcrLine {
@@ -24,33 +10,46 @@ export interface OcrLine {
   score: number;
 }
 
-interface OcrEngine {
-  detect(image: string): Promise<Array<{ text: string; mean: number }>>;
+interface WorkerResult {
+  id: number;
+  lines?: OcrLine[];
+  error?: string;
 }
 
-let enginePromise: Promise<OcrEngine> | null = null;
+let worker: Worker | null = null;
+let seq = 0;
+const pending = new Map<number, { resolve: (lines: OcrLine[]) => void; reject: (err: Error) => void }>();
 
-async function init(): Promise<OcrEngine> {
-  const [{ default: Ocr }, ort] = await Promise.all([
-    import('@gutenye/ocr-browser'),
-    import('onnxruntime-web'),
-  ]);
-  // No cross-origin isolation in the renderer → single-thread WASM. Load the ORT
-  // wasm from a CDN matching the pinned onnxruntime-web version.
-  ort.env.wasm.numThreads = 1;
-  ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.3/dist/';
-  return Ocr.create({ models: MODELS }) as Promise<OcrEngine>;
+function getWorker(): Worker {
+  if (worker) return worker;
+  worker = new Worker(new URL('./ocr.worker.ts', import.meta.url), { type: 'module' });
+  worker.onmessage = (e: MessageEvent<WorkerResult>): void => {
+    const { id, lines, error } = e.data;
+    const p = pending.get(id);
+    if (!p) return;
+    pending.delete(id);
+    if (error) p.reject(new Error(error));
+    else p.resolve(lines ?? []);
+  };
+  worker.onerror = (e: ErrorEvent): void => {
+    const err = new Error(e.message || 'OCR worker failed to load');
+    for (const p of pending.values()) p.reject(err);
+    pending.clear();
+  };
+  return worker;
 }
 
-/** Lazily create (and cache) the PP-OCR engine. First call loads the models. */
-export function loadOcr(): Promise<OcrEngine> {
-  if (!enginePromise) enginePromise = init();
-  return enginePromise;
+/** Spawn/warm the OCR worker (and begin loading models) ahead of first use. */
+export function loadOcr(): void {
+  getWorker();
 }
 
 /** Detect + recognize all text lines in a crop given as a PNG data URL. */
-export async function recognize(imageDataUrl: string): Promise<OcrLine[]> {
-  const engine = await loadOcr();
-  const lines = await engine.detect(imageDataUrl);
-  return lines.map((l) => ({ text: l.text, score: l.mean }));
+export function recognize(imageDataUrl: string): Promise<OcrLine[]> {
+  const w = getWorker();
+  const id = ++seq;
+  return new Promise<OcrLine[]>((resolve, reject) => {
+    pending.set(id, { resolve, reject });
+    w.postMessage({ id, dataUrl: imageDataUrl });
+  });
 }
