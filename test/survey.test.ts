@@ -7,6 +7,7 @@ import {
   dedupeEntries,
   mergeEntries,
   filterBySystem,
+  isStablePos,
 } from '../src/core/survey';
 import type { SurveyEntry, NewEntryInput } from '../src/core/survey';
 import type { OreCandidate } from '../src/core/types';
@@ -110,5 +111,28 @@ describe('filterBySystem', () => {
     );
     expect(out).toHaveLength(1);
     expect(out[0].id).toBe('a');
+  });
+});
+
+describe('isStablePos', () => {
+  const p = (x: number): { x: number; y: number; z: number } => ({ x, y: 0, z: 0 });
+
+  it('needs at least `min` samples', () => {
+    expect(isStablePos([p(0)], 5000)).toBe(false);
+    expect(isStablePos([], 5000)).toBe(false);
+  });
+
+  it('is stable when the last samples agree within tolerance', () => {
+    expect(isStablePos([p(0), p(100)], 5000)).toBe(true); // 100 m apart < 5 km
+    expect(isStablePos([p(0), p(0)], 5000)).toBe(true);
+  });
+
+  it('is unstable when a recent sample jumps far (a misread)', () => {
+    expect(isStablePos([p(0), p(1e11)], 5000)).toBe(false);
+  });
+
+  it('only considers the last `min` samples', () => {
+    // older far sample, but the last two are parked
+    expect(isStablePos([p(1e11), p(0), p(50)], 5000, 2)).toBe(true);
   });
 });

@@ -154,3 +154,15 @@ export function mergeEntries(existing: SurveyEntry[], incoming: SurveyEntry[]): 
 export function filterBySystem(entries: SurveyEntry[], system: string): SurveyEntry[] {
   return entries.filter((e) => e.system === system);
 }
+
+/**
+ * True when the most recent positions agree within `tolMeters` — i.e. the ship
+ * is parked, not mid-flight or mid-misread. Used to gate logging so a one-frame
+ * OCR garbage coordinate isn't recorded. Needs at least `min` samples.
+ */
+export function isStablePos(recent: Vec3[], tolMeters: number, min = 2): boolean {
+  if (recent.length < min) return false;
+  const sample = recent.slice(-min);
+  const ref = sample[sample.length - 1];
+  return sample.every((p) => distance(p, ref) <= tolMeters);
+}

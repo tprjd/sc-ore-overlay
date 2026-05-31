@@ -53,6 +53,7 @@ export {
   dedupeEntries,
   mergeEntries,
   filterBySystem,
+  isStablePos,
 } from './survey';
 export type {
   SurveyEntry,

@@ -18,7 +18,7 @@ import type { DrawableSource, NormRegion } from '../preprocess';
 import { DEBUG_SHIP, debugEntries } from '../survey-debug';
 import { scanImage } from '../scanImage';
 import type { SimScan } from '../scanImage';
-import { makeEntry, mergeEntries } from '../../core';
+import { isStablePos, makeEntry, mergeEntries } from '../../core';
 import type { AxisPlane, SignatureTable, SurveyEntry, Vec3 } from '../../core';
 import type { SurveyRegionSetting, SurveyRole } from '../../shared/bridge';
 
@@ -129,9 +129,26 @@ export function SurveyView({
   // The map centers on the logged field itself; the ship is just a marker.
   const mapShip: Vec3 | null = debugMode ? DEBUG_SHIP : readout.pos;
 
+  // Track recent ship positions so logging can require a steady read (parked),
+  // rejecting a one-frame misread.
+  const recentPos = useRef<Vec3[]>([]);
+  useEffect(() => {
+    if (!readout.pos) return;
+    const r = recentPos.current;
+    r.push(readout.pos);
+    if (r.length > 5) r.shift();
+  }, [readout.pos]);
+  const [logWarn, setLogWarn] = useState<string | null>(null);
+
   const canLog = readout.pos != null;
+  const STABLE_TOL_M = 5000; // 5 km
   const logScan = (): void => {
     if (!readout.pos) return;
+    if (!isStablePos(recentPos.current, STABLE_TOL_M)) {
+      setLogWarn('Ship position not steady yet — hold still a moment, then log.');
+      return;
+    }
+    setLogWarn(null);
     const entry = makeEntry({
       id: newId(),
       ts: Date.now(),
@@ -331,6 +348,7 @@ export function SurveyView({
               + Log scan
             </button>
             {!canLog && <p style={S.dim}>Need a ship position to log (box a Ship Pos region).</p>}
+            {logWarn && <p style={{ ...S.dim, color: '#fbbf24', opacity: 1 }}>{logWarn}</p>}
           </Card>
 
           <Card title="Log">

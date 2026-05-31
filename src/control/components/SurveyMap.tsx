@@ -115,12 +115,18 @@ export function SurveyMap({ ship, entries, plane = 'xy' }: SurveyMapProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entries, plane, size.w, size.h, fitNonce]);
 
-  // Draw.
+  // Draw. Resize the backing store only when the size actually changes — setting
+  // canvas.width/height reallocates and clears the bitmap, so doing it on every
+  // hover/view redraw is what made the map janky.
   useEffect(() => {
     if (!canvasEl || size.w < 2 || size.h < 2) return;
     const dpr = window.devicePixelRatio || 1;
-    canvasEl.width = Math.round(size.w * dpr);
-    canvasEl.height = Math.round(size.h * dpr);
+    const W = Math.round(size.w * dpr);
+    const H = Math.round(size.h * dpr);
+    if (canvasEl.width !== W || canvasEl.height !== H) {
+      canvasEl.width = W;
+      canvasEl.height = H;
+    }
     const ctx = canvasEl.getContext('2d');
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -187,7 +193,10 @@ export function SurveyMap({ ship, entries, plane = 'xy' }: SurveyMapProps) {
       return;
     }
     const rect = e.currentTarget.getBoundingClientRect();
-    setHover(hitTest(e.clientX - rect.left, e.clientY - rect.top));
+    const next = hitTest(e.clientX - rect.left, e.clientY - rect.top);
+    // Only re-render when the hovered point changes (the tooltip anchors to the
+    // dot, not the cursor), so plain mouse movement doesn't trigger redraws.
+    setHover((prev) => (prev?.entry.id === next?.entry.id ? prev : next));
   };
   const onPointerUp = (): void => {
     drag.current = null;
