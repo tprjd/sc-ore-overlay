@@ -23,6 +23,8 @@ export interface ActiveSurveyRegion {
   id: string;
   role: SurveyRole;
   rect: NormRegion;
+  /** Per-region upscale override; falls back to the global upscale when unset. */
+  scale?: number;
 }
 
 /** Per-region debug surfaced in the Survey panel (aids the OCR checkpoint). */
@@ -91,7 +93,7 @@ export function useSurveyCapture(
   const { scale, intervalMs } = params;
   // Restart the loop when the set/role/rect of regions changes.
   const regionsKey = regions
-    .map((r) => `${r.id}:${r.role}:${r.rect.x},${r.rect.y},${r.rect.w},${r.rect.h}`)
+    .map((r) => `${r.id}:${r.role}:${r.scale ?? ''}:${r.rect.x},${r.rect.y},${r.rect.w},${r.rect.h}`)
     .join('|');
 
   useEffect(() => {
@@ -108,7 +110,7 @@ export function useSurveyCapture(
       try {
         const next = new Map<string, Cached>();
         for (const reg of current) {
-          const pre = preprocess(media, reg.rect, { scale });
+          const pre = preprocess(media, reg.rect, { scale: reg.scale ?? scale });
           if (!pre) continue;
           const hash = hashPixels(pre.pixels);
           const prev = cache.current.get(reg.id);
@@ -128,10 +130,9 @@ export function useSurveyCapture(
           if (reg.role === 'rs') {
             rs = pickReading(lines, table);
           } else if (reg.role === 'shipPos') {
-            // Newline-join first (lets parsePos prefer the SolarSystem line when
-            // several zones are in view); fall back to a space-join for a single
-            // line PP-OCR fragmented into pieces.
-            pos = parsePos(texts.join('\n')) ?? parsePos(texts.join(' '));
+            // parsePos anchors on the SolarSystem frame across however many zone
+            // rows the box caught, and flattens the lines itself.
+            pos = parsePos(texts.join('\n'));
           } else if (reg.role === 'scanResult') {
             scan = parseScanResult(texts.join('\n'));
           } else {

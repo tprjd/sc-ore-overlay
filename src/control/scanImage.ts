@@ -67,7 +67,7 @@ export async function scanImage(
     let scan: ScanResult | null = null;
 
     for (const reg of regions) {
-      const pre = preprocess(img, reg.rect, { scale });
+      const pre = preprocess(img, reg.rect, { scale: reg.scale ?? scale });
       if (!pre) {
         debugs.push({ role: reg.role, dataUrl: null, rawText: '(no crop)', parsed: '—', ok: false });
         continue;
@@ -82,7 +82,7 @@ export async function scanImage(
         parsed = rs != null ? String(rs) : 'no match';
         ok = rs != null;
       } else if (reg.role === 'shipPos') {
-        const p = parsePos(texts.join('\n')) ?? parsePos(texts.join(' '));
+        const p = parsePos(texts.join('\n'));
         pos = p?.pos ?? null;
         parsed = p ? fmtKm(p.pos) : 'no coords';
         ok = p != null;

@@ -108,6 +108,8 @@ export interface SurveyRegionSetting {
   role: SurveyRole;
   rect: PersistedRegion;
   enabled: boolean;
+  /** Per-region upscale override; falls back to the global upscale when unset. */
+  scale?: number;
 }
 
 /** User settings persisted to Electron userData (survive restart). */

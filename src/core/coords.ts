@@ -115,13 +115,45 @@ export function parsePosLine(line: string): PosReading | null {
 }
 
 /**
- * Parse the ship position from a block of overlay text (one or many lines).
- * Picks the most useful frame: the zone matching `preferZone` ("SolarSystem" by
- * default), else a "Root" line, else the largest-magnitude reading (the most
- * global frame). Returns null when no line yields three coordinates.
+ * Find the three coordinates that follow a zone keyword anywhere in the text
+ * (newlines flattened to spaces first). Tries every occurrence until one yields
+ * a triple — so it skips a keyword that appears without coordinates (e.g. the
+ * "Current player location : NyxSolarSystem" line) and isn't fooled by OCR that
+ * splits the zone label from its numbers. Requires units, so the numeric zone id
+ * (e.g. "_286442628222") is not mistaken for a coordinate.
+ */
+function parseAfterKeyword(flat: string, keyword: string): PosReading | null {
+  const low = flat.toLowerCase();
+  const kw = keyword.toLowerCase();
+  let from = 0;
+  for (;;) {
+    const idx = low.indexOf(kw, from);
+    if (idx < 0) return null;
+    const after = flat.slice(idx + keyword.length);
+    const pos = extractTriple(after, true);
+    if (pos) {
+      const tail = /^[\w-]*/.exec(after)?.[0] ?? '';
+      return { zone: keyword + tail, pos };
+    }
+    from = idx + kw.length;
+  }
+}
+
+/**
+ * Parse the ship position from a block of overlay text (one or many lines). The
+ * debug overlay shows several nested zone rows and the count varies; we only
+ * want the absolute `SolarSystem` frame. Strategy: anchor on the `SolarSystem`
+ * keyword (then `Root`) even across a multi-row capture; otherwise fall back to
+ * per-line parsing — a line whose zone matches, else the largest-magnitude
+ * reading. Returns null when no three coordinates are found.
  */
 export function parsePos(text: string, opts: { preferZone?: string } = {}): PosReading | null {
-  const preferZone = (opts.preferZone ?? 'SolarSystem').toLowerCase();
+  const preferZone = opts.preferZone ?? 'SolarSystem';
+  const flat = text.replace(/\r?\n/g, ' ');
+
+  const anchored = parseAfterKeyword(flat, preferZone) ?? parseAfterKeyword(flat, 'Root');
+  if (anchored) return anchored;
+
   const readings: PosReading[] = [];
   for (const line of text.split(/\r?\n/)) {
     const r = parsePosLine(line);
@@ -129,10 +161,11 @@ export function parsePos(text: string, opts: { preferZone?: string } = {}): PosR
   }
   if (readings.length === 0) return null;
 
-  const zoned = readings.find((r) => r.zone.toLowerCase().includes(preferZone));
+  const lowerPrefer = preferZone.toLowerCase();
+  const zoned =
+    readings.find((r) => r.zone.toLowerCase().includes(lowerPrefer)) ??
+    readings.find((r) => r.zone.toLowerCase().includes('root'));
   if (zoned) return zoned;
-  const root = readings.find((r) => r.zone.toLowerCase().includes('root'));
-  if (root) return root;
   return readings.reduce((best, r) => (magnitude(r.pos) > magnitude(best.pos) ? r : best));
 }
 

@@ -12,6 +12,16 @@ const SAMPLE = [
   'No Current Planet',
 ].join('\n');
 
+// A second real capture: a different system, Z in km this time, and a large
+// (hundreds of km) Microtech row that must NOT be mistaken for the system frame.
+const SAMPLE2 = [
+  'Zone: ARGO_MOLE_Teach_380173754363 Pos: -1.00m 20.15m 0.78m',
+  'Zone: OOC_Stanton_4_Microtech Pos: 547.3048km 532.8736km 823.2152km',
+  'Zone: SolarSystem_286442628222 Pos: 22462765.8040km 37185398.0550km 823.2152km',
+  'Zone: Root Pos: 22462765.8040km 37185398.0550km 823.2152km',
+  'Current player location : Stanton4',
+].join('\n');
+
 describe('parseDistanceToken', () => {
   it('applies the per-token metric unit', () => {
     expect(parseDistanceToken('734.87m')).toBeCloseTo(734.87, 5);
@@ -102,6 +112,21 @@ describe('parsePos', () => {
     const text = ['1km 0m 0m', '10km 0m 0m'].join('\n');
     const r = parsePos(text);
     expect(r!.pos.x).toBe(10_000);
+  });
+
+  it('picks SolarSystem from a multi-row capture with km Z and a large Microtech row', () => {
+    const r = parsePos(SAMPLE2)!;
+    expect(r.zone).toBe('SolarSystem_286442628222');
+    expect(r.pos.x).toBeCloseTo(22_462_765_804.0, 0);
+    expect(r.pos.y).toBeCloseTo(37_185_398_055.0, 0);
+    expect(r.pos.z).toBeCloseTo(823_215.2, 1);
+  });
+
+  it('still finds SolarSystem when the rows are flattened into one line (OCR fragmentation)', () => {
+    const r = parsePos(SAMPLE2.replace(/\n/g, ' '))!;
+    // Must anchor on SolarSystem, not grab the first (ARGO) row's tiny numbers.
+    expect(r.pos.x).toBeCloseTo(22_462_765_804.0, 0);
+    expect(r.zone).toContain('SolarSystem');
   });
 
   it('returns null when no line has three coordinates', () => {

@@ -9,6 +9,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { CapturePreview } from './CapturePreview';
 import type { PreviewRegion } from './CapturePreview';
 import { SurveyMap } from './SurveyMap';
+import { OreReference } from './OreReference';
 import type { PickedSource } from './SourcePicker';
 import { useSurveyCapture } from '../useSurveyCapture';
 import type { ActiveSurveyRegion } from '../useSurveyCapture';
@@ -93,7 +94,7 @@ export function SurveyView({
   const [simBusy, setSimBusy] = useState(false);
 
   const active: ActiveSurveyRegion[] = useMemo(
-    () => regions.filter((r) => r.enabled).map((r) => ({ id: r.id, role: r.role, rect: r.rect })),
+    () => regions.filter((r) => r.enabled).map((r) => ({ id: r.id, role: r.role, rect: r.rect, scale: r.scale })),
     [regions],
   );
   const readout = useSurveyCapture(mediaRef, active, params, true, table);
@@ -257,6 +258,8 @@ export function SurveyView({
             </div>
           )}
         </div>
+
+        <OreReference table={table} />
 
         <div style={S.panel}>
           <Card title="Live readout">
@@ -504,6 +507,25 @@ export function SurveyView({
                             </option>
                           ))}
                         </select>
+                        <label
+                          style={S.scaleLabel}
+                          title="upscale — raise for small/blurry text (high FOV)"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="number"
+                            min={1}
+                            max={12}
+                            value={r.scale ?? params.scale}
+                            onChange={(e) =>
+                              updateRegion(r.id, {
+                                scale: Math.max(1, Math.min(12, Math.round(Number(e.target.value)) || 1)),
+                              })
+                            }
+                            style={S.scaleInput}
+                          />
+                          ×
+                        </label>
                         <label style={S.enableLabel} onClick={(e) => e.stopPropagation()}>
                           <input
                             type="checkbox"
@@ -625,6 +647,8 @@ const S: Record<string, CSSProperties> = {
   dot: { width: 10, height: 10, borderRadius: 5, flex: '0 0 auto' },
   select: { flex: 1, background: '#0d0f12', color: '#e6e6e6', border: '1px solid #3a4150', borderRadius: 6, padding: '4px 6px', fontSize: 13 },
   enableLabel: { display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, opacity: 0.8 },
+  scaleLabel: { display: 'flex', alignItems: 'center', gap: 2, fontSize: 11, opacity: 0.7 },
+  scaleInput: { width: 36, background: '#0d0f12', color: '#e6e6e6', border: '1px solid #3a4150', borderRadius: 4, padding: '2px 4px', fontSize: 12 },
   delBtn: { background: 'none', color: '#9fb3c8', border: '1px solid #3a4150', borderRadius: 6, padding: '2px 7px', cursor: 'pointer', fontSize: 12 },
   regionBody: { display: 'flex', gap: 8, marginTop: 8, alignItems: 'flex-start' },
   cropWrap: { minWidth: 96, minHeight: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000', border: '1px solid #2c323d', borderRadius: 4, padding: 2 },
