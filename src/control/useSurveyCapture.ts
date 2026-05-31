@@ -9,8 +9,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 
-import { hashPixels, matchOre, parsePos, parseSystemName } from '../core';
-import type { OreCandidate, SignatureTable, Vec3 } from '../core';
+import { hashPixels, matchOre, parsePos, parseScanResult, parseSystemName } from '../core';
+import type { OreCandidate, ScanResult, SignatureTable, Vec3 } from '../core';
 import { preprocess } from './preprocess';
 import type { DrawableSource, NormRegion } from './preprocess';
 import { recognize } from './ocr';
@@ -41,6 +41,7 @@ export interface SurveyReadout {
   pos: Vec3 | null;
   posZone: string | null;
   system: string | null;
+  scan: ScanResult | null;
   regions: Record<string, RegionDebug>;
   error: string | null;
 }
@@ -51,6 +52,7 @@ const EMPTY: SurveyReadout = {
   pos: null,
   posZone: null,
   system: null,
+  scan: null,
   regions: {},
   error: null,
 };
@@ -64,6 +66,7 @@ interface Cached {
   rs: number | null;
   pos: { zone: string; pos: Vec3 } | null;
   system: string | null;
+  scan: ScanResult | null;
 }
 
 /** Format a position vector in km for the debug line. */
@@ -121,6 +124,7 @@ export function useSurveyCapture(
           let rs: number | null = null;
           let pos: { zone: string; pos: Vec3 } | null = null;
           let system: string | null = null;
+          let scan: ScanResult | null = null;
           if (reg.role === 'rs') {
             rs = pickReading(lines, table);
           } else if (reg.role === 'shipPos') {
@@ -128,10 +132,12 @@ export function useSurveyCapture(
             // several zones are in view); fall back to a space-join for a single
             // line PP-OCR fragmented into pieces.
             pos = parsePos(texts.join('\n')) ?? parsePos(texts.join(' '));
+          } else if (reg.role === 'scanResult') {
+            scan = parseScanResult(texts.join('\n'));
           } else {
             system = parseSystemName(texts.join(' '));
           }
-          next.set(reg.id, { hash, role: reg.role, dataUrl: pre.dataUrl, rawText, rs, pos, system });
+          next.set(reg.id, { hash, role: reg.role, dataUrl: pre.dataUrl, rawText, rs, pos, system, scan });
         }
         cache.current = next;
         if (cancelled) return;
@@ -140,6 +146,7 @@ export function useSurveyCapture(
         let pos: Vec3 | null = null;
         let posZone: string | null = null;
         let system: string | null = null;
+        let scan: ScanResult | null = null;
         const regionsDebug: Record<string, RegionDebug> = {};
         for (const reg of current) {
           const c = next.get(reg.id);
@@ -162,6 +169,12 @@ export function useSurveyCapture(
               parsed = fmtKm(c.pos.pos);
               ok = true;
             } else parsed = 'no coords';
+          } else if (c.role === 'scanResult') {
+            if (c.scan) {
+              scan = c.scan;
+              parsed = `${c.scan.ore} · ${c.scan.composition.length} mat`;
+              ok = true;
+            } else parsed = 'no scan';
           } else if (c.system) {
             system = c.system;
             parsed = c.system;
@@ -170,7 +183,7 @@ export function useSurveyCapture(
           regionsDebug[reg.id] = { role: c.role, dataUrl: c.dataUrl, rawText: c.rawText, parsed, ok };
         }
         const candidates = rs != null ? matchOre(rs, table, { method: 'Ship' }) : [];
-        setState({ rs, candidates, pos, posZone, system, regions: regionsDebug, error: null });
+        setState({ rs, candidates, pos, posZone, system, scan, regions: regionsDebug, error: null });
       } catch (err) {
         if (!cancelled) {
           setState((s) => ({ ...s, error: err instanceof Error ? err.message : String(err) }));

@@ -100,7 +100,7 @@ export interface PersistedRegion {
 }
 
 /** What a Survey-Mode capture region reads (see SURVEY-MODE.md). */
-export type SurveyRole = 'rs' | 'shipPos' | 'system';
+export type SurveyRole = 'rs' | 'shipPos' | 'system' | 'scanResult';
 
 /** One persisted Survey-Mode capture region + the field it reads. */
 export interface SurveyRegionSetting {

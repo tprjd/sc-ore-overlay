@@ -35,6 +35,7 @@ export interface SurveyViewProps {
 }
 
 const ROLE_META: Record<SurveyRole, { label: string; color: string }> = {
+  scanResult: { label: 'Scan Result', color: '#f0abfc' },
   shipPos: { label: 'Ship Pos', color: '#6ee7b7' },
   rs: { label: 'RS', color: '#4fd1ff' },
   system: { label: 'System', color: '#fbbf24' },
@@ -146,6 +147,7 @@ export function SurveyView({
       pos: readout.pos,
       rs: readout.rs ?? 0,
       candidates: readout.candidates,
+      scan: readout.scan ?? undefined,
       source: 'local',
     });
     setLog((prev) => [entry, ...prev]);
@@ -279,6 +281,31 @@ export function SurveyView({
                 <div style={S.dim}>no coordinates yet</div>
               )}
             </div>
+            {readout.scan && (
+              <div style={S.scanBlock}>
+                <div style={S.scanOre}>
+                  {readout.scan.ore}
+                  {readout.scan.scu != null && <span style={S.dim}> · {readout.scan.scu} SCU</span>}
+                </div>
+                <div style={S.scanMeta}>
+                  {readout.scan.mass != null && <span>mass {readout.scan.mass.toLocaleString()}</span>}
+                  {readout.scan.resistance != null && <span>res {readout.scan.resistance}%</span>}
+                  {readout.scan.instability != null && <span>inst {readout.scan.instability}</span>}
+                </div>
+                <div style={S.compHead}>
+                  <span style={S.compPct}>%</span>
+                  <span style={S.compMat}>content</span>
+                  <span style={S.compVal}>quality</span>
+                </div>
+                {readout.scan.composition.map((c, i) => (
+                  <div key={i} style={S.compRow}>
+                    <span style={S.compPct}>{c.percent}%</span>
+                    <span style={S.compMat}>{c.material}</span>
+                    <span style={S.compVal}>{c.quality}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             <div style={S.kv}>
               <span style={S.k}>RS</span>
               <span style={S.v}>{readout.rs ?? '—'}</span>
@@ -568,6 +595,14 @@ const S: Record<string, CSSProperties> = {
   k: { opacity: 0.6, fontSize: 13 },
   v: { fontFamily: 'ui-monospace, monospace', fontSize: 14 },
   coordBlock: { margin: '8px 0', padding: '8px 10px', background: '#0d0f12', border: '1px solid #2c323d', borderRadius: 6 },
+  scanBlock: { margin: '8px 0', padding: '8px 10px', background: '#160f18', border: '1px solid #5b3a63', borderRadius: 6 },
+  scanOre: { fontSize: 16, fontWeight: 700, color: '#f0abfc' },
+  scanMeta: { display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 11, opacity: 0.7, margin: '2px 0 6px', fontVariantNumeric: 'tabular-nums' },
+  compHead: { display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.4, opacity: 0.4, marginBottom: 2 },
+  compRow: { display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 12, padding: '1px 0' },
+  compPct: { width: 48, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#f0abfc' },
+  compMat: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  compVal: { width: 48, textAlign: 'right', fontVariantNumeric: 'tabular-nums', opacity: 0.7 },
   coordTitle: { fontSize: 11, opacity: 0.6, marginBottom: 6 },
   coordGrid: { display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 8px', alignItems: 'baseline' },
   axis: { fontSize: 11, opacity: 0.5 },

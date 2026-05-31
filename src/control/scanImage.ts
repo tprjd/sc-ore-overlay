@@ -6,8 +6,8 @@
 // per-region debug (crop + raw text + parsed value) so misreads/misaligned
 // boxes are visible.
 
-import { makeEntry, matchOre, parsePos, parseSystemName } from '../core';
-import type { SignatureTable, SurveyEntry, Vec3 } from '../core';
+import { makeEntry, matchOre, parsePos, parseScanResult, parseSystemName } from '../core';
+import type { ScanResult, SignatureTable, SurveyEntry, Vec3 } from '../core';
 import { preprocess } from './preprocess';
 import { recognize } from './ocr';
 import { pickReading } from './useCaptureLoop';
@@ -64,6 +64,7 @@ export async function scanImage(
     let rs: number | null = null;
     let pos: Vec3 | null = null;
     let system: string | null = null;
+    let scan: ScanResult | null = null;
 
     for (const reg of regions) {
       const pre = preprocess(img, reg.rect, { scale });
@@ -85,6 +86,10 @@ export async function scanImage(
         pos = p?.pos ?? null;
         parsed = p ? fmtKm(p.pos) : 'no coords';
         ok = p != null;
+      } else if (reg.role === 'scanResult') {
+        scan = parseScanResult(texts.join('\n'));
+        parsed = scan ? `${scan.ore} · ${scan.composition.length} mat` : 'no scan';
+        ok = scan != null;
       } else {
         system = parseSystemName(texts.join(' '));
         parsed = system ?? '—';
@@ -111,6 +116,7 @@ export async function scanImage(
         pos,
         rs: rs ?? 0,
         candidates,
+        scan: scan ?? undefined,
         source: 'peer',
       }),
     };

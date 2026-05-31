@@ -6,6 +6,7 @@
 import type { Vec3 } from './coords';
 import type { OreCandidate } from './types';
 import type { QualityDetail } from './quality';
+import type { ScanResult } from './scan';
 
 /** Whether a logged entry was created here or arrived from a peer (sync, later). */
 export type EntrySource = 'local' | 'peer';
@@ -38,6 +39,8 @@ export interface SurveyEntry {
   nodes?: number;
   /** Quality breakdown when the location is known (from `getQualityDetail`). */
   quality?: QualityDetail;
+  /** Direct SCAN RESULTS panel reading, when captured (ground truth). */
+  scan?: ScanResult;
   /** Free-text note. */
   notes?: string;
   /** Where the entry came from. */
@@ -74,13 +77,15 @@ export interface NewEntryInput {
   rs: number;
   candidates: OreCandidate[];
   quality?: QualityDetail;
+  scan?: ScanResult;
   notes?: string;
   source?: EntrySource;
 }
 
 /**
- * Assemble a `SurveyEntry`, deriving the primary ore + node count from the
- * top-ranked candidate. Pure: the caller supplies `id` and `ts`.
+ * Assemble a `SurveyEntry`. The primary ore prefers the direct SCAN RESULTS
+ * reading (ground truth) and falls back to the top RS candidate; node count
+ * comes from that candidate. Pure: the caller supplies `id` and `ts`.
  */
 export function makeEntry(input: NewEntryInput): SurveyEntry {
   const top = input.candidates[0];
@@ -92,9 +97,10 @@ export function makeEntry(input: NewEntryInput): SurveyEntry {
     pos: input.pos,
     rs: input.rs,
     candidates: input.candidates,
-    ore: top?.name,
+    ore: input.scan?.ore ?? top?.name,
     nodes: top?.nodes,
     quality: input.quality,
+    scan: input.scan,
     notes: input.notes,
     source: input.source ?? 'local',
   };
