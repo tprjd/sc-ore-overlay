@@ -20,8 +20,14 @@ import { useSurveyCapture } from '../useSurveyCapture';
 import type { ActiveSurveyRegion } from '../useSurveyCapture';
 import type { LoopParams } from '../useCaptureLoop';
 import type { DrawableSource, NormRegion } from '../preprocess';
-import { createVoter, matchOre, groupLocations, getQualityDetail } from '../../core';
-import type { SignatureTable, Voter } from '../../core';
+import {
+  createVoter,
+  matchOre,
+  groupLocations,
+  getQualityDetail,
+  cleanMaterial,
+} from '../../core';
+import type { ScanResult, SignatureTable, Voter } from '../../core';
 import type {
   HotkeyAction,
   HotkeyMap,
@@ -29,6 +35,20 @@ import type {
   OverlayScale,
   SurveyRegionSetting,
 } from '../../shared/bridge';
+
+/**
+ * Two scans are "the same rock" when the OCR'd ore matches and the rock's
+ * fingerprint (composition row count + mass) is close. Used to freeze the
+ * scan box against OCR jitter while the rock stays targeted.
+ */
+function sameRock(a: ScanResult, b: ScanResult): boolean {
+  if (a.ore.toLowerCase() !== b.ore.toLowerCase()) return false;
+  if (a.composition.length !== b.composition.length) return false;
+  const aMass = a.mass ?? 0;
+  const bMass = b.mass ?? 0;
+  if (Math.abs(aMass - bMass) > 200) return false;
+  return true;
+}
 
 export interface ScanViewProps {
   source: PickedSource;
@@ -96,7 +116,30 @@ export function ScanView({
     [stableRs, table, location],
   );
 
-  // Push matches + top-candidate quality + the scanned rock to the overlay boxes.
+  // Recognized-ore set, lowercased. A SCAN RESULTS read whose ore isn't in
+  // this set is treated as OCR garbage and ignored (won't replace the
+  // frozen scan, won't be pushed to the overlay).
+  const oreSet = useMemo(
+    () => new Set(table.deposits.map((d) => d.name.toLowerCase())),
+    [table],
+  );
+
+  // Freeze the displayed scan once we see a recognized rock — UI shifts and
+  // OCR jitter would otherwise rewrite the percentages/qualities continuously.
+  // Replace the frozen scan only when the OCR clearly reports a *different*
+  // rock (ore name changed, row count changed, or mass differs by > 200).
+  const [frozenScan, setFrozenScan] = useState<ScanResult | null>(null);
+  useEffect(() => {
+    const next = readout.scan;
+    if (!next) return;
+    if (!oreSet.has(next.ore.toLowerCase())) return;
+    if (frozenScan && sameRock(frozenScan, next)) return;
+    setFrozenScan(next);
+  }, [readout, oreSet, frozenScan]);
+
+  // Push matches + top-candidate quality + the frozen scanned rock to the
+  // overlay boxes. Effect deps only fire on meaningful changes so the overlay
+  // doesn't re-arm its idle timer on every OCR tick.
   useEffect(() => {
     const top = matches[0];
     const detail = top ? getQualityDetail(table, top.name, top.signature, location) : null;
@@ -104,15 +147,19 @@ export function ScanView({
       reading: stableRs,
       candidates: matches.map((c) => ({ name: c.name, nodes: c.nodes, score: c.score })),
       detail,
-      scan: readout.scan ?? null,
+      scan: frozenScan,
     });
-  }, [stableRs, matches, table, location, readout.scan]);
+  }, [stableRs, matches, table, location, frozenScan]);
 
-  // Global-hotkey commands relayed from the main process.
+  // Global-hotkey commands relayed from the main process. Recalibrate clears
+  // both the regions *and* the frozen scan so the next rock takes over.
   useEffect(() => {
     return window.sco?.onCommand?.((command) => {
       if (command === 'pause') setPaused((p) => !p);
-      else if (command === 'recalibrate') onRegionsChange([]);
+      else if (command === 'recalibrate') {
+        onRegionsChange([]);
+        setFrozenScan(null);
+      }
     });
   }, [onRegionsChange]);
 
@@ -215,17 +262,25 @@ export function ScanView({
             )}
           </Section>
 
-          {readout.scan && (
+          {frozenScan && (
             <Section title="Scanned rock">
               <div style={S.scanBlock}>
                 <div style={S.scanOre}>
-                  {readout.scan.ore}
-                  {readout.scan.scu != null && <span style={S.dim}> · {readout.scan.scu} SCU</span>}
+                  {frozenScan.ore}
+                  {frozenScan.scu != null && <span style={S.dim}> · {frozenScan.scu} SCU</span>}
+                  <button
+                    type="button"
+                    style={S.clearBtn}
+                    onClick={() => setFrozenScan(null)}
+                    title="Clear the frozen scan and accept the next recognized rock"
+                  >
+                    clear
+                  </button>
                 </div>
                 <div style={S.scanMeta}>
-                  {readout.scan.mass != null && <span>mass {readout.scan.mass.toLocaleString()}</span>}
-                  {readout.scan.resistance != null && <span>res {readout.scan.resistance}%</span>}
-                  {readout.scan.instability != null && <span>inst {readout.scan.instability}</span>}
+                  {frozenScan.mass != null && <span>mass {frozenScan.mass.toLocaleString()}</span>}
+                  {frozenScan.resistance != null && <span>res {frozenScan.resistance}%</span>}
+                  {frozenScan.instability != null && <span>inst {frozenScan.instability}</span>}
                 </div>
                 <div style={S.compHead}>
                   <span style={S.compPct}>%</span>
@@ -233,10 +288,10 @@ export function ScanView({
                   <span style={S.compVal}>qual</span>
                   <span style={S.compScu}>SCU</span>
                 </div>
-                {readout.scan.composition.map((c, i) => (
+                {frozenScan.composition.map((c, i) => (
                   <div key={i} style={S.compRow}>
                     <span style={S.compPct}>{c.percent}%</span>
-                    <span style={S.compMat}>{c.material}</span>
+                    <span style={S.compMat} title={c.material}>{cleanMaterial(c.material)}</span>
                     <span style={S.compVal}>{c.quality}</span>
                     <span style={S.compScu}>{c.scu != null ? c.scu.toFixed(2) : '—'}</span>
                   </div>
@@ -582,7 +637,8 @@ const S: Record<string, CSSProperties> = {
   keyBtnActive: { borderColor: '#4fd1ff', color: '#4fd1ff' },
   color: { width: 48, height: 28, padding: 0, background: 'transparent', border: '1px solid #3a4150', borderRadius: 6, cursor: 'pointer' },
   scanBlock: { padding: '8px 10px', background: '#160f18', border: '1px solid #5b3a63', borderRadius: 6 },
-  scanOre: { ...text, fontSize: 16, fontWeight: 700, color: '#f0abfc' },
+  scanOre: { ...text, fontSize: 16, fontWeight: 700, color: '#f0abfc', display: 'flex', alignItems: 'baseline', gap: 6 },
+  clearBtn: { marginLeft: 'auto', background: 'transparent', color: '#9fb3c8', border: '1px solid #3a4150', borderRadius: 4, padding: '1px 6px', fontSize: 10, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: 0.4 },
   scanMeta: { display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 11, opacity: 0.7, margin: '2px 0 6px', fontVariantNumeric: 'tabular-nums' },
   compHead: { display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.4, opacity: 0.4, marginBottom: 2 },
   compRow: { display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 12, padding: '1px 0' },

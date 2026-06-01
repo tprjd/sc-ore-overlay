@@ -43,7 +43,7 @@ export type { OcrCandidate } from './parse';
 export { parseDistanceToken, parsePosLine, parsePos, parseSystemName } from './coords';
 export type { Vec3, PosReading } from './coords';
 
-export { parseScanResult } from './scan';
+export { parseScanResult, cleanMaterial } from './scan';
 export type { ScanResult, ScanComposition } from './scan';
 
 export {

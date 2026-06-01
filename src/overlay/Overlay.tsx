@@ -94,7 +94,9 @@ export function Overlay() {
 
   const { reading, candidates } = payload;
   const sz = SCALE[config.scale];
-  const hasContent = candidates.length > 0 || config.showPlaceholder;
+  // Only show when we actually have an RS number. No reading → no box.
+  // With a number but no match the placeholder reads "<reading> — no match".
+  const hasContent = reading != null && (candidates.length > 0 || config.showPlaceholder);
   const visible = editing || (!hidden && hasContent && (config.idleMs <= 0 || !idle));
   const cardBg = hexToRgba(config.bgColor, config.bgOpacity);
 

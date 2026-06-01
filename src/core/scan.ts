@@ -62,15 +62,29 @@ function titleCase(s: string): string {
   return s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-/** Strip "(ORE)"/"[CF]"-style tags and title-case, e.g. "IRON (ORE) [CF]" → "Iron". */
+/** Drop "(ORE)" / "[CF]"-style tags + collapse whitespace. */
+function stripTags(raw: string): string {
+  return raw
+    .replace(/\(.*?\)/g, '')
+    .replace(/\[.*?\]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Strip tags and title-case, e.g. "IRON (ORE) [CF]" → "Iron". */
 function cleanOre(raw: string): string {
-  return titleCase(
-    raw
-      .replace(/\(.*?\)/g, '')
-      .replace(/\[.*?\]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim(),
-  );
+  return titleCase(stripTags(raw));
+}
+
+/**
+ * Display-cleanup for a composition material name. Drops "(ORE)"/"[CF]" tags
+ * and title-cases; "INERT MATERIALS" → "Inert". Keeps the original string when
+ * stripping would leave nothing (so OCR garbage is still visible).
+ */
+export function cleanMaterial(raw: string): string {
+  if (/\binert\b/i.test(raw)) return 'Inert';
+  const c = stripTags(raw);
+  return c ? titleCase(c) : raw;
 }
 
 /**
