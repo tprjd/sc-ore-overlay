@@ -145,6 +145,33 @@ describe('matchWithNoise', () => {
   it('returns [] when neither the raw reading nor any subtraction matches', () => {
     expect(matchWithNoise(9999, fixtureTable, ship, {}, [1, 2, 3])).toHaveLength(0);
   });
+
+  it('subtracts multiples of a noise value (Iron ×5 + 2×10000 = 41350)', () => {
+    expect(matchOre(41350, fixtureTable, ship)).toHaveLength(0);
+    const r = matchWithNoise(41350, fixtureTable, ship, {}, [10_000]);
+    expect(r[0]).toMatchObject({ name: 'Iron', nodes: 5, noise: 20_000 });
+    // Two terms ⇒ score is the direct score × 0.7^2.
+    const base = matchOre(21350, fixtureTable, ship)[0].score;
+    expect(r[0].score).toBeCloseTo(base * 0.7 * 0.7, 10);
+  });
+
+  it('subtracts subset-sums across distinct noise values (10000 + 2000)', () => {
+    // 21350 (Iron ×5) + 10000 + 2000 = 33350. Neither value alone resolves —
+    // 33350 - 10000 = 23350; 33350 - 2000 = 31350; only 10000+2000 = 12000
+    // brings it back to 21350.
+    expect(matchOre(33350, fixtureTable, ship)).toHaveLength(0);
+    expect(matchOre(23350, fixtureTable, ship)).toHaveLength(0);
+    expect(matchOre(31350, fixtureTable, ship)).toHaveLength(0);
+    const r = matchWithNoise(33350, fixtureTable, ship, {}, [2_000, 10_000]);
+    expect(r[0]).toMatchObject({ name: 'Iron', nodes: 5, noise: 12_000 });
+  });
+
+  it('prefers the shorter noise explanation when several work', () => {
+    // 21350 (Iron ×5) + 10000 = 31350. With noises [5000, 10000] both 10000
+    // and 5000+5000 explain the reading; the single-term hypothesis must win.
+    const r = matchWithNoise(31350, fixtureTable, ship, {}, [5_000, 10_000]);
+    expect(r[0]).toMatchObject({ name: 'Iron', nodes: 5, noise: 10_000 });
+  });
 });
 
 describe('clusterProb', () => {

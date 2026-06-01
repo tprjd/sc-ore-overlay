@@ -123,26 +123,20 @@ export function ScanView({
     [stableRs, table, location, noiseSignatures],
   );
 
-  // Recognized-ore set, lowercased. A SCAN RESULTS read whose ore isn't in
-  // this set is treated as OCR garbage and ignored (won't replace the
-  // frozen scan, won't be pushed to the overlay).
-  const oreSet = useMemo(
-    () => new Set(table.deposits.map((d) => d.name.toLowerCase())),
-    [table],
-  );
-
-  // Freeze the displayed scan once we see a recognized rock — UI shifts and
+  // Freeze the displayed scan once parseScanResult returns one — UI shifts and
   // OCR jitter would otherwise rewrite the percentages/qualities continuously.
   // Replace the frozen scan only when the OCR clearly reports a *different*
   // rock (ore name changed, row count changed, or mass differs by > 200).
+  // We deliberately don't gate on a "known ore name" lookup any more — OCR
+  // typos (one letter off) were silently dropping otherwise-valid scans. The
+  // parser's structural check (ore line + composition rows present) is enough.
   const [frozenScan, setFrozenScan] = useState<ScanResult | null>(null);
   useEffect(() => {
     const next = readout.scan;
     if (!next) return;
-    if (!oreSet.has(next.ore.toLowerCase())) return;
     if (frozenScan && sameRock(frozenScan, next)) return;
     setFrozenScan(next);
-  }, [readout, oreSet, frozenScan]);
+  }, [readout, frozenScan]);
 
   // Push matches + top-candidate quality + the frozen scanned rock to the
   // overlay boxes. Effect deps only fire on meaningful changes so the overlay

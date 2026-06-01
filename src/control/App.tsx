@@ -29,10 +29,12 @@ const DEFAULT_PARAMS: LoopParams = { scale: 4, intervalMs: 700, quorum: 3 };
 
 /**
  * Default non-ore signatures to try subtracting from the RS before matching.
- * Wrecks (~10,000) frequently overlay an ore reading; without subtraction the
- * sum reads as "no match" even though there's a real ore underneath.
+ * Empty by default: real values are game-specific and we don't have a verified
+ * list. The user populates this from the Mining → "Noise signatures" panel
+ * with values they've observed in-game; sub-sums and multiples are then tried
+ * automatically (see `matchWithNoise`).
  */
-const DEFAULT_NOISE_SIGNATURES: number[] = [10_000];
+const DEFAULT_NOISE_SIGNATURES: number[] = [];
 
 // All crawled patch tables, bundled at build time → { patch: table }.
 const tableModules = import.meta.glob('../data/tables/*.json', { eager: true, import: 'default' });

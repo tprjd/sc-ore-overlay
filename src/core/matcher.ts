@@ -127,25 +127,81 @@ export function matchOre(
 }
 
 /**
- * Direct matches outrank noise-subtracted matches; the wreck/sat hypothesis is
- * the *less* parsimonious explanation, so we penalize it. 0.7 keeps noise hits
- * visible behind a clean match but ahead of "no match" silence.
+ * Score multiplier per noise term subtracted. A single wreck (0.7^1) sits a
+ * touch below a clean direct match; a 3-term explanation (0.7^3 ≈ 0.34) is
+ * already half as plausible. Keeps the "fewer wrecks is more likely" prior.
  */
-const NOISE_SCORE_PENALTY = 0.7;
+const NOISE_SCORE_PENALTY_PER_TERM = 0.7;
 
 /**
- * Identify the ore(s) behind a reading, optionally after subtracting one of a
- * list of known non-ore "noise" signatures (wrecks, satellites, debris panels).
+ * Safety cap on subset size. Without a bound the subset-sum search would let
+ * any RS reading "match" some ore by piling on enough wrecks; capping it at 4
+ * keeps the search finite *and* preserves the prior that real-world readings
+ * are dominated by ore plus at most a couple of overlapping non-ore signals.
+ */
+const MAX_NOISE_TERMS = 4;
+
+/**
+ * Enumerate every distinct sum of up to `maxTerms` values drawn (with
+ * repetition) from `noises` and strictly less than `reading`. Returns
+ * `{ sum, terms }` pairs sorted shortest-bag-first — the prior we use for
+ * scoring (fewer terms ⇒ less penalty).
  *
- * Star Citizen's scanner sometimes lumps a wreck signal into the same RS chip
- * as the ore — e.g. a ~10,000-unit wreck on top of `4270 × 3 = 12,810` reads as
- * `22,810`. matchOre alone fails on that reading. This helper tries the raw
- * reading first, then `reading - noise` for each noise in `noises`, and labels
- * the resulting candidates with the noise value that produced them.
+ * The search is naturally pruned by `currentSum + k*v < reading`: if a partial
+ * sum already meets the reading, no longer bag built on it can contribute.
+ * For a typical noise list of 3–5 values and `maxTerms = 4` this is well
+ * under a thousand candidate sums.
+ */
+function enumerateNoiseSums(
+  noises: readonly number[],
+  reading: number,
+  maxTerms: number,
+): Array<{ sum: number; terms: number[] }> {
+  const distinct = [...new Set(noises)]
+    .filter((n) => Number.isInteger(n) && n > 0 && n < reading)
+    .sort((a, b) => a - b);
+  if (distinct.length === 0) return [];
+
+  // Map each sum to the *shortest* bag that produces it (longer bags would
+  // only ever lose on penalty; no point keeping them).
+  const best = new Map<number, number[]>();
+  const visit = (i: number, currentSum: number, terms: number[]): void => {
+    if (i >= distinct.length) return;
+    // Branch 1: skip this noise value entirely.
+    visit(i + 1, currentSum, terms);
+    // Branch 2: include k = 1, 2, … copies of this noise value.
+    const v = distinct[i];
+    for (let k = 1; terms.length + k <= maxTerms; k++) {
+      const newSum = currentSum + k * v;
+      if (newSum >= reading) break;
+      const bag = [...terms, ...new Array(k).fill(v)];
+      const prev = best.get(newSum);
+      if (!prev || bag.length < prev.length) best.set(newSum, bag);
+      visit(i + 1, newSum, bag);
+    }
+  };
+  visit(0, 0, []);
+
+  return [...best.entries()]
+    .map(([sum, terms]) => ({ sum, terms }))
+    .sort((a, b) => a.terms.length - b.terms.length || a.sum - b.sum);
+}
+
+/**
+ * Identify the ore(s) behind a reading, optionally after subtracting any
+ * subset-sum of known non-ore "noise" signatures (wrecks, satellites, debris
+ * panels). Subsets are taken with repetition up to MAX_NOISE_TERMS, so a
+ * reading that conceals e.g. one 10k wreck plus two 2k panels still resolves.
  *
- * Direct (noise == null) matches are returned ahead of noise hits at equal
- * score; noise hits are penalized so they only surface when there is no clean
- * match.
+ * Star Citizen's scanner sometimes lumps these non-ore signals into the same
+ * RS chip as the ore — e.g. an Iron ×3 (12,810) sitting next to a wreck reads
+ * as 22,810. `matchOre` alone fails on that reading; this helper recovers it
+ * by trying every plausible sum to subtract.
+ *
+ * Each noise-subtracted candidate is penalized by NOISE_SCORE_PENALTY_PER_TERM
+ * raised to the bag size, so the simplest explanation (direct, then one
+ * wreck, then two…) ranks first. Per (ore, nodes) the best explanation wins —
+ * we don't list the same Iron ×3 twice under different wreck combinations.
  */
 export function matchWithNoise(
   reading: number,
@@ -154,21 +210,29 @@ export function matchWithNoise(
   context: MatchContext = {},
   noises: readonly number[] = [],
 ): OreCandidate[] {
-  const direct = matchOre(reading, table, opts, context).map((c) => ({ ...c, noise: null }));
+  if (!Number.isFinite(reading) || !Number.isInteger(reading) || reading < 1) return [];
 
-  const seen = new Set<string>(direct.map((c) => `${c.name}|${c.nodes}|n`));
-  const noiseHits: OreCandidate[] = [];
-  for (const noise of noises) {
-    if (!Number.isInteger(noise) || noise <= 0 || noise >= reading) continue;
-    for (const c of matchOre(reading - noise, table, opts, context)) {
-      const key = `${c.name}|${c.nodes}|${noise}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      noiseHits.push({ ...c, score: c.score * NOISE_SCORE_PENALTY, noise });
+  // Direct matches first — the no-noise hypothesis is the strongest prior.
+  const byKey = new Map<string, OreCandidate>();
+  for (const c of matchOre(reading, table, opts, context)) {
+    byKey.set(`${c.name}|${c.nodes}`, { ...c, noise: null });
+  }
+
+  // Noise-subtracted matches: for each plausible noise sum, run the matcher
+  // on (reading − sum) and fold the result into byKey, keeping the highest
+  // score per (ore, nodes). The penalty grows with the bag size, so shorter
+  // explanations naturally win even before sorting.
+  for (const { sum, terms } of enumerateNoiseSums(noises, reading, MAX_NOISE_TERMS)) {
+    const penalty = NOISE_SCORE_PENALTY_PER_TERM ** terms.length;
+    for (const c of matchOre(reading - sum, table, opts, context)) {
+      const k = `${c.name}|${c.nodes}`;
+      const cand: OreCandidate = { ...c, score: c.score * penalty, noise: sum };
+      const prev = byKey.get(k);
+      if (!prev || cand.score > prev.score) byKey.set(k, cand);
     }
   }
 
-  return [...direct, ...noiseHits].sort(
+  return [...byKey.values()].sort(
     (a, b) => b.score - a.score || a.name.localeCompare(b.name),
   );
 }
