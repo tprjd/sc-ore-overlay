@@ -57,6 +57,8 @@ export interface ScanViewProps {
   onRegionsChange: (regions: SurveyRegionSetting[]) => void;
   noiseSignatures: number[];
   onNoiseSignaturesChange: (sigs: number[]) => void;
+  enforceCluster: boolean;
+  onEnforceClusterChange: (next: boolean) => void;
   params: LoopParams;
   onParamsChange: (p: LoopParams) => void;
   table: SignatureTable;
@@ -79,6 +81,8 @@ export function ScanView({
   onRegionsChange,
   noiseSignatures,
   onNoiseSignaturesChange,
+  enforceCluster,
+  onEnforceClusterChange,
   params,
   onParamsChange,
   table,
@@ -119,9 +123,15 @@ export function ScanView({
   const matches = useMemo(
     () =>
       stableRs != null
-        ? matchWithNoise(stableRs, table, { method: 'Ship' }, { location }, noiseSignatures)
+        ? matchWithNoise(
+            stableRs,
+            table,
+            { method: 'Ship', enforceCluster },
+            { location },
+            noiseSignatures,
+          )
         : [],
-    [stableRs, table, location, noiseSignatures],
+    [stableRs, table, location, noiseSignatures, enforceCluster],
   );
 
   // Known-ore vocabulary used to snap OCR'd material names to their nearest
@@ -263,6 +273,15 @@ export function ScanView({
                   </optgroup>
                 ))}
               </select>
+            </label>
+            <label style={S.checkRow}>
+              <input
+                type="checkbox"
+                checked={enforceCluster}
+                onChange={(e) => onEnforceClusterChange(e.target.checked)}
+              />
+              Enforce cluster-size range
+              <span style={S.dim}> · disable when the table is stale (out-of-range hits accepted)</span>
             </label>
             {stableRs == null ? (
               <p style={S.dim}>Waiting for a stable reading…</p>

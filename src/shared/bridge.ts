@@ -143,9 +143,15 @@ export interface AppSettings {
     /**
      * Known non-ore signatures to try subtracting from the RS before matching
      * — wrecks, satellites, debris panels that sometimes sit on top of an ore
-     * reading. Defaults to [10000]. Edit to taste.
+     * reading. Defaults to []. Edit in the Mining → "Noise signatures" panel.
      */
     noiseSignatures?: number[];
+    /**
+     * Enforce the table's cluster-size range when matching. Default true.
+     * Turn off when the table is stale for the current patch and clean-divisor
+     * hits outside the stated range should be accepted.
+     */
+    enforceCluster?: boolean;
   };
   /** Survey Mode: persisted capture regions + their roles, and the scout name. */
   survey?: { regions?: SurveyRegionSetting[]; scout?: string };

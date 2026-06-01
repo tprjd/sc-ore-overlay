@@ -54,6 +54,7 @@ export function App() {
   const [source, setSource] = useState<PickedSource | null>(null);
   const [miningRegions, setMiningRegions] = useState<SurveyRegionSetting[]>([]);
   const [noiseSignatures, setNoiseSignatures] = useState<number[]>(DEFAULT_NOISE_SIGNATURES);
+  const [enforceCluster, setEnforceCluster] = useState<boolean>(true);
   const [location, setLocation] = useState<string | null>(null);
   const [params, setParams] = useState<LoopParams>(DEFAULT_PARAMS);
   const [activePatch, setActivePatch] = useState<string>(() => patches[0] ?? 'unknown');
@@ -87,6 +88,7 @@ export function App() {
           setMiningRegions([{ id: newRegionId(), role: 'rs', rect: s.region, enabled: true }]);
         }
         if (s.mining?.noiseSignatures) setNoiseSignatures(s.mining.noiseSignatures);
+        if (typeof s.mining?.enforceCluster === 'boolean') setEnforceCluster(s.mining.enforceCluster);
         if (s.location != null) setLocation(s.location);
         setParams((prev) => ({
           scale: s.scale ?? prev.scale,
@@ -110,10 +112,10 @@ export function App() {
   useEffect(() => {
     if (loaded) {
       window.sco?.setSettings?.({
-        mining: { regions: miningRegions, noiseSignatures },
+        mining: { regions: miningRegions, noiseSignatures, enforceCluster },
       });
     }
-  }, [miningRegions, noiseSignatures, loaded]);
+  }, [miningRegions, noiseSignatures, enforceCluster, loaded]);
   useEffect(() => {
     if (loaded) window.sco?.setSettings?.({ location: location ?? null });
   }, [location, loaded]);
@@ -202,6 +204,8 @@ export function App() {
             onRegionsChange={setMiningRegions}
             noiseSignatures={noiseSignatures}
             onNoiseSignaturesChange={setNoiseSignatures}
+            enforceCluster={enforceCluster}
+            onEnforceClusterChange={setEnforceCluster}
             params={params}
             onParamsChange={setParams}
             table={table}
