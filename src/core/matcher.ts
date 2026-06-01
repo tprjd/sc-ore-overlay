@@ -228,7 +228,12 @@ export function matchWithNoise(
 ): OreCandidate[] {
   if (!Number.isFinite(reading) || !Number.isInteger(reading) || reading < 1) return [];
 
-  const strict: MatchOptions = { ...opts, enforceCluster: true };
+  // Respect the caller's enforceCluster preference. Default is true (strict).
+  // When the caller explicitly turns enforcement off, we skip the fallback —
+  // the strict pass with the cluster check dropped already covers everything
+  // the loose fallback would find.
+  const userEnforce = opts.enforceCluster !== false;
+  const strictOpts: MatchOptions = { ...opts, enforceCluster: userEnforce };
   const byKey = new Map<string, OreCandidate>();
   const fold = (cand: OreCandidate): void => {
     const k = `${cand.name}|${cand.nodes}`;
@@ -236,19 +241,20 @@ export function matchWithNoise(
     if (!prev || cand.score > prev.score) byKey.set(k, cand);
   };
 
-  // Strict pass: direct + noise-subtracted, cluster constraint enforced.
-  for (const c of matchOre(reading, table, strict, context)) {
+  // First pass: direct + noise-subtracted, with the user's cluster setting.
+  for (const c of matchOre(reading, table, strictOpts, context)) {
     fold({ ...c, noise: null });
   }
   for (const { sum, terms } of enumerateNoiseSums(noises, reading, MAX_NOISE_TERMS)) {
     const penalty = NOISE_SCORE_PENALTY_PER_TERM ** terms.length;
-    for (const c of matchOre(reading - sum, table, strict, context)) {
+    for (const c of matchOre(reading - sum, table, strictOpts, context)) {
       fold({ ...c, score: c.score * penalty, noise: sum });
     }
   }
 
-  // If anything stuck, return — strict matches always beat loose ones.
-  if (byKey.size > 0) {
+  // Return when we have hits, or when the user already disabled enforcement
+  // (no separate loose pass to fall back to).
+  if (byKey.size > 0 || !userEnforce) {
     return [...byKey.values()].sort(
       (a, b) => b.score - a.score || a.name.localeCompare(b.name),
     );
@@ -257,13 +263,13 @@ export function matchWithNoise(
   // Loose fallback: same passes with the cluster check dropped. Useful when
   // the table's cluster data is stale (e.g. an Aluminum cluster of 2 nodes
   // reads as 8570 but the table says cluster 4..6).
-  const loose: MatchOptions = { ...opts, enforceCluster: false };
-  for (const c of matchOre(reading, table, loose, context)) {
+  const looseOpts: MatchOptions = { ...opts, enforceCluster: false };
+  for (const c of matchOre(reading, table, looseOpts, context)) {
     fold({ ...c, score: c.score * LOOSE_CLUSTER_PENALTY, noise: null, loose: true });
   }
   for (const { sum, terms } of enumerateNoiseSums(noises, reading, MAX_NOISE_TERMS)) {
     const penalty = NOISE_SCORE_PENALTY_PER_TERM ** terms.length * LOOSE_CLUSTER_PENALTY;
-    for (const c of matchOre(reading - sum, table, loose, context)) {
+    for (const c of matchOre(reading - sum, table, looseOpts, context)) {
       fold({ ...c, score: c.score * penalty, noise: sum, loose: true });
     }
   }

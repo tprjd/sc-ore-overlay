@@ -280,15 +280,18 @@ export function ScanView({
                 checked={enforceCluster}
                 onChange={(e) => onEnforceClusterChange(e.target.checked)}
               />
-              Enforce cluster-size range
-              <span style={S.dim}> · disable when the table is stale (out-of-range hits accepted)</span>
+              <span style={S.checkLabel}>
+                Enforce cluster-size range
+                <span style={S.checkHint}>Disable when the table is stale and an out-of-range node count is real.</span>
+              </span>
             </label>
             {stableRs == null ? (
               <p style={S.dim}>Waiting for a stable reading…</p>
             ) : matches.length === 0 ? (
               <p style={S.dim}>
                 No ore matches {stableRs}
-                {location ? ` at ${location}` : ''}.
+                {location ? ` at ${location} (try "Anywhere")` : ''}
+                {enforceCluster ? '. Cluster check is on — try disabling it.' : '.'}
               </p>
             ) : (
               <ul style={S.candList}>
@@ -725,7 +728,9 @@ const S: Record<string, CSSProperties> = {
   sliderLabel: { width: 82, fontSize: 12, opacity: 0.8 },
   range: { flex: 1 },
   sliderValue: { width: 56, textAlign: 'right', fontSize: 12, fontVariantNumeric: 'tabular-nums' },
-  checkRow: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginBottom: 8 },
+  checkRow: { display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, marginBottom: 10, lineHeight: 1.35 },
+  checkLabel: { display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 },
+  checkHint: { fontSize: 11, opacity: 0.5 },
   btn: { background: '#2a2f3a', color: '#e6e6e6', border: '1px solid #3a4150', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontSize: 13 },
   badge: { fontSize: 10, textTransform: 'uppercase', background: '#2c323d', borderRadius: 4, padding: '2px 5px', opacity: 0.8 },
   selectRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 },
