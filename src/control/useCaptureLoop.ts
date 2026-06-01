@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 
-import { createVoter, hashPixels, isPlausibleReading, matchOre } from '../core';
+import { createVoter, hashPixels, isPlausibleReading, matchWithNoise } from '../core';
 import type { SignatureTable } from '../core';
 import { preprocess } from './preprocess';
 import type { DrawableSource, NormRegion, PreprocessParams } from './preprocess';
@@ -55,10 +55,12 @@ const INITIAL: LoopState = {
  * The voter resets whenever params change (so tuning starts a fresh streak).
  */
 /**
- * From PP-OCR's detected lines, pick the largest digit token that matches a
- * ship ore — the signature table acts as a validity filter, so OCR garbage
- * (e.g. a misread 27080) that divides no signature cleanly is dropped. Returns
- * null when nothing matches.
+ * From PP-OCR's detected lines, pick the largest digit token that resolves to
+ * a ship ore — the signature table acts as a validity filter, so OCR garbage
+ * (e.g. a misread 27080) that divides no signature cleanly is dropped. Uses
+ * `matchWithNoise` so the loose-cluster fallback admits readings whose node
+ * count sits outside the table's stale cluster range (e.g. Aluminum ×2 for
+ * sig 4285 → reading 8570). Returns null when nothing matches.
  */
 export function pickReading(lines: OcrLine[], table: SignatureTable): number | null {
   const numbers = new Set<number>();
@@ -71,7 +73,7 @@ export function pickReading(lines: OcrLine[], table: SignatureTable): number | n
   let best: number | null = null;
   for (const n of numbers) {
     if (!isPlausibleReading(n)) continue;
-    if (matchOre(n, table, { method: 'Ship' }).length === 0) continue;
+    if (matchWithNoise(n, table, { method: 'Ship' }, {}, []).length === 0) continue;
     if (best === null || n > best) best = n;
   }
   return best;
