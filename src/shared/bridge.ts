@@ -23,6 +23,8 @@ export interface OverlayCandidate {
   name: string;
   nodes: number;
   score: number;
+  /** Non-ore noise (wreck/sat/debris) signature subtracted; null/undefined = direct match. */
+  noise?: number | null;
 }
 
 /** What the control window pushes to the overlay (relayed to both boxes). */
@@ -134,7 +136,15 @@ export interface AppSettings {
   detailBounds?: { x: number; y: number; width: number; height: number };
   scanBounds?: { x: number; y: number; width: number; height: number };
   /** Mining tab: persisted capture regions (RS + scan-result) + their roles. */
-  mining?: { regions?: SurveyRegionSetting[] };
+  mining?: {
+    regions?: SurveyRegionSetting[];
+    /**
+     * Known non-ore signatures to try subtracting from the RS before matching
+     * — wrecks, satellites, debris panels that sometimes sit on top of an ore
+     * reading. Defaults to [10000]. Edit to taste.
+     */
+    noiseSignatures?: number[];
+  };
   /** Survey Mode: persisted capture regions + their roles, and the scout name. */
   survey?: { regions?: SurveyRegionSetting[]; scout?: string };
 }

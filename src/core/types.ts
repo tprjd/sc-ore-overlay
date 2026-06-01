@@ -139,4 +139,10 @@ export interface OreCandidate {
   score: number;
   /** The deposit signature that produced this candidate. */
   signature: number;
+  /**
+   * Non-ore noise signature subtracted from the reading before matching, e.g.
+   * a 10,000-unit wreck signal sitting on top of an iron deposit. Null/undefined
+   * means the reading matched directly. Surfaces in the UI as a "+wreck" hint.
+   */
+  noise?: number | null;
 }

@@ -27,6 +27,13 @@ type Tab = 'mining' | 'survey';
 // the crop upscale and the loop cadence.
 const DEFAULT_PARAMS: LoopParams = { scale: 4, intervalMs: 700, quorum: 3 };
 
+/**
+ * Default non-ore signatures to try subtracting from the RS before matching.
+ * Wrecks (~10,000) frequently overlay an ore reading; without subtraction the
+ * sum reads as "no match" even though there's a real ore underneath.
+ */
+const DEFAULT_NOISE_SIGNATURES: number[] = [10_000];
+
 // All crawled patch tables, bundled at build time → { patch: table }.
 const tableModules = import.meta.glob('../data/tables/*.json', { eager: true, import: 'default' });
 function loadTables(): Record<string, SignatureTable> {
@@ -44,6 +51,7 @@ export function App() {
 
   const [source, setSource] = useState<PickedSource | null>(null);
   const [miningRegions, setMiningRegions] = useState<SurveyRegionSetting[]>([]);
+  const [noiseSignatures, setNoiseSignatures] = useState<number[]>(DEFAULT_NOISE_SIGNATURES);
   const [location, setLocation] = useState<string | null>(null);
   const [params, setParams] = useState<LoopParams>(DEFAULT_PARAMS);
   const [activePatch, setActivePatch] = useState<string>(() => patches[0] ?? 'unknown');
@@ -76,6 +84,7 @@ export function App() {
           // Migrate the legacy single RS region to the new region list.
           setMiningRegions([{ id: newRegionId(), role: 'rs', rect: s.region, enabled: true }]);
         }
+        if (s.mining?.noiseSignatures) setNoiseSignatures(s.mining.noiseSignatures);
         if (s.location != null) setLocation(s.location);
         setParams((prev) => ({
           scale: s.scale ?? prev.scale,
@@ -97,8 +106,12 @@ export function App() {
 
   // Persist changes after the initial restore.
   useEffect(() => {
-    if (loaded) window.sco?.setSettings?.({ mining: { regions: miningRegions } });
-  }, [miningRegions, loaded]);
+    if (loaded) {
+      window.sco?.setSettings?.({
+        mining: { regions: miningRegions, noiseSignatures },
+      });
+    }
+  }, [miningRegions, noiseSignatures, loaded]);
   useEffect(() => {
     if (loaded) window.sco?.setSettings?.({ location: location ?? null });
   }, [location, loaded]);
@@ -185,6 +198,8 @@ export function App() {
             source={source}
             regions={miningRegions}
             onRegionsChange={setMiningRegions}
+            noiseSignatures={noiseSignatures}
+            onNoiseSignaturesChange={setNoiseSignatures}
             params={params}
             onParamsChange={setParams}
             table={table}

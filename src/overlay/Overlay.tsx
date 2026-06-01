@@ -56,6 +56,11 @@ export function Overlay() {
     });
 
     const offMatches = sco.onMatches((next) => {
+      const empty = next.reading == null && next.candidates.length === 0;
+      // Ignore "void" pushes (no reading + no candidates) — between OCR ticks
+      // the voter briefly emits null which would otherwise blink the box off
+      // every cycle. The idle timer handles eventual fade-out instead.
+      if (empty) return;
       setPayload(next);
       armIdle();
     });
@@ -94,9 +99,10 @@ export function Overlay() {
 
   const { reading, candidates } = payload;
   const sz = SCALE[config.scale];
-  // Only show when we actually have an RS number. No reading → no box.
-  // With a number but no match the placeholder reads "<reading> — no match".
-  const hasContent = reading != null && (candidates.length > 0 || config.showPlaceholder);
+  // Show whenever we have *anything* useful: candidates, or a reading (so the
+  // "no match" message is visible), or — when the user has it enabled — the
+  // "scanning…" placeholder. Idle fade handles eventual disappearance.
+  const hasContent = candidates.length > 0 || reading != null || config.showPlaceholder;
   const visible = editing || (!hidden && hasContent && (config.idleMs <= 0 || !idle));
   const cardBg = hexToRgba(config.bgColor, config.bgOpacity);
 
@@ -118,15 +124,30 @@ export function Overlay() {
       >
         {candidates.length > 0 ? (
           candidates.map((c, i) => (
-            <div key={c.name} style={{ ...S.row, opacity: i === 0 ? 1 : 0.85 }}>
-              <span style={{ ...S.name, fontSize: sz.font }}>{c.name}</span>
+            <div key={`${c.name}-${c.noise ?? 'n'}-${i}`} style={{ ...S.row, opacity: i === 0 ? 1 : 0.85 }}>
+              <span style={{ ...S.name, fontSize: sz.font }}>
+                {c.name}
+                {c.noise != null && (
+                  <span style={{ ...S.noiseBadge, fontSize: Math.max(10, sz.font * 0.45) }}>
+                    +{c.noise.toLocaleString()}
+                  </span>
+                )}
+              </span>
               <span style={{ ...S.nodes, fontSize: sz.font }}>×{c.nodes}</span>
             </div>
           ))
-        ) : config.showPlaceholder ? (
+        ) : reading != null ? (
+          // Number is on screen but matches nothing — always show this; it's
+          // diagnostic, not a "placeholder". showPlaceholder gates only the
+          // truly-empty "scanning…" state below.
           <div style={{ ...S.muted, fontSize: sz.muted }}>
-            {reading != null ? `${reading} — no match` : 'scanning…'}
+            <span style={{ fontVariantNumeric: 'tabular-nums', color: '#e6e6e6' }}>
+              {reading.toLocaleString()}
+            </span>{' '}
+            — no match
           </div>
+        ) : config.showPlaceholder ? (
+          <div style={{ ...S.muted, fontSize: sz.muted }}>scanning…</div>
         ) : null}
       </div>
       {editing && (
@@ -192,4 +213,15 @@ const S: Record<string, CSSProperties> = {
     paddingLeft: 8,
   },
   muted: { color: '#9fb3c8', textShadow: '0 1px 3px rgba(0,0,0,0.9)' },
+  noiseBadge: {
+    marginLeft: 6,
+    padding: '1px 5px',
+    background: 'rgba(58,42,26,0.85)',
+    color: '#fbbf24',
+    border: '1px solid rgba(90,58,31,0.9)',
+    borderRadius: 4,
+    fontVariantNumeric: 'tabular-nums',
+    fontWeight: 600,
+    verticalAlign: 'middle',
+  },
 };

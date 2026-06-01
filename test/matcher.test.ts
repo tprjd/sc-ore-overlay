@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { matchOre, clusterProb } from '../src/core/matcher';
+import { matchOre, matchWithNoise, clusterProb } from '../src/core/matcher';
 import type { Clustering } from '../src/core/types';
 import {
   fixtureTable,
@@ -107,6 +107,43 @@ describe('matchOre', () => {
   it('accepts a plain Deposit[] as well as a SignatureTable', () => {
     const result = matchOre(21350, fixtureTable.deposits, ship);
     expect(result[0]).toMatchObject({ name: 'Iron', nodes: 5 });
+  });
+});
+
+describe('matchWithNoise', () => {
+  it('matches the raw reading without subtracting when a clean match exists', () => {
+    const result = matchWithNoise(21350, fixtureTable, ship, {}, [10_000]);
+    expect(result[0]).toMatchObject({ name: 'Iron', nodes: 5, noise: null });
+  });
+
+  it('finds the ore behind a wreck-corrupted reading by subtracting noise', () => {
+    // 21350 (Iron ×5) + 10000 wreck = 31350. Bare matchOre fails; noise wrapper recovers it.
+    expect(matchOre(31350, fixtureTable, ship)).toHaveLength(0);
+    const result = matchWithNoise(31350, fixtureTable, ship, {}, [10_000]);
+    expect(result[0]).toMatchObject({ name: 'Iron', nodes: 5, noise: 10_000 });
+  });
+
+  it('applies a multiplicative penalty to noise-subtracted scores', () => {
+    // matchOre(R-noise) gives the un-penalized score; matchWithNoise must
+    // report that score × 0.7 for the noise hit.
+    const base = matchOre(21350, fixtureTable, ship)[0].score;
+    const noisy = matchWithNoise(31350, fixtureTable, ship, {}, [10_000])[0];
+    expect(noisy.noise).toBe(10_000);
+    expect(noisy.score).toBeCloseTo(base * 0.7, 10);
+  });
+
+  it('ignores noise values that are non-positive, non-integer, or >= the reading', () => {
+    const a = matchWithNoise(21350, fixtureTable, ship, {}, [0, -10, 1.5, 21350, 99_999]);
+    const b = matchOre(21350, fixtureTable, ship);
+    expect(a.map((r) => ({ name: r.name, nodes: r.nodes }))).toEqual(
+      b.map((r) => ({ name: r.name, nodes: r.nodes })),
+    );
+    // All resulting entries should be marked as direct (noise == null).
+    expect(a.every((r) => r.noise == null)).toBe(true);
+  });
+
+  it('returns [] when neither the raw reading nor any subtraction matches', () => {
+    expect(matchWithNoise(9999, fixtureTable, ship, {}, [1, 2, 3])).toHaveLength(0);
   });
 });
 

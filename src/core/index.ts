@@ -15,7 +15,7 @@ export type {
 export { getQualityDetail } from './quality';
 export type { QualityDetail } from './quality';
 
-export { matchOre, clusterProb, DEFAULT_REL_TOL } from './matcher';
+export { matchOre, matchWithNoise, clusterProb, DEFAULT_REL_TOL } from './matcher';
 
 export {
   isPlausibleReading,

@@ -22,7 +22,7 @@ import type { LoopParams } from '../useCaptureLoop';
 import type { DrawableSource, NormRegion } from '../preprocess';
 import {
   createVoter,
-  matchOre,
+  matchWithNoise,
   groupLocations,
   getQualityDetail,
   cleanMaterial,
@@ -54,6 +54,8 @@ export interface ScanViewProps {
   source: PickedSource;
   regions: SurveyRegionSetting[];
   onRegionsChange: (regions: SurveyRegionSetting[]) => void;
+  noiseSignatures: number[];
+  onNoiseSignaturesChange: (sigs: number[]) => void;
   params: LoopParams;
   onParamsChange: (p: LoopParams) => void;
   table: SignatureTable;
@@ -74,6 +76,8 @@ export function ScanView({
   source,
   regions,
   onRegionsChange,
+  noiseSignatures,
+  onNoiseSignaturesChange,
   params,
   onParamsChange,
   table,
@@ -112,8 +116,11 @@ export function ScanView({
 
   const systemGroups = useMemo(() => groupLocations(table), [table]);
   const matches = useMemo(
-    () => (stableRs != null ? matchOre(stableRs, table, { method: 'Ship' }, { location }) : []),
-    [stableRs, table, location],
+    () =>
+      stableRs != null
+        ? matchWithNoise(stableRs, table, { method: 'Ship' }, { location }, noiseSignatures)
+        : [],
+    [stableRs, table, location, noiseSignatures],
   );
 
   // Recognized-ore set, lowercased. A SCAN RESULTS read whose ore isn't in
@@ -145,7 +152,12 @@ export function ScanView({
     const detail = top ? getQualityDetail(table, top.name, top.signature, location) : null;
     window.sco?.sendMatches?.({
       reading: stableRs,
-      candidates: matches.map((c) => ({ name: c.name, nodes: c.nodes, score: c.score })),
+      candidates: matches.map((c) => ({
+        name: c.name,
+        nodes: c.nodes,
+        score: c.score,
+        noise: c.noise ?? null,
+      })),
       detail,
       scan: frozenScan,
     });
@@ -251,15 +263,30 @@ export function ScanView({
               </p>
             ) : (
               <ul style={S.candList}>
-                {matches.map((c) => (
-                  <li key={c.name} style={S.candRow}>
-                    <span style={S.candName}>{c.name}</span>
+                {matches.map((c, i) => (
+                  <li key={`${c.name}-${c.noise ?? 'n'}-${i}`} style={S.candRow}>
+                    <span style={S.candName}>
+                      {c.name}
+                      {c.noise != null && (
+                        <span style={S.noiseBadge} title={`RS = ${c.signature * c.nodes} + ${c.noise} noise`}>
+                          +{c.noise.toLocaleString()}
+                        </span>
+                      )}
+                    </span>
                     <span style={S.candNodes}>×{c.nodes}</span>
                     <span style={S.candScore}>{Math.round(c.score * 100)}%</span>
                   </li>
                 ))}
               </ul>
             )}
+          </Section>
+
+          <Section title="Noise signatures" defaultOpen={false}>
+            <p style={S.dim}>
+              Non-ore signals (wrecks, satellites, debris) that can sit on top of an RS reading.
+              Each value is tried as a subtraction before matching.
+            </p>
+            <NoiseEditor values={noiseSignatures} onChange={onNoiseSignaturesChange} />
           </Section>
 
           {frozenScan && (
@@ -541,6 +568,49 @@ function Slider({
   );
 }
 
+/**
+ * Comma-separated noise-signature editor. Lets the user manage the list of
+ * non-ore signatures (wrecks, sats, etc) that the matcher tries subtracting
+ * from a "no match" RS reading. Parses on blur / Enter; ignores garbage.
+ */
+function NoiseEditor({
+  values,
+  onChange,
+}: {
+  values: number[];
+  onChange: (next: number[]) => void;
+}) {
+  const [text, setText] = useState<string>(values.join(', '));
+  useEffect(() => {
+    setText(values.join(', '));
+  }, [values]);
+  const commit = (): void => {
+    const next = text
+      .split(/[,\s]+/)
+      .map((t) => Number.parseInt(t, 10))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    onChange([...new Set(next)].sort((a, b) => a - b));
+  };
+  return (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6 }}>
+      <input
+        type="text"
+        value={text}
+        placeholder="10000, 5000, …"
+        style={{ ...S.select, fontVariantNumeric: 'tabular-nums' }}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            commit();
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+      />
+    </div>
+  );
+}
+
 const HOTKEY_ROWS: Array<[HotkeyAction, string]> = [
   ['toggleOverlay', 'Toggle overlay'],
   ['pause', 'Pause / resume'],
@@ -628,7 +698,8 @@ const S: Record<string, CSSProperties> = {
   select: { flex: 1, background: '#0d0f12', color: '#e6e6e6', border: '1px solid #3a4150', borderRadius: 6, padding: '6px 8px', fontSize: 13 },
   candList: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 },
   candRow: { display: 'flex', alignItems: 'baseline', gap: 8, background: '#1d2128', border: '1px solid #2c323d', borderRadius: 6, padding: '8px 10px' },
-  candName: { flex: 1, fontSize: 16, fontWeight: 600 },
+  candName: { flex: 1, fontSize: 16, fontWeight: 600, display: 'flex', alignItems: 'baseline', gap: 6 },
+  noiseBadge: { fontSize: 10, padding: '1px 5px', background: '#3a2a1a', color: '#fbbf24', border: '1px solid #5a3a1f', borderRadius: 4, fontVariantNumeric: 'tabular-nums', fontWeight: 600 },
   candNodes: { fontSize: 16, color: '#4fd1ff', fontVariantNumeric: 'tabular-nums' },
   candScore: { fontSize: 11, opacity: 0.5, width: 40, textAlign: 'right' },
   hotkeyRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 },

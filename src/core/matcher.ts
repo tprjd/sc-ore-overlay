@@ -125,3 +125,50 @@ export function matchOre(
     (a, b) => b.score - a.score || a.name.localeCompare(b.name),
   );
 }
+
+/**
+ * Direct matches outrank noise-subtracted matches; the wreck/sat hypothesis is
+ * the *less* parsimonious explanation, so we penalize it. 0.7 keeps noise hits
+ * visible behind a clean match but ahead of "no match" silence.
+ */
+const NOISE_SCORE_PENALTY = 0.7;
+
+/**
+ * Identify the ore(s) behind a reading, optionally after subtracting one of a
+ * list of known non-ore "noise" signatures (wrecks, satellites, debris panels).
+ *
+ * Star Citizen's scanner sometimes lumps a wreck signal into the same RS chip
+ * as the ore — e.g. a ~10,000-unit wreck on top of `4270 × 3 = 12,810` reads as
+ * `22,810`. matchOre alone fails on that reading. This helper tries the raw
+ * reading first, then `reading - noise` for each noise in `noises`, and labels
+ * the resulting candidates with the noise value that produced them.
+ *
+ * Direct (noise == null) matches are returned ahead of noise hits at equal
+ * score; noise hits are penalized so they only surface when there is no clean
+ * match.
+ */
+export function matchWithNoise(
+  reading: number,
+  table: SignatureTable | Deposit[],
+  opts: MatchOptions,
+  context: MatchContext = {},
+  noises: readonly number[] = [],
+): OreCandidate[] {
+  const direct = matchOre(reading, table, opts, context).map((c) => ({ ...c, noise: null }));
+
+  const seen = new Set<string>(direct.map((c) => `${c.name}|${c.nodes}|n`));
+  const noiseHits: OreCandidate[] = [];
+  for (const noise of noises) {
+    if (!Number.isInteger(noise) || noise <= 0 || noise >= reading) continue;
+    for (const c of matchOre(reading - noise, table, opts, context)) {
+      const key = `${c.name}|${c.nodes}|${noise}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      noiseHits.push({ ...c, score: c.score * NOISE_SCORE_PENALTY, noise });
+    }
+  }
+
+  return [...direct, ...noiseHits].sort(
+    (a, b) => b.score - a.score || a.name.localeCompare(b.name),
+  );
+}
