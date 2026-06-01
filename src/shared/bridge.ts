@@ -25,6 +25,8 @@ export interface OverlayCandidate {
   score: number;
   /** Non-ore noise (wreck/sat/debris) signature subtracted; null/undefined = direct match. */
   noise?: number | null;
+  /** Match accepted only after relaxing the table's cluster-size range. */
+  loose?: boolean;
 }
 
 /** What the control window pushes to the overlay (relayed to both boxes). */

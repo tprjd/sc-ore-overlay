@@ -117,6 +117,13 @@ export interface MatchOptions {
    * Defaults to 0.005 (0.5%). Keeps OCR jitter in while rejecting non-divisors.
    */
   relTol?: number;
+  /**
+   * Whether to enforce the deposit's cluster-size range. Default true. Setting
+   * this to false is the "loose" fallback used when the table's cluster data
+   * is stale or wrong for the current patch — e.g. Aluminum (sig 4285) is
+   * marked cluster 4..6 but a real-world reading of 8570 (×2) is observed.
+   */
+  enforceCluster?: boolean;
 }
 
 /** Context that narrows and re-weights matches. */
@@ -145,4 +152,11 @@ export interface OreCandidate {
    * means the reading matched directly. Surfaces in the UI as a "+wreck" hint.
    */
   noise?: number | null;
+  /**
+   * Match accepted only after relaxing the deposit's cluster-size range. Means
+   * the reading divides cleanly but the resulting node count sits outside the
+   * table's stated range — useful when the table is stale. UI badges it so
+   * the user knows it's the "less confident" hypothesis.
+   */
+  loose?: boolean;
 }

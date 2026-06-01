@@ -123,12 +123,17 @@ export function Overlay() {
       >
         {candidates.length > 0 ? (
           candidates.map((c, i) => (
-            <div key={`${c.name}-${c.noise ?? 'n'}-${i}`} style={{ ...S.row, opacity: i === 0 ? 1 : 0.85 }}>
+            <div key={`${c.name}-${c.noise ?? 'n'}-${c.loose ? 'L' : 'S'}-${i}`} style={{ ...S.row, opacity: i === 0 ? 1 : 0.85 }}>
               <span style={{ ...S.name, fontSize: sz.font }}>
                 {c.name}
                 {c.noise != null && (
                   <span style={{ ...S.noiseBadge, fontSize: Math.max(10, sz.font * 0.45) }}>
                     +{c.noise.toLocaleString()}
+                  </span>
+                )}
+                {c.loose && (
+                  <span style={{ ...S.looseBadge, fontSize: Math.max(10, sz.font * 0.45) }}>
+                    loose
                   </span>
                 )}
               </span>
@@ -222,5 +227,17 @@ const S: Record<string, CSSProperties> = {
     fontVariantNumeric: 'tabular-nums',
     fontWeight: 600,
     verticalAlign: 'middle',
+  },
+  looseBadge: {
+    marginLeft: 6,
+    padding: '1px 5px',
+    background: 'rgba(42,26,58,0.85)',
+    color: '#c084fc',
+    border: '1px solid rgba(74,42,90,0.9)',
+    borderRadius: 4,
+    fontWeight: 600,
+    verticalAlign: 'middle',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
 };

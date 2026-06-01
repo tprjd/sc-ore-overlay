@@ -172,6 +172,24 @@ describe('matchWithNoise', () => {
     const r = matchWithNoise(31350, fixtureTable, ship, {}, [5_000, 10_000]);
     expect(r[0]).toMatchObject({ name: 'Iron', nodes: 5, noise: 10_000 });
   });
+
+  it('falls back to a loose-cluster match when strict has no hits', () => {
+    // Iron sig 4270, cluster 4..6. 4270 × 2 = 8540 — clean divisor but outside
+    // the cluster range. strict pass should return []; loose fallback recovers
+    // Iron ×2 with loose:true.
+    expect(matchOre(8540, fixtureTable, ship)).toHaveLength(0);
+    const r = matchWithNoise(8540, fixtureTable, ship, {}, []);
+    expect(r.length).toBeGreaterThan(0);
+    const iron = r.find((c) => c.name === 'Iron' && c.nodes === 2);
+    expect(iron).toBeDefined();
+    expect(iron!.loose).toBe(true);
+  });
+
+  it('keeps the strict match and suppresses the loose fallback when both exist', () => {
+    // 21350 = Iron ×5 (strict, in cluster). Should never return loose.
+    const r = matchWithNoise(21350, fixtureTable, ship, {}, []);
+    expect(r.every((c) => !c.loose)).toBe(true);
+  });
 });
 
 describe('clusterProb', () => {

@@ -166,6 +166,7 @@ export function ScanView({
         nodes: c.nodes,
         score: c.score,
         noise: c.noise ?? null,
+        loose: c.loose ?? false,
       })),
       detail,
       scan: frozenScan,
@@ -273,12 +274,17 @@ export function ScanView({
             ) : (
               <ul style={S.candList}>
                 {matches.map((c, i) => (
-                  <li key={`${c.name}-${c.noise ?? 'n'}-${i}`} style={S.candRow}>
+                  <li key={`${c.name}-${c.noise ?? 'n'}-${c.loose ? 'L' : 'S'}-${i}`} style={S.candRow}>
                     <span style={S.candName}>
                       {c.name}
                       {c.noise != null && (
                         <span style={S.noiseBadge} title={`RS = ${c.signature * c.nodes} + ${c.noise} noise`}>
                           +{c.noise.toLocaleString()}
+                        </span>
+                      )}
+                      {c.loose && (
+                        <span style={S.looseBadge} title="Outside the table's cluster range — table may be stale.">
+                          loose
                         </span>
                       )}
                     </span>
@@ -709,6 +715,7 @@ const S: Record<string, CSSProperties> = {
   candRow: { display: 'flex', alignItems: 'baseline', gap: 8, background: '#1d2128', border: '1px solid #2c323d', borderRadius: 6, padding: '8px 10px' },
   candName: { flex: 1, fontSize: 16, fontWeight: 600, display: 'flex', alignItems: 'baseline', gap: 6 },
   noiseBadge: { fontSize: 10, padding: '1px 5px', background: '#3a2a1a', color: '#fbbf24', border: '1px solid #5a3a1f', borderRadius: 4, fontVariantNumeric: 'tabular-nums', fontWeight: 600 },
+  looseBadge: { fontSize: 10, padding: '1px 5px', background: '#2a1a3a', color: '#c084fc', border: '1px solid #4a2a5a', borderRadius: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 },
   candNodes: { fontSize: 16, color: '#4fd1ff', fontVariantNumeric: 'tabular-nums' },
   candScore: { fontSize: 11, opacity: 0.5, width: 40, textAlign: 'right' },
   hotkeyRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 },

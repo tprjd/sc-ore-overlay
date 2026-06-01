@@ -107,9 +107,17 @@ export function matchOre(
     const relErr = Math.abs(reading - n * deposit.signature) / reading;
     if (relErr > relTol) continue;
 
-    if (n < deposit.clustering.minSize || n > deposit.clustering.maxSize) continue;
+    const enforceCluster = opts.enforceCluster !== false;
+    const inCluster = n >= deposit.clustering.minSize && n <= deposit.clustering.maxSize;
+    if (enforceCluster && !inCluster) continue;
 
-    const score = (1 - relErr) * clusterProb(deposit.clustering, n) * locationProb;
+    // When the cluster check is disabled, use a uniform weight (1 / spanCap)
+    // so out-of-range candidates can still be ranked against each other and
+    // against in-range candidates without collapsing to zero.
+    const cProb = inCluster
+      ? clusterProb(deposit.clustering, n)
+      : 1 / Math.max(1, deposit.clustering.maxSize + 1);
+    const score = (1 - relErr) * cProb * locationProb;
     const candidate: OreCandidate = {
       name: deposit.name,
       nodes: n,
@@ -132,6 +140,14 @@ export function matchOre(
  * already half as plausible. Keeps the "fewer wrecks is more likely" prior.
  */
 const NOISE_SCORE_PENALTY_PER_TERM = 0.7;
+
+/**
+ * Penalty applied to candidates accepted only after dropping the cluster-size
+ * check. These are the "the table is probably wrong" hypothesis — useful when
+ * a real-world reading violates the wiki's cluster range (e.g. Aluminum ×2
+ * for sig 4285 even though the table says cluster 4..6).
+ */
+const LOOSE_CLUSTER_PENALTY = 0.5;
 
 /**
  * Safety cap on subset size. Without a bound the subset-sum search would let
@@ -212,23 +228,43 @@ export function matchWithNoise(
 ): OreCandidate[] {
   if (!Number.isFinite(reading) || !Number.isInteger(reading) || reading < 1) return [];
 
-  // Direct matches first — the no-noise hypothesis is the strongest prior.
+  const strict: MatchOptions = { ...opts, enforceCluster: true };
   const byKey = new Map<string, OreCandidate>();
-  for (const c of matchOre(reading, table, opts, context)) {
-    byKey.set(`${c.name}|${c.nodes}`, { ...c, noise: null });
-  }
+  const fold = (cand: OreCandidate): void => {
+    const k = `${cand.name}|${cand.nodes}`;
+    const prev = byKey.get(k);
+    if (!prev || cand.score > prev.score) byKey.set(k, cand);
+  };
 
-  // Noise-subtracted matches: for each plausible noise sum, run the matcher
-  // on (reading − sum) and fold the result into byKey, keeping the highest
-  // score per (ore, nodes). The penalty grows with the bag size, so shorter
-  // explanations naturally win even before sorting.
+  // Strict pass: direct + noise-subtracted, cluster constraint enforced.
+  for (const c of matchOre(reading, table, strict, context)) {
+    fold({ ...c, noise: null });
+  }
   for (const { sum, terms } of enumerateNoiseSums(noises, reading, MAX_NOISE_TERMS)) {
     const penalty = NOISE_SCORE_PENALTY_PER_TERM ** terms.length;
-    for (const c of matchOre(reading - sum, table, opts, context)) {
-      const k = `${c.name}|${c.nodes}`;
-      const cand: OreCandidate = { ...c, score: c.score * penalty, noise: sum };
-      const prev = byKey.get(k);
-      if (!prev || cand.score > prev.score) byKey.set(k, cand);
+    for (const c of matchOre(reading - sum, table, strict, context)) {
+      fold({ ...c, score: c.score * penalty, noise: sum });
+    }
+  }
+
+  // If anything stuck, return — strict matches always beat loose ones.
+  if (byKey.size > 0) {
+    return [...byKey.values()].sort(
+      (a, b) => b.score - a.score || a.name.localeCompare(b.name),
+    );
+  }
+
+  // Loose fallback: same passes with the cluster check dropped. Useful when
+  // the table's cluster data is stale (e.g. an Aluminum cluster of 2 nodes
+  // reads as 8570 but the table says cluster 4..6).
+  const loose: MatchOptions = { ...opts, enforceCluster: false };
+  for (const c of matchOre(reading, table, loose, context)) {
+    fold({ ...c, score: c.score * LOOSE_CLUSTER_PENALTY, noise: null, loose: true });
+  }
+  for (const { sum, terms } of enumerateNoiseSums(noises, reading, MAX_NOISE_TERMS)) {
+    const penalty = NOISE_SCORE_PENALTY_PER_TERM ** terms.length * LOOSE_CLUSTER_PENALTY;
+    for (const c of matchOre(reading - sum, table, loose, context)) {
+      fold({ ...c, score: c.score * penalty, noise: sum, loose: true });
     }
   }
 
