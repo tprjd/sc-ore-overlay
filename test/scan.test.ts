@@ -1,6 +1,31 @@
 import { describe, it, expect } from 'vitest';
 
-import { parseScanResult } from '../src/core/scan';
+import { parseScanResult, snapMaterial } from '../src/core/scan';
+
+const ORE_VOCAB = [
+  'Agricium',
+  'Aluminum',
+  'Aslarite',
+  'Beryl',
+  'Bexalite',
+  'Borase',
+  'Copper',
+  'Corundum',
+  'Gold',
+  'Hephaestanite',
+  'Ice',
+  'Iron',
+  'Laranite',
+  'Quantainium',
+  'Quartz',
+  'Riccite',
+  'Silicon',
+  'Stileron',
+  'Taranite',
+  'Tin',
+  'Titanium',
+  'Tungsten',
+];
 
 // The real SCAN RESULTS panel from the user's HUD.
 const SAMPLE = [
@@ -77,5 +102,35 @@ describe('parseScanResult', () => {
   it('returns null when there is no ore line', () => {
     expect(parseScanResult('SCAN RESULTS\nMASS: 10\nCOMPOSITION 5 SCU')).toBeNull();
     expect(parseScanResult('')).toBeNull();
+  });
+});
+
+describe('snapMaterial', () => {
+  it('maps "INERT MATERIALS" and its OCR variants to "Inert"', () => {
+    expect(snapMaterial('INERT MATERIALS', ORE_VOCAB)).toBe('Inert');
+    expect(snapMaterial('Inertmaterials', ORE_VOCAB)).toBe('Inert');
+    expect(snapMaterial('inert', ORE_VOCAB)).toBe('Inert');
+  });
+
+  it('corrects one-letter OCR typos to the closest ore name', () => {
+    expect(snapMaterial('Agricius', ORE_VOCAB)).toBe('Agricium');
+    expect(snapMaterial('Quantanium', ORE_VOCAB)).toBe('Quantainium'); // missing 'i'
+    expect(snapMaterial('Berylicf', ORE_VOCAB)).toBe('Beryl');
+  });
+
+  it('strips ASCII + unicode brackets before matching', () => {
+    expect(snapMaterial('TITANIUM (ORE) [CF]', ORE_VOCAB)).toBe('Titanium');
+    expect(snapMaterial('Titanium【Cf】', ORE_VOCAB)).toBe('Titanium');
+    expect(snapMaterial('Aslarite【Cf】S', ORE_VOCAB)).toBe('Aslarite');
+  });
+
+  it('absorbs unmatched bracket leakage like "Titaniumicf)"', () => {
+    expect(snapMaterial('Titaniumicf)', ORE_VOCAB)).toBe('Titanium');
+    expect(snapMaterial('Titanium【Cf)', ORE_VOCAB)).toBe('Titanium');
+  });
+
+  it('falls back to the cleaned raw when nothing is close enough', () => {
+    expect(snapMaterial('Frobnicator', ORE_VOCAB)).toBe('Frobnicator');
+    expect(snapMaterial('xyzzy', ORE_VOCAB)).toBe('Xyzzy');
   });
 });

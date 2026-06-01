@@ -62,11 +62,22 @@ function titleCase(s: string): string {
   return s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-/** Drop "(ORE)" / "[CF]"-style tags + collapse whitespace. */
+/**
+ * Drop "(ORE)" / "[CF]" / "【Cf】" style tags + collapse whitespace. Covers ASCII
+ * parens/brackets *and* the unicode lookalikes OCR sometimes produces for the
+ * SC HUD's stylized brackets ("【", "】"). Unmatched openers/closers are also
+ * stripped so OCR garbage like "Titanium【Cf)" doesn't leak into the output.
+ */
 function stripTags(raw: string): string {
   return raw
-    .replace(/\(.*?\)/g, '')
-    .replace(/\[.*?\]/g, '')
+    // Matched bracket pairs (ASCII or unicode) → drop content.
+    .replace(/[([【（［].*?[)\]】）］]/g, '')
+    // Unmatched opener — drop the opener and everything after it on the line.
+    .replace(/[([【（］［].*$/g, '')
+    // Lone closing brackets that leaked in — drop the char only; rely on the
+    // snap-to-vocab Levenshtein step to absorb any junk letters left over
+    // (e.g. "Titaniumicf)" → "Titaniumicf" → snap → "Titanium").
+    .replace(/[)\]】）］]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -85,6 +96,54 @@ export function cleanMaterial(raw: string): string {
   if (/\binert\b/i.test(raw)) return 'Inert';
   const c = stripTags(raw);
   return c ? titleCase(c) : raw;
+}
+
+/** Damerau-free Levenshtein distance, classic DP. Small strings → fine to allocate. */
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  const m = a.length;
+  const n = b.length;
+  let prev = new Array<number>(n + 1);
+  let curr = new Array<number>(n + 1);
+  for (let j = 0; j <= n; j++) prev[j] = j;
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return prev[n];
+}
+
+const letters = (s: string): string => s.toLowerCase().replace(/[^a-z]/g, '');
+
+/**
+ * Snap an OCR'd material name to the nearest known ore from `vocab`, or to
+ * "Inert" if the raw contains "inert". Compares letter-only lowercased forms
+ * by Levenshtein and accepts a match within `max(2, ceil(len × 0.3))` edits —
+ * enough to absorb single-letter swaps ("Agricius" → "Agricium") and tag
+ * leakage ("Titaniumicf" → "Titanium") without snapping random words to ores.
+ * Falls back to a cleaned/title-cased version of the raw when no candidate is
+ * close enough, so OCR garbage is still visible (not silently rewritten).
+ */
+export function snapMaterial(raw: string, vocab: readonly string[]): string {
+  if (/\binert\b/i.test(raw) || /^inert/i.test(letters(raw))) return 'Inert';
+  const cleaned = stripTags(raw);
+  if (!cleaned) return raw;
+  const target = letters(cleaned);
+  if (!target) return raw;
+  let best: { name: string; dist: number } | null = null;
+  for (const v of vocab) {
+    const d = levenshtein(target, letters(v));
+    if (!best || d < best.dist) best = { name: v, dist: d };
+  }
+  const threshold = Math.max(2, Math.ceil(target.length * 0.3));
+  if (best && best.dist <= threshold) return best.name;
+  return titleCase(cleaned);
 }
 
 /**

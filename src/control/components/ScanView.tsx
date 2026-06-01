@@ -26,6 +26,7 @@ import {
   groupLocations,
   getQualityDetail,
   cleanMaterial,
+  snapMaterial,
 } from '../../core';
 import type { ScanResult, SignatureTable, Voter } from '../../core';
 import type {
@@ -123,20 +124,34 @@ export function ScanView({
     [stableRs, table, location, noiseSignatures],
   );
 
+  // Known-ore vocabulary used to snap OCR'd material names to their nearest
+  // legal table entry. The HUD font + tag leakage routinely turns "Agricium"
+  // into "Agricius" or "Titanium (Cf)" into "Titaniumicf)" — snapMaterial
+  // absorbs those without changing the underlying parsed numbers.
+  const oreVocab = useMemo(() => table.deposits.map((d) => d.name), [table]);
+
   // Freeze the displayed scan once parseScanResult returns one — UI shifts and
   // OCR jitter would otherwise rewrite the percentages/qualities continuously.
   // Replace the frozen scan only when the OCR clearly reports a *different*
   // rock (ore name changed, row count changed, or mass differs by > 200).
-  // We deliberately don't gate on a "known ore name" lookup any more — OCR
-  // typos (one letter off) were silently dropping otherwise-valid scans. The
-  // parser's structural check (ore line + composition rows present) is enough.
+  // Materials are snap-corrected against the table vocabulary at freeze time
+  // so the overlay/IPC consumers see clean names without doing their own fuzzy
+  // matching.
   const [frozenScan, setFrozenScan] = useState<ScanResult | null>(null);
   useEffect(() => {
     const next = readout.scan;
     if (!next) return;
-    if (frozenScan && sameRock(frozenScan, next)) return;
-    setFrozenScan(next);
-  }, [readout, frozenScan]);
+    const snapped: ScanResult = {
+      ...next,
+      ore: snapMaterial(next.ore, oreVocab),
+      composition: next.composition.map((c) => ({
+        ...c,
+        material: snapMaterial(c.material, oreVocab),
+      })),
+    };
+    if (frozenScan && sameRock(frozenScan, snapped)) return;
+    setFrozenScan(snapped);
+  }, [readout, frozenScan, oreVocab]);
 
   // Push matches + top-candidate quality + the frozen scanned rock to the
   // overlay boxes. Effect deps only fire on meaningful changes so the overlay
