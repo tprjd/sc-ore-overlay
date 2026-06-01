@@ -56,13 +56,12 @@ export function Overlay() {
     });
 
     const offMatches = sco.onMatches((next) => {
-      const empty = next.reading == null && next.candidates.length === 0;
-      // Ignore "void" pushes (no reading + no candidates) — between OCR ticks
-      // the voter briefly emits null which would otherwise blink the box off
-      // every cycle. The idle timer handles eventual fade-out instead.
-      if (empty) return;
+      // Always apply the latest payload — the temporal voter already absorbs
+      // single null/garbage OCR frames upstream, so the values we see here
+      // are intentional transitions. Re-arm idle only when there's something
+      // visible so a real "scanner off" state can fade out via the timer.
       setPayload(next);
-      armIdle();
+      if (next.reading != null || next.candidates.length > 0) armIdle();
     });
     const offEdit = sco.onEditMode(setEditing);
     const offConfig = sco.onOverlayConfig((cfg) => {

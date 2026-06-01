@@ -76,11 +76,12 @@ export function Detail() {
     });
 
     const offMatches = sco.onMatches((next) => {
-      // Don't clear the detail on void ticks — the main overlay does the same,
-      // so they stay in sync and the box doesn't blink between OCR cycles.
-      if (next.detail == null && next.reading == null && next.candidates.length === 0) return;
+      // Apply every payload — the temporal voter upstream already filters
+      // garbage frames, so a null detail here means the matcher genuinely
+      // has no top candidate (and the user wants to see that, not the
+      // stale previous one).
       setDetail(next.detail ?? null);
-      armIdle();
+      if (next.detail != null) armIdle();
     });
     const offEdit = sco.onEditMode(setEditing);
     const offConfig = sco.onOverlayConfig((cfg) => {

@@ -96,7 +96,8 @@ export function ScanOverlay() {
 
     const offMatches = sco.onMatches((next) => {
       setScan(next.scan ?? null);
-      armIdle();
+      // Only re-arm idle on real content so an empty payload still fades.
+      if (next.scan != null) armIdle();
     });
     const offEdit = sco.onEditMode(setEditing);
     const offConfig = sco.onOverlayConfig((cfg) => {

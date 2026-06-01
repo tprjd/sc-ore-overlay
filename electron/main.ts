@@ -157,6 +157,11 @@ function createControlWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // Star Citizen runs in the foreground; this control window sits behind
+      // and must keep OCR + the capture loop running at full cadence even when
+      // it's unfocused. Without this Chromium throttles setTimeout/rAF in
+      // hidden/background windows to ~1Hz and capture effectively stalls.
+      backgroundThrottling: false,
     },
   });
   loadPage(win, 'index');
@@ -191,6 +196,7 @@ function createOverlayWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      backgroundThrottling: false,
     },
   });
   // Stay above the game; pass clicks through by default.
@@ -239,6 +245,7 @@ function createDetailWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      backgroundThrottling: false,
     },
   });
   win.setAlwaysOnTop(true, 'screen-saver');
@@ -285,6 +292,7 @@ function createScanWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      backgroundThrottling: false,
     },
   });
   win.setAlwaysOnTop(true, 'screen-saver');
