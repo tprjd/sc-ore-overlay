@@ -30,7 +30,6 @@ import {
   matchWithNoise,
   groupLocations,
   getQualityDetail,
-  cleanMaterial,
   snapMaterial,
 } from '../../core';
 import type { ScanResult, SignatureTable, Voter } from '../../core';
@@ -307,10 +306,10 @@ export function ScanView({
         />
 
         <div style={S.panel}>
-          {/* Always-visible Results pane — the matched ore(s) + scanned rock
-              never hide behind a sub-tab. The control-window-native fuller view
-              (scores, noise/loose badges, composition); the overlay uses the
-              shared OverlayCard. */}
+          {/* Always-visible Results pane — the matched ore(s) never hide behind
+              a sub-tab. Reading + top ore + overlap candidates (scores, noise/
+              loose badges). The scanned-rock composition lives on the overlay's
+              scan box + its Overlay-tab preview, not here. */}
           <div style={S.results}>
             <div style={S.hero}>
               <div style={S.heroLabel}>Accepted reading</div>
@@ -378,45 +377,6 @@ export function ScanView({
                 {location ? ` at ${location} (try "Anywhere")` : ''}
                 {enforceCluster ? '. Cluster check is on — try disabling it.' : '.'}
               </p>
-            )}
-
-            {frozenScan && (
-              <div>
-                <div style={S.resultsSub}>scanned rock</div>
-                <div style={S.scanBlock}>
-                  <div style={S.scanOre}>
-                    {frozenScan.ore}
-                    {frozenScan.scu != null && <span style={S.dim}> · {frozenScan.scu} SCU</span>}
-                    <button
-                      type="button"
-                      style={S.clearBtn}
-                      onClick={() => setFrozenScan(null)}
-                      title="Clear the frozen scan and accept the next recognized rock"
-                    >
-                      clear
-                    </button>
-                  </div>
-                  <div style={S.scanMeta}>
-                    {frozenScan.mass != null && <span>mass {frozenScan.mass.toLocaleString()}</span>}
-                    {frozenScan.resistance != null && <span>res {frozenScan.resistance}%</span>}
-                    {frozenScan.instability != null && <span>inst {frozenScan.instability}</span>}
-                  </div>
-                  <div style={S.compHead}>
-                    <span style={S.compPct}>%</span>
-                    <span style={S.compMat}>content</span>
-                    <span style={S.compVal}>qual</span>
-                    <span style={S.compScu}>SCU</span>
-                  </div>
-                  {frozenScan.composition.map((c, i) => (
-                    <div key={i} style={S.compRow}>
-                      <span style={S.compPct}>{c.percent}%</span>
-                      <span style={S.compMat} title={c.material}>{cleanMaterial(c.material)}</span>
-                      <span style={S.compVal}>{c.quality}</span>
-                      <span style={S.compScu}>{c.scu != null ? c.scu.toFixed(2) : '—'}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
             )}
           </div>
 
@@ -759,7 +719,6 @@ export function ScanView({
   );
 }
 
-const text: CSSProperties = { color: C.text };
 const S: Record<string, CSSProperties> = {
   page: { display: 'flex', flexDirection: 'column', height: '100%', color: C.text, boxSizing: 'border-box' },
   header: { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: `1px solid ${C.border}` },
@@ -843,14 +802,4 @@ const S: Record<string, CSSProperties> = {
   hotkeyRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 },
   hotkeyErr: { fontSize: 11, color: C.danger },
   color: { width: 48, height: 28, padding: 0, background: 'transparent', border: `1px solid ${C.borderStrong}`, borderRadius: R.md, cursor: 'pointer' },
-  scanBlock: { padding: '8px 10px', background: C.scanBg, border: `1px solid ${C.scanBorder}`, borderRadius: R.md },
-  scanOre: { ...text, fontSize: 16, fontWeight: 700, color: C.magenta, display: 'flex', alignItems: 'baseline', gap: 6 },
-  clearBtn: { marginLeft: 'auto', background: 'transparent', color: '#9fb3c8', border: `1px solid ${C.borderStrong}`, borderRadius: R.sm, padding: '1px 6px', fontSize: 10, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: 0.4 },
-  scanMeta: { display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 11, opacity: 0.7, margin: '2px 0 6px', fontVariantNumeric: 'tabular-nums' },
-  compHead: { display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.4, opacity: 0.4, marginBottom: 2 },
-  compRow: { display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 12, padding: '1px 0' },
-  compPct: { width: 44, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: C.magenta },
-  compMat: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  compVal: { width: 40, textAlign: 'right', fontVariantNumeric: 'tabular-nums', opacity: 0.7 },
-  compScu: { width: 48, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: C.green },
 };
