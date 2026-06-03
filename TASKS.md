@@ -138,9 +138,12 @@ The Overlay tab is ~11 controls — sprawl.
 **Tasks**
 - A "Reset overlay to defaults" button (restores `DEFAULT_OVERLAY_CONFIG`) so experimenting is safe.
 
-### C3 (optional) — Ore color-coding + change flash
+### C3 (optional) — Change flash
 **Tasks**
-- Optional ore color-coding by category and a brief highlight when the displayed ore/count changes.
+- A brief highlight when the displayed ore/count changes (shipped).
+- Ore color-coding by category was **dropped**: the signature table carries no category/tier field,
+  so it would mean hardcoding a game classification that drifts per patch — not worth the maintenance
+  for a cosmetic tint. Revisit only if a category source lands in the crawl.
 
 **Acceptance (C)**
 - A preset reconfigures the overlay in one click; reset restores defaults; both reflect live in the

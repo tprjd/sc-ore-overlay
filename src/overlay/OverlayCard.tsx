@@ -2,11 +2,11 @@
 // real transparent overlay window (Overlay.tsx) and the live preview in the
 // control window (ScanView), so the preview can't drift from what ships.
 //
-// Renders the matched ore(s): the top candidate is emphasized (confidence dot
-// + score bar); overlap candidates are demoted below a divider. A pulsing dot
-// in the placeholder means the temporal voter is still confirming a reading; a
-// solid dot on the top candidate means it's locked. Compact scale collapses to
-// a single line.
+// Renders the matched ore(s): the top candidate is emphasized (confidence dot);
+// overlap candidates are demoted below a divider. A pulsing dot in the
+// placeholder means the temporal voter is still confirming a reading; a solid
+// dot on the top candidate means it's locked. Compact scale collapses to a
+// single line. The shown ore/count flashes briefly when it changes.
 
 import type { CSSProperties } from 'react';
 import type { OverlayCandidate, OverlayConfig, OverlayOcr, OverlayScale } from '../shared/bridge';
@@ -18,11 +18,18 @@ const SCALE: Record<OverlayScale, { font: number; muted: number }> = {
   large: { font: 32, muted: 18 },
 };
 
-/** Keyframes for the confidence-dot pulse and the per-row enter animation. */
+// Keyframes for the confidence-dot pulse, the per-row enter animation, and the
+// change-flash — a brief tint when the shown ore/count changes. The primary
+// block remounts on identity change (its key includes name/nodes/noise/loose),
+// so the flash replays automatically with no extra state.
 const KEYFRAMES = `
 @keyframes scoDot { 0%,100% { opacity: 1; } 50% { opacity: 0.2; } }
 @keyframes scoEnter { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+@keyframes scoFlash { 0% { box-shadow: inset 0 0 0 9999px rgba(79,209,255,0.22); } 100% { box-shadow: inset 0 0 0 9999px rgba(79,209,255,0); } }
 `;
+
+/** Replayed on every shown-ore change (the block remounts by key). */
+const ENTER_FLASH = 'scoEnter 160ms ease-out, scoFlash 650ms ease-out';
 
 /** "#rrggbb" + alpha → "rgba(r,g,b,a)". */
 function hexToRgba(hex: string, alpha: number): string {
@@ -92,7 +99,7 @@ export function OverlayCard({ reading, candidates, settling = false, ocr = null,
       {top && compact ? (
         // Compact: top candidate only, on a single line. No bar/hierarchy, but
         // still honor the signature toggle (inline, so it stays one line).
-        <div key={`${top.name}-${top.noise ?? 'n'}-${top.loose ? 'L' : 'S'}`} style={{ ...S.row, animation: 'scoEnter 160ms ease-out' }}>
+        <div key={`${top.name}-${top.nodes}-${top.noise ?? 'n'}-${top.loose ? 'L' : 'S'}`} style={{ ...S.row, animation: ENTER_FLASH }}>
           {dot}
           <span style={{ ...S.name, fontSize: sz.font }}>{top.name}</span>
           <span style={{ ...S.nodes, fontSize: sz.font }}>×{top.nodes}</span>
@@ -100,7 +107,7 @@ export function OverlayCard({ reading, candidates, settling = false, ocr = null,
       ) : top ? (
         <>
           {/* Primary candidate — emphasized. */}
-          <div key={`${top.name}-${top.noise ?? 'n'}-${top.loose ? 'L' : 'S'}`} style={{ ...S.primaryBlock, animation: 'scoEnter 160ms ease-out' }}>
+          <div key={`${top.name}-${top.nodes}-${top.noise ?? 'n'}-${top.loose ? 'L' : 'S'}`} style={{ ...S.primaryBlock, animation: ENTER_FLASH }}>
             <div style={S.row}>
               {dot}
               <span style={{ ...S.name, fontSize: sz.font }}>
@@ -178,8 +185,8 @@ const S: Record<string, CSSProperties> = {
     backdropFilter: 'blur(2px)',
     boxSizing: 'border-box',
   },
-  primaryBlock: { display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 },
-  row: { display: 'flex', alignItems: 'baseline', lineHeight: 1.1, minWidth: 0 },
+  primaryBlock: { display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0, borderRadius: 6 },
+  row: { display: 'flex', alignItems: 'baseline', lineHeight: 1.1, minWidth: 0, borderRadius: 6 },
   dot: {
     width: 7,
     height: 7,
