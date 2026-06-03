@@ -268,6 +268,8 @@ export function ScanView({
   const confPct = ocr ? Math.round(ocr.score * 100) : null;
   // PP-OCR scores run high; treat <90% as worth noticing, <70% as bad.
   const confColor = confPct == null ? '#9fb3c8' : confPct >= 90 ? C.green : confPct >= 70 ? C.amber : '#f87171';
+  // Top identified ore — headlined in the always-visible Results pane.
+  const top = matches[0];
 
   return (
     <div style={S.page}>
@@ -300,12 +302,117 @@ export function ScanView({
         />
 
         <div style={S.panel}>
-          <div style={S.readout}>
-            <div style={S.readoutLabel}>Accepted reading</div>
-            <div style={S.readoutValue}>{stableRs ?? '—'}</div>
-            <div style={S.readoutMeta}>
-              {paused ? 'paused' : `every ${params.intervalMs} ms · quorum ${params.quorum}`}
+          {/* Always-visible Results pane — the matched ore(s) + scanned rock
+              never hide behind a sub-tab. The control-window-native fuller view
+              (scores, noise/loose badges, composition); the overlay uses the
+              shared OverlayCard. */}
+          <div style={S.results}>
+            <div style={S.hero}>
+              <div style={S.heroLabel}>Accepted reading</div>
+              <div style={S.heroReading}>{stableRs != null ? stableRs.toLocaleString() : '—'}</div>
+              {top ? (
+                <div style={S.heroOre}>
+                  <span style={S.heroOreName}>
+                    {top.name}
+                    {top.noise != null && (
+                      <span style={S.noiseBadge} title={`RS = ${top.signature * top.nodes} + ${top.noise} noise`}>
+                        +{top.noise.toLocaleString()}
+                      </span>
+                    )}
+                    {top.loose && (
+                      <span style={S.looseBadge} title="Outside the table's cluster range — table may be stale.">
+                        loose
+                      </span>
+                    )}
+                  </span>
+                  <span style={S.heroNodes}>×{top.nodes}</span>
+                  <span style={S.heroScore}>{Math.round(top.score * 100)}%</span>
+                </div>
+              ) : stableRs != null ? (
+                <div style={S.heroNoMatch}>no match</div>
+              ) : (
+                <div style={S.heroWait}>waiting for a stable reading…</div>
+              )}
+              <div style={S.heroMeta}>
+                {paused ? 'paused' : `every ${params.intervalMs} ms · quorum ${params.quorum}`}
+              </div>
             </div>
+
+            {/* Overlap candidates — top is in the hero, so list the rest. */}
+            {matches.length > 1 && (
+              <div>
+                <div style={S.resultsSub}>also matches</div>
+                <ul style={S.candList}>
+                  {matches.slice(1).map((c, i) => (
+                    <li key={`${c.name}-${c.noise ?? 'n'}-${c.loose ? 'L' : 'S'}-${i}`} style={S.candRow}>
+                      <span style={S.candName}>
+                        {c.name}
+                        {c.noise != null && (
+                          <span style={S.noiseBadge} title={`RS = ${c.signature * c.nodes} + ${c.noise} noise`}>
+                            +{c.noise.toLocaleString()}
+                          </span>
+                        )}
+                        {c.loose && (
+                          <span style={S.looseBadge} title="Outside the table's cluster range — table may be stale.">
+                            loose
+                          </span>
+                        )}
+                      </span>
+                      <span style={S.candNodes}>×{c.nodes}</span>
+                      <span style={S.candScore}>{Math.round(c.score * 100)}%</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Why nothing matched — the actionable hint. */}
+            {stableRs != null && matches.length === 0 && (
+              <p style={S.dim}>
+                No ore matches {stableRs}
+                {location ? ` at ${location} (try "Anywhere")` : ''}
+                {enforceCluster ? '. Cluster check is on — try disabling it.' : '.'}
+              </p>
+            )}
+
+            {frozenScan && (
+              <div>
+                <div style={S.resultsSub}>scanned rock</div>
+                <div style={S.scanBlock}>
+                  <div style={S.scanOre}>
+                    {frozenScan.ore}
+                    {frozenScan.scu != null && <span style={S.dim}> · {frozenScan.scu} SCU</span>}
+                    <button
+                      type="button"
+                      style={S.clearBtn}
+                      onClick={() => setFrozenScan(null)}
+                      title="Clear the frozen scan and accept the next recognized rock"
+                    >
+                      clear
+                    </button>
+                  </div>
+                  <div style={S.scanMeta}>
+                    {frozenScan.mass != null && <span>mass {frozenScan.mass.toLocaleString()}</span>}
+                    {frozenScan.resistance != null && <span>res {frozenScan.resistance}%</span>}
+                    {frozenScan.instability != null && <span>inst {frozenScan.instability}</span>}
+                  </div>
+                  <div style={S.compHead}>
+                    <span style={S.compPct}>%</span>
+                    <span style={S.compMat}>content</span>
+                    <span style={S.compVal}>qual</span>
+                    <span style={S.compScu}>SCU</span>
+                  </div>
+                  {frozenScan.composition.map((c, i) => (
+                    <div key={i} style={S.compRow}>
+                      <span style={S.compPct}>{c.percent}%</span>
+                      <span style={S.compMat} title={c.material}>{cleanMaterial(c.material)}</span>
+                      <span style={S.compVal}>{c.quality}</span>
+                      <span style={S.compScu}>{c.scu != null ? c.scu.toFixed(2) : '—'}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <nav style={S.subtabs}>
@@ -320,6 +427,8 @@ export function ScanView({
               </button>
             ))}
           </nav>
+
+          <div style={S.tabScroll}>
 
           {panelTab === 'match' && (
             <>
@@ -364,37 +473,6 @@ export function ScanView({
                     <span style={S.checkHint}>Disable when the table is stale and an out-of-range node count is real.</span>
                   </span>
                 </label>
-                {stableRs == null ? (
-                  <p style={S.dim}>Waiting for a stable reading…</p>
-                ) : matches.length === 0 ? (
-                  <p style={S.dim}>
-                    No ore matches {stableRs}
-                    {location ? ` at ${location} (try "Anywhere")` : ''}
-                    {enforceCluster ? '. Cluster check is on — try disabling it.' : '.'}
-                  </p>
-                ) : (
-                  <ul style={S.candList}>
-                    {matches.map((c, i) => (
-                      <li key={`${c.name}-${c.noise ?? 'n'}-${c.loose ? 'L' : 'S'}-${i}`} style={S.candRow}>
-                        <span style={S.candName}>
-                          {c.name}
-                          {c.noise != null && (
-                            <span style={S.noiseBadge} title={`RS = ${c.signature * c.nodes} + ${c.noise} noise`}>
-                              +{c.noise.toLocaleString()}
-                            </span>
-                          )}
-                          {c.loose && (
-                            <span style={S.looseBadge} title="Outside the table's cluster range — table may be stale.">
-                              loose
-                            </span>
-                          )}
-                        </span>
-                        <span style={S.candNodes}>×{c.nodes}</span>
-                        <span style={S.candScore}>{Math.round(c.score * 100)}%</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
               </Section>
 
               <Section title="Noise signatures" defaultOpen={false}>
@@ -404,44 +482,6 @@ export function ScanView({
                 </p>
                 <NoiseEditor values={noiseSignatures} onChange={onNoiseSignaturesChange} />
               </Section>
-
-              {frozenScan && (
-                <Section title="Scanned rock">
-                  <div style={S.scanBlock}>
-                    <div style={S.scanOre}>
-                      {frozenScan.ore}
-                      {frozenScan.scu != null && <span style={S.dim}> · {frozenScan.scu} SCU</span>}
-                      <button
-                        type="button"
-                        style={S.clearBtn}
-                        onClick={() => setFrozenScan(null)}
-                        title="Clear the frozen scan and accept the next recognized rock"
-                      >
-                        clear
-                      </button>
-                    </div>
-                    <div style={S.scanMeta}>
-                      {frozenScan.mass != null && <span>mass {frozenScan.mass.toLocaleString()}</span>}
-                      {frozenScan.resistance != null && <span>res {frozenScan.resistance}%</span>}
-                      {frozenScan.instability != null && <span>inst {frozenScan.instability}</span>}
-                    </div>
-                    <div style={S.compHead}>
-                      <span style={S.compPct}>%</span>
-                      <span style={S.compMat}>content</span>
-                      <span style={S.compVal}>qual</span>
-                      <span style={S.compScu}>SCU</span>
-                    </div>
-                    {frozenScan.composition.map((c, i) => (
-                      <div key={i} style={S.compRow}>
-                        <span style={S.compPct}>{c.percent}%</span>
-                        <span style={S.compMat} title={c.material}>{cleanMaterial(c.material)}</span>
-                        <span style={S.compVal}>{c.quality}</span>
-                        <span style={S.compScu}>{c.scu != null ? c.scu.toFixed(2) : '—'}</span>
-                      </div>
-                    ))}
-                  </div>
-                </Section>
-              )}
             </>
           )}
 
@@ -656,6 +696,7 @@ export function ScanView({
               />
             </Section>
           )}
+          </div>
         </div>
       </div>
 
@@ -698,12 +739,23 @@ const S: Record<string, CSSProperties> = {
   srcLabel: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, opacity: 0.9 },
   spacer: { flex: 1 },
   body: { display: 'flex', flex: 1, minHeight: 0 },
-  panel: { width: 380, borderLeft: `1px solid ${C.border}`, padding: 14, overflowY: 'auto', boxSizing: 'border-box' },
-  readout: { background: C.surface, border: `1px solid ${C.border}`, borderRadius: R.lg, padding: 12, marginBottom: 14, textAlign: 'center' },
-  readoutLabel: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.6 },
-  readoutValue: { fontSize: 40, fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1, color: C.accent },
-  readoutMeta: { fontSize: 11, opacity: 0.55 },
-  subtabs: { display: 'flex', gap: 2, marginBottom: 14, borderBottom: `1px solid ${C.border}` },
+  panel: { width: 380, borderLeft: `1px solid ${C.border}`, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', minHeight: 0 },
+  // Always-visible Results pane: caps its own height and scrolls internally so
+  // the sub-tab bar and tab content below stay reachable.
+  results: { padding: 14, borderBottom: `1px solid ${C.border}`, overflowY: 'auto', maxHeight: '48%', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 },
+  hero: { background: C.surface, border: `1px solid ${C.border}`, borderRadius: R.lg, padding: 12, textAlign: 'center' },
+  heroLabel: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.6 },
+  heroReading: { fontSize: 40, fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1, color: C.accent },
+  heroOre: { display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 8, marginTop: 2 },
+  heroOreName: { fontSize: 18, fontWeight: 700, display: 'inline-flex', alignItems: 'baseline', gap: 6 },
+  heroNodes: { fontSize: 18, fontWeight: 700, color: C.accent, fontVariantNumeric: 'tabular-nums' },
+  heroScore: { fontSize: 12, opacity: 0.5 },
+  heroNoMatch: { fontSize: 14, color: C.danger, marginTop: 2 },
+  heroWait: { fontSize: 13, opacity: 0.5, marginTop: 2 },
+  heroMeta: { fontSize: 11, opacity: 0.55, marginTop: 4 },
+  resultsSub: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.5, marginBottom: 4 },
+  tabScroll: { flex: 1, minHeight: 0, overflowY: 'auto', padding: 14 },
+  subtabs: { display: 'flex', gap: 2, padding: '0 14px', borderBottom: `1px solid ${C.border}` },
   subtab: { flex: 1, background: 'none', color: C.text, opacity: 0.5, border: 'none', borderBottom: '2px solid transparent', padding: '6px 4px', cursor: 'pointer', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4 },
   subtabActive: { opacity: 1, color: C.accent, borderBottom: `2px solid ${C.accent}` },
   statusbar: {
