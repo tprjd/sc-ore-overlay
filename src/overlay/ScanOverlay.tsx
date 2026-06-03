@@ -21,6 +21,18 @@ export function ScanOverlay() {
   const idleMsRef = useRef(DEFAULT_OVERLAY_CONFIG.idleMs);
   const idleTimer = useRef<number | null>(null);
   const resizeStart = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
+  // Auto-fit window height to the card content (width stays user-controlled).
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => {
+      const h = Math.ceil(el.getBoundingClientRect().height);
+      if (h > 0) window.sco?.resizeScan?.({ width: window.innerWidth, height: h });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     const sco = window.sco;
@@ -81,7 +93,7 @@ export function ScanOverlay() {
     editing || (!hidden && config.showScan && scan != null && (config.idleMs <= 0 || !idle));
 
   return (
-    <div style={{ ...S.root, opacity: visible ? 1 : 0 }}>
+    <div ref={contentRef} style={{ ...S.root, opacity: visible ? 1 : 0 }}>
       <ScanCard
         scan={scan}
         config={config}
@@ -119,7 +131,8 @@ const S: Record<string, CSSProperties> = {
   root: {
     position: 'relative',
     width: '100%',
-    height: '100%',
+    // Fits the card content; the window is auto-resized to match.
+    height: 'auto',
     boxSizing: 'border-box',
     overflow: 'hidden',
     transition: 'opacity 400ms ease',

@@ -21,6 +21,19 @@ export function Overlay() {
   const idleMsRef = useRef(DEFAULT_OVERLAY_CONFIG.idleMs);
   const idleTimer = useRef<number | null>(null);
   const resizeStart = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
+  // Auto-fit the window height to the card's content so the overlay is never
+  // taller than what it shows. Width stays user-controlled (grip / drag).
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => {
+      const h = Math.ceil(el.getBoundingClientRect().height);
+      if (h > 0) window.sco?.resizeOverlay?.({ width: window.innerWidth, height: h });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     const sco = window.sco;
@@ -90,7 +103,7 @@ export function Overlay() {
   const visible = !sourceLost && (editing || (!hidden && hasContent && (config.idleMs <= 0 || !idle)));
 
   return (
-    <div style={{ ...S.root, opacity: visible ? 1 : 0 }}>
+    <div ref={contentRef} style={{ ...S.root, opacity: visible ? 1 : 0 }}>
       <OverlayCard reading={reading} candidates={candidates} settling={settling} ocr={ocr} status={status} config={config} editing={editing} />
       {editing && (
         <div style={GRIP} onPointerDown={onGripDown} onPointerMove={onGripMove} onPointerUp={onGripUp} />
@@ -116,7 +129,9 @@ const S: Record<string, CSSProperties> = {
   root: {
     position: 'relative',
     width: '100%',
-    height: '100%',
+    // Height fits the card content (the window is auto-resized to match), so the
+    // overlay is never taller than what it shows.
+    height: 'auto',
     boxSizing: 'border-box',
     overflow: 'hidden',
   },
