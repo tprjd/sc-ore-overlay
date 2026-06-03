@@ -12,14 +12,147 @@ commits `U0`–`U4`). **v1.2.0** then dropped the low-value signature echo and a
 (confidence / latency / line count / raw text) to the status footer and, behind a toggle, the
 overlay card (commits `F1`–`F3`).
 
-What's left below: the **deferred/optional** feature work. Read `CLAUDE.md` first — locked stack,
-guardrails, and matcher spec live there.
+What's left below: a near-term **UX chapter** (Part I) and the **deferred/optional** feature work
+(Part II). Read `CLAUDE.md` first — locked stack, guardrails, and matcher spec live there.
 
-Current version: **1.2.0**. Part I below (other mining methods) is the next minor/major.
+Current version: **1.2.0**. Part I (UX restructure) is the next chapter; Part II (other mining
+methods) is the next minor/major after it.
 
 ---
 
-# Part I — Post-v1 roadmap
+# Part I — UX restructure & polish (next chapter)
+
+The control window's sub-tabs accreted by a fuzzy mix of domain + frequency, so contents ended up
+"all over the place": live **output** is buried inside the Match tab, capture setup is split across
+Regions + Tuning (upscale lives in both), and the Match/Tuning boundary is unclear.
+
+**Decision (target IA): organize tabs by pipeline stage `Capture → Match → Show`, and pull live
+output out of the tabs entirely.** 5 mixed tabs → **4 clean tabs + an always-visible Results pane**:
+
+```
+ALWAYS-VISIBLE RESULTS PANE
+  21,350   Iron ×5   (94%)
+  + scanned rock when present
+──────────────────────────────
+[ Capture ][ Match ][ Overlay ][ Hotkeys ]
+
+Capture  regions, upscale (global + per-region), interval, quorum, source reconnect
+Match    patch, location, enforce-cluster, noise signatures
+Overlay  live preview + appearance   (unchanged)
+Hotkeys  bindings                     (unchanged)
+```
+
+Do the restructure (T1–T3) first; the calibration/robustness items below land in the new tabs.
+
+## Tab restructure — `4 tabs + results pane`
+
+### T1 — Results pane (out of the tabs)
+**Tasks**
+- Pull the candidate list **and** the frozen Scanned-rock block out of the Match tab into an
+  always-visible Results pane above the sub-tab bar.
+- Fold the standalone "Accepted reading" readout box into that pane: hero reading + top ore name +
+  confidence; kill the reading/footer RS redundancy (reading currently shows in the readout box
+  *and* the footer).
+- Keep the shared `OverlayCard` for the overlay; the Results pane is the control-window-native,
+  fuller view (scores, noise/loose badges, composition table) — don't force it through OverlayCard.
+
+**Acceptance**
+- Switching sub-tabs never hides the matched ore(s) or the scanned rock; reading shown once.
+
+### T2 — Capture tab (merge Tuning + Regions)
+**Tasks**
+- Merge the Regions tab and the Tuning tab into one **Capture** tab: region list (draw RS + scan
+  boxes), global upscale, per-region scale override, interval, quorum.
+- De-dupe upscale — one global control + the per-region override in the same place (no longer split
+  across two tabs).
+- Add a source line here (current source + a "Reconnect / change source" affordance) so capture
+  setup has one home instead of only the header `← Sources`.
+
+**Acceptance**
+- Every capture/read knob (regions, upscale, interval, quorum, source) is reachable from one tab; no
+  setting appears in two tabs.
+
+### T3 — Match tab = inputs only
+**Tasks**
+- Reduce Match to identification **inputs**: patch, location, enforce-cluster, noise signatures.
+  (Candidates + scanned rock now live in the Results pane per T1.)
+
+**Acceptance**
+- Match tab contains only patch/location/cluster/noise; no live output renders inside it.
+
+## A — Calibration & confidence
+
+The hardest user task is getting the RS box right; today the only feedback is the footer.
+
+### A1 — Per-region live calibration card
+**Tasks**
+- In the Capture tab's region list, show per region: the cropped thumbnail + last OCR text +
+  confidence + a green/amber/red verdict (reuse `readout.regions` debug already passed to
+  `RegionList`).
+
+**Acceptance**
+- A user can position the RS box correctly from the calibration card alone, without watching the
+  status footer.
+
+### A2 — Setup-wizard confirm-read gate
+**Tasks**
+- In the wizard's region step, show the live read of the box being drawn and a "looks good?" gate
+  before advancing, so a bad crop is caught at setup time.
+
+**Acceptance**
+- The wizard won't advance past the region step until a plausible reading is shown (or the user
+  explicitly overrides).
+
+### A3 — Header health pill
+**Tasks**
+- Add a single rollup indicator in the header: source ✓ · RS region ✓ · getting reads ✓ · conf%.
+
+**Acceptance**
+- One glance tells the user whether the pipeline is healthy; the pill turns amber/red when a stage
+  is missing or low-confidence.
+
+## C — Overlay presets & reset
+
+The Overlay tab is ~11 controls — sprawl.
+
+### C1 — Appearance presets
+**Tasks**
+- Add Minimal / Standard / Detailed presets that set scale + which boxes/stats show in one click;
+  individual controls remain for fine-tuning.
+
+### C2 — Reset to defaults
+**Tasks**
+- A "Reset overlay to defaults" button (restores `DEFAULT_OVERLAY_CONFIG`) so experimenting is safe.
+
+### C3 (optional) — Ore color-coding + change flash
+**Tasks**
+- Optional ore color-coding by category and a brief highlight when the displayed ore/count changes.
+
+**Acceptance (C)**
+- A preset reconfigures the overlay in one click; reset restores defaults; both reflect live in the
+  preview.
+
+## D — Robustness & help
+
+### D1 — Capture-source-lost banner
+**Tasks**
+- When the capture stream ends (window closed, source lost), show a banner + a reconnect button
+  instead of silently freezing.
+
+**Acceptance**
+- Closing the captured window surfaces a visible "source lost" state with a one-click reconnect.
+
+### D2 — In-app help / about
+**Tasks**
+- A help/about surface: hotkey cheat-sheet, the borderless-windowed requirement reminder, and a more
+  obvious paused state (dim the preview / badge).
+
+**Acceptance**
+- The borderless-windowed requirement and the hotkeys are discoverable in-app without the README.
+
+---
+
+# Part II — Post-v1 roadmap
 
 Bigger feature work beyond shipped v1. Not blocking.
 
