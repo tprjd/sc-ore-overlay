@@ -46,6 +46,32 @@ export interface OverlayOcr {
   lineCount: number;
 }
 
+/**
+ * Why the overlay is showing what it's showing — so a blank overlay (or the
+ * control window) can explain *why* nothing matched, instead of failing
+ * silently. Threaded from the read pipeline to both the control UI and the
+ * overlay so the reason isn't re-derived in two places.
+ * - `ok`          — a real match is shown.
+ * - `no-match`    — a valid reading, but no ore divides it.
+ * - `held`        — the read dropped; the last ore is shown on borrowed time (within holdMs).
+ * - `expired`     — holdMs elapsed; the stale reading was cleared (this is why it's empty).
+ * - `low-conf`    — reads arriving but below the confidence gate (rejected garbage).
+ * - `no-rs`       — nothing readable in the RS region.
+ * - `no-scan`     — RS fine, but no SCAN RESULTS panel detected (empty scan box).
+ * - `source-lost` — the capture source is gone; the overlay hides entirely.
+ * - `paused`      — capture paused by the user.
+ */
+export type OverlayStatus =
+  | 'ok'
+  | 'no-match'
+  | 'held'
+  | 'expired'
+  | 'low-conf'
+  | 'no-rs'
+  | 'no-scan'
+  | 'source-lost'
+  | 'paused';
+
 /** What the control window pushes to the overlay (relayed to both boxes). */
 export interface OverlayPayload {
   /** The accepted RS reading, or null when none is stable. */
@@ -64,6 +90,8 @@ export interface OverlayPayload {
   settling?: boolean;
   /** OCR stats for the RS region (for the overlay's optional stats line). */
   ocr?: OverlayOcr | null;
+  /** Why the overlay shows (or doesn't show) what it does. See OverlayStatus. */
+  status?: OverlayStatus;
 }
 
 /** Commands raised by global hotkeys in the main process. */
@@ -80,8 +108,15 @@ export type SortDir = 'asc' | 'desc';
 
 /** Live-tunable overlay appearance. */
 export interface OverlayConfig {
-  /** Idle fade-out delay in ms; 0 = never fade. */
+  /** Idle fade-out delay in ms; 0 = never fade. Fades *opacity* only. */
   idleMs: number;
+  /**
+   * How long to keep showing the last reading after fresh reads stop (the RS
+   * chip left the screen), in ms; 0 = never drop (sticky forever, legacy). Once
+   * elapsed the *value* is cleared (status → `expired`), distinct from `idleMs`
+   * which only fades the opacity while the value persists underneath.
+   */
+  holdMs: number;
   scale: OverlayScale;
   /** CSS font-family for the overlay text. */
   fontFamily: string;
@@ -112,6 +147,7 @@ export interface OverlayConfig {
 /** Default overlay appearance. */
 export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
   idleMs: 10_000,
+  holdMs: 4_000,
   scale: 'normal',
   fontFamily: 'system-ui, sans-serif',
   bgColor: '#0d0f12',
@@ -171,6 +207,12 @@ export interface AppSettings {
   scale?: number;
   intervalMs?: number;
   quorum?: number;
+  /**
+   * Minimum OCR confidence (0..1) to accept a reading. Reads below this are
+   * treated as no-reading (fed to the voter as null), not as a candidate, so
+   * clear garbage can't move the lock. PP-OCR scores run high; default ~0.5.
+   */
+  minConfidence?: number;
   activePatch?: string;
   hotkeys?: Partial<HotkeyMap>;
   overlay?: Partial<OverlayConfig>;

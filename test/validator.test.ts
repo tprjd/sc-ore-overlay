@@ -2,11 +2,31 @@ import { describe, it, expect } from 'vitest';
 
 import {
   isPlausibleReading,
+  isExpired,
   voteStep,
   createVoter,
   initialVoteState,
 } from '../src/core/validator';
 import type { VoteState } from '../src/core/validator';
+
+describe('isExpired', () => {
+  it('is fresh within the hold window', () => {
+    expect(isExpired(1000, 1000 + 3000, 4000)).toBe(false);
+  });
+  it('expires once past the hold window', () => {
+    expect(isExpired(1000, 1000 + 4001, 4000)).toBe(true);
+  });
+  it('is not expired exactly at the boundary', () => {
+    expect(isExpired(1000, 1000 + 4000, 4000)).toBe(false);
+  });
+  it('never expires when holdMs <= 0 (sticky)', () => {
+    expect(isExpired(1000, 1000 + 999999, 0)).toBe(false);
+    expect(isExpired(1000, 1000 + 999999, -1)).toBe(false);
+  });
+  it('is not expired when there was never a valid read', () => {
+    expect(isExpired(null, 99999, 4000)).toBe(false);
+  });
+});
 
 describe('isPlausibleReading', () => {
   it('accepts a positive integer in range', () => {

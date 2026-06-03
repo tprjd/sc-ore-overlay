@@ -36,6 +36,22 @@ export function isPlausibleReading(
   return value >= min && value <= max;
 }
 
+/**
+ * Has a latched reading gone stale? True once more than `holdMs` has elapsed
+ * since the last *valid* reading. `holdMs <= 0` means never expire (the value is
+ * sticky forever — the legacy behavior); a null `lastValidTs` (never had a valid
+ * read) is not expired. Pure so the hold-then-drop timer is unit-testable; the
+ * caller owns the wall clock and what counts as "valid".
+ */
+export function isExpired(
+  lastValidTs: number | null,
+  now: number,
+  holdMs: number,
+): boolean {
+  if (holdMs <= 0 || lastValidTs == null) return false;
+  return now - lastValidTs > holdMs;
+}
+
 /** Options for the temporal voter. */
 export interface VoteOptions {
   /** Agreeing frames *within the window* required before a value is accepted. */

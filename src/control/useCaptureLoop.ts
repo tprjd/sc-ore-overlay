@@ -18,6 +18,11 @@ export interface LoopParams extends PreprocessParams {
   intervalMs: number;
   /** Consecutive identical reads required before a value is accepted. */
   quorum: number;
+  /**
+   * Minimum OCR confidence (0..1) to accept a reading; below it the frame is
+   * treated as no-reading. Optional; defaults to 0 (no gate) when unset.
+   */
+  minConfidence?: number;
 }
 
 export interface LoopState {

@@ -254,6 +254,169 @@ DevTools knob to the default, with a visible control.
 
 ---
 
+## R6 — Overlay presence & staleness: only show real reads, hold then drop, vanish on source loss — ⏳ BUILT, pending in-game verification
+
+**Status (2026-06-03):** all sub-tasks implemented on `main`; `npm run typecheck`, `npm run
+build`, and the 115-test suite pass (new: `isExpired` + strict `parseScanResult` negatives).
+Mechanisms only — the over-game behavior (hold-then-clear, empty scan box, vanish-on-loss)
+still needs the human checkpoint below on real Windows + live HUD before R6 is marked done.
+
+**Problem.** Three failure modes leak garbage onto the overlay:
+
+1. **Stale lock never clears.** The temporal voter latches `stable` and is *sticky* —
+   it only changes when a *different* value reaches quorum (`voteStep`,
+   `src/core/validator.ts`). When the RS chip leaves the screen (no signature shown),
+   no new value ever reaches quorum, so the last ore stays on the overlay forever. The
+   idle fade (`idleMs`) only lowers *opacity*; the value underneath is still latched and
+   snaps back to full on the next unrelated tick.
+2. **Scan box shows garbage when SCAN RESULTS isn't on screen.** `parseScanResult`
+   (`src/core/scan.ts`) takes the *first text line with a letter* as the ore name. With
+   the panel absent, the scan region OCRs whatever HUD junk sits there and emits a bogus
+   `ScanResult`, which freezes into `frozenScan` and ships to the scan overlay box.
+3. **Source loss leaves a frozen overlay.** If the shared screen/window goes away (track
+   ends, capture stalls), the last payload stays on the overlay indefinitely.
+
+**Goal.** The overlay reflects *what is currently on screen*: it shows the matched ore
+only while a valid RS read is fresh, **holds** the last ore briefly (configurable) when
+the read drops, then clears; the scan box appears **only** when a real SCAN RESULTS panel
+is detected; and the whole overlay **disappears** when the capture source is lost.
+
+These three are independent — implement and test each on its own.
+
+### R6.1 — Confidence gate on reads
+**Tasks**
+- Add a minimum OCR-confidence threshold for accepting a reading. Reads below it are
+  treated as *no reading* (fed to the voter as `null`), not as a candidate. PP-OCR scores
+  run high (see `confColor` in `ScanView.tsx`: ≥90 good, <70 bad) — default the gate low
+  (e.g. ~0.6) so it only kills clear garbage, and make it a tuning setting
+  (`AppSettings`/`LoopParams`, Capture → Tuning).
+- The gate lives in the read pipeline (where `pickReading`/`useSurveyCapture` produce the
+  RS value), so a low-confidence frame becomes `null` *before* voting. Keep `src/core`
+  pure: pass the score + threshold in; don't read settings inside core.
+
+**Acceptance**
+- A low-confidence frame does not move the voter; an existing stable read holds (subject to
+  R6.2 expiry) rather than flipping to a garbage value.
+
+### R6.2 — Hold-then-drop for the RS reading (staleness expiry)
+**Tasks**
+- Add `holdMs` to `OverlayConfig` (`src/shared/bridge.ts`, with a default — e.g. 4000) and
+  a control in the **Overlay** settings tab (dropdown like `idleMs`: e.g. 2s / 4s / 10s /
+  Never). Document it as distinct from `idleMs`: `holdMs` drops the *value*; `idleMs` fades
+  the *opacity*.
+- Track the timestamp of the last **valid** RS reading (passed the R6.1 gate + plausible).
+  When `now − lastValid > holdMs`, clear the stable reading: reset the voter and set
+  `stableRs = null` so `matches` empties and the overlay clears the ore. `holdMs = 0`/Never
+  keeps today's sticky-forever behavior.
+- Implement in the read/vote owner (`ScanView.tsx`, around the `voter.current.push` effect).
+  Prefer a small pure helper in `src/core` (e.g. `isExpired(lastValidTs, now, holdMs)` or a
+  reducer extension) so it's unit-testable; keep the wall-clock/`setTimeout` in the
+  component. Do **not** bake hold logic into `voteStep` (it must stay a pure reducer of
+  readings) unless you extend it with an explicit timestamp input and test that.
+- Note interaction: a static/unchanged frame currently re-votes `lastValue.current` to keep
+  a still image latched. Ensure "RS chip gone" reads as `null` (no digit token / failed
+  gate), which is the expiry trigger — not as an unchanged frame that keeps the value alive.
+  Verify the unchanged-frame skip path doesn't defeat the hold timer.
+
+**Acceptance**
+- RS chip leaves screen → ore stays for ~`holdMs` → then the overlay clears (no value, not
+  just faded).
+- RS chip returns within `holdMs` → no flicker, the reading stays continuous.
+- `holdMs = Never` reproduces current sticky behavior. Matcher/validator unit tests still
+  pass; new expiry helper has its own tests (fresh, just-expired, boundary, Never).
+
+### R6.3 — Scan box only when SCAN RESULTS is really present
+**Tasks**
+- Gate `parseScanResult` (`src/core/scan.ts`) on actual panel presence instead of
+  "first line with a letter." Require structural evidence, e.g. the **SCAN RESULTS** header
+  token detected (fuzzy-tolerant for OCR) **and/or** ≥1 real signal (a `MASS:` label, a SCU
+  total, or ≥1 composition row). Return `null` when the evidence is absent so junk HUD text
+  never becomes a `ScanResult`. Keep it pure; add a `requireHeader`/strictness option if a
+  looser mode is still wanted elsewhere.
+- Optionally also apply the R6.1 confidence gate to the scan region.
+- In `ScanView.tsx`, only set/keep `frozenScan` when the parse is non-null; clear
+  `frozenScan` (→ scan box hides) once the panel is gone for `holdMs` (reuse R6.2 expiry),
+  so the scan box follows the same hold-then-drop rule as the RS reading.
+
+**Acceptance**
+- With the scan region pointed at the HUD but **no** SCAN RESULTS panel up, the scan
+  overlay box shows nothing (no garbage ore/composition).
+- A real panel still parses (existing `scan` tests pass; add a negative test: junk lines →
+  `null`, and a partial-panel case).
+
+### R6.4 — Hide the overlay when the capture source is lost
+**Tasks**
+- Detect source loss in the control window: `MediaStreamTrack` `ended`/`mute` events on the
+  captured stream, the `<video>` element erroring/stalling, or no fresh frame for a
+  threshold (e.g. the preprocess hash unchanged **and** the track unhealthy — distinguish a
+  paused-but-alive game from a dead source). Centralize in the capture owner
+  (`App.tsx`/`useSurveyCapture`/`ScanView.tsx`).
+- On loss: stop pushing matches, clear the voter + `frozenScan`, and tell the overlay to
+  **disappear entirely** (not just fade). Add an explicit signal — either a payload flag
+  (e.g. `sourceLost: true` on `OverlayPayload`) or reuse the existing hide channel
+  (`onToggleVisible`/a dedicated `setOverlayVisible`) — and have `Overlay.tsx` force
+  `visible = false` while lost, independent of `idleMs`/content.
+- Reflect the lost state in the control header health pill (it currently hard-codes
+  `source ✓`; make it show source lost/reconnect).
+- On reconnect (source re-selected or track live again), resume normally.
+
+**Acceptance**
+- Killing/closing the shared source makes the overlay vanish within ~1s.
+- Reconnecting the source brings readings + overlay back with no restart.
+- The control header shows the lost/reconnect state rather than a false `source ✓`.
+
+### R6.5 — Tell the user *why* nothing shows (don't fail silently)
+**Problem.** With R6.1–R6.4, the overlay correctly goes blank on garbage / low-conf /
+expired / lost-source — but a silent blank looks like a broken app. The user must be able to
+tell *why* there's nothing: bad read vs. waiting vs. source gone.
+
+**Tasks**
+- **Control window (primary).** Make the Results hero + status footer name the current
+  reason explicitly. Today the footer `voterState` is only `paused|settling|locked|idle`
+  and the hero shows "no match" / "waiting…". Extend the derived state to distinguish:
+  - `low conf` — reads arriving but below the R6.1 gate (rejected garbage). Show the live
+    conf% next to it so the user sees it's *reading something*, just untrusted.
+  - `stale / held` — was locked, RS read dropped, inside `holdMs` (ore still shown, on
+    borrowed time). Optionally a countdown/“holding…”.
+  - `expired` — `holdMs` elapsed, value cleared (this is *why the overlay is now empty*).
+  - `no scan panel` — RS may be fine but SCAN RESULTS isn't detected (explains the empty
+    scan box specifically; R6.3).
+  - `source lost` — capture dead (R6.4); the header pill already gets this, mirror it here.
+  The footer already surfaces `conf` + `raw` OCR text — keep that so the user can see the
+  garbage that's being rejected.
+- **Overlay (secondary, opt-in).** When `showPlaceholder` is on, replace the blank with a
+  short reason chip instead of nothing — e.g. `low signal`, `no RS`, `source lost` — so the
+  user glancing at the game (not the control window) still gets a cause. Keep it tiny and
+  faded; respect `idleMs`. When `showPlaceholder` is off, stay fully blank (current behavior).
+- Thread the reason from the read pipeline (gate result, expiry, scan-gate, source-lost)
+  rather than re-deriving in two places — a single `status`/`reason` enum passed to both the
+  control UI and the overlay payload (`OverlayPayload`).
+
+**Acceptance**
+- Pointing the RS region at junk → control shows `low conf` + the rejected raw text + conf%,
+  not a silent blank, and the overlay (if placeholder on) shows a `low signal` chip.
+- After `holdMs` with no read → control footer reads `expired` and the hero explains the
+  overlay is empty because the reading went stale.
+- Source killed → both control header and footer say `source lost`.
+
+### R6.6 — Tests, docs
+**Tasks**
+- Unit-test the new pure pieces: expiry helper (R6.2) and the stricter `parseScanResult`
+  gate (R6.3). `src/core` stays pure; matcher/validator tests unchanged.
+- Document the new knobs (`holdMs`, confidence threshold) in the Knobs section + README:
+  what they do and how they differ from `idleMs`.
+
+**Acceptance**
+- All existing tests pass; new tests cover expiry + scan-gate negatives.
+
+**Human verification:** this dev box can't run the over-game overlay. After build, the user
+confirms on real Windows + live HUD: (a) ore holds then clears when the RS chip leaves; (b)
+the scan box stays empty with no SCAN RESULTS panel up; (c) the overlay vanishes when the
+captured window is closed and returns on reconnect. Do not claim these work without confirmed
+in-game runs.
+
+---
+
 ## Reminders that apply to every item
 
 - Run the acceptance check before continuing.

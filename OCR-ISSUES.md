@@ -127,6 +127,21 @@ no ramp, no freeze, video stays smooth, overlay can be shown.
   cross-origin isolation), so a *new* read costs ~1–2 s. Mitigate by **tightening
   the RS box and lowering upscale** (Capture tab) — less area = faster inference.
 - **`quorum` / `interval`** (Capture → Timing) trade lock speed vs. robustness.
+- **`minConfidence`** (Capture → Timing, R6) — minimum OCR confidence (0..1) to
+  accept a reading. Below it the frame is treated as *no reading* (fed to the
+  voter as null), so clear garbage can't move the lock. PP-OCR scores run high;
+  default 0.5. 0 = accept everything.
+- **`holdMs`** (Overlay → "Hold reading", R6) — how long the last ore stays on
+  the overlay after the RS reading disappears, then the *value* is cleared. This
+  is **distinct from `idleMs`**: `idleMs` only fades the *opacity* (the value
+  persists underneath and snaps back on the next tick); `holdMs` drops the value
+  entirely (status → `expired`). `0` = never drop (sticky forever, legacy).
+- **Why nothing shows (R6)** — the read pipeline emits an `OverlayStatus`
+  (`held` / `expired` / `low-conf` / `no-rs` / `no-scan` / `source-lost`) shown
+  in the control footer and as a reason chip on the overlay placeholder, so a
+  blank overlay always explains itself instead of failing silently. A lost
+  capture source hides the overlay entirely; SCAN RESULTS parsing is strict
+  (`parseScanResult`), so the scan box only appears when a real panel is on screen.
 
 ---
 
