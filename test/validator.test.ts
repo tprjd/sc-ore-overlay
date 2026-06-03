@@ -97,4 +97,42 @@ describe('createVoter', () => {
     voter.reset();
     expect(voter.stable).toBeNull();
   });
+
+  it('exposes the in-progress candidate and streak count', () => {
+    const voter = createVoter({ quorum: 3 });
+    voter.push(4270);
+    expect(voter.candidate).toBe(4270);
+    expect(voter.count).toBe(1);
+    expect(voter.stable).toBeNull();
+
+    voter.push(4270);
+    expect(voter.count).toBe(2);
+    // A new value mid-stream: candidate switches to it while `stable` is still
+    // null (never locked) — this is the "settling" signal the overlay uses.
+    voter.push(8540);
+    expect(voter.candidate).toBe(8540);
+    expect(voter.count).toBe(1);
+    expect(voter.stable).toBeNull();
+
+    voter.reset();
+    expect(voter.candidate).toBeNull();
+    expect(voter.count).toBe(0);
+  });
+
+  it('drops the latched value when a different reading starts accumulating', () => {
+    const voter = createVoter({ quorum: 2 });
+    voter.push(100);
+    expect(voter.push(100)).toBe(100); // locked
+    // A different plausible value resets the streak: `stable` goes null until
+    // the new value reaches quorum. `candidate` tracks it the whole time, so
+    // `candidate != null && candidate !== stable` is the overlay's "settling".
+    expect(voter.push(200)).toBeNull();
+    expect(voter.candidate).toBe(200);
+    expect(voter.stable).toBeNull();
+    expect(voter.push(200)).toBe(200); // now locked on the new value
+
+    // A dropped (null) frame keeps the latched value — not a reset.
+    expect(voter.push(null)).toBe(200);
+    expect(voter.candidate).toBe(200);
+  });
 });

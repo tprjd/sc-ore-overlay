@@ -1,14 +1,16 @@
 // The transparent, click-through overlay. Receives matches over IPC and renders
-// "Ore ×N" (stacked on overlap). Appearance (idle fade, size preset, font,
-// background color + opacity, padding, line gap) is live-configurable from the
-// control window. In "edit overlay" mode the window is interactive: drag the
-// body to move, drag the bottom-right grip to resize. The drag bar is an overlay
-// (out of layout flow) so toggling edit mode never resizes the content.
+// the matched ore(s). The top candidate is emphasized (larger, with a
+// confidence dot + score bar); additional overlap candidates are demoted below
+// a divider. A pulsing dot means the temporal voter is still confirming a new
+// reading (the value may change); a solid dot means it's locked. Appearance
+// (idle fade, size preset, font, background, padding, line gap, signature echo)
+// is live-configurable from the control window. In "edit overlay" mode the
+// window is interactive: drag the body to move, drag the grip to resize.
 
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { DEFAULT_OVERLAY_CONFIG } from '../shared/bridge';
-import type { OverlayConfig, OverlayPayload, OverlayScale } from '../shared/bridge';
+import type { OverlayCandidate, OverlayConfig, OverlayPayload, OverlayScale } from '../shared/bridge';
 
 const EMPTY: OverlayPayload = { reading: null, candidates: [] };
 
@@ -19,12 +21,32 @@ const SCALE: Record<OverlayScale, { font: number; muted: number }> = {
   large: { font: 32, muted: 18 },
 };
 
+/** Keyframes for the confidence-dot pulse and the per-row enter animation. */
+const KEYFRAMES = `
+@keyframes scoDot { 0%,100% { opacity: 1; } 50% { opacity: 0.2; } }
+@keyframes scoEnter { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+`;
+
 /** "#rrggbb" + alpha → "rgba(r,g,b,a)". */
 function hexToRgba(hex: string, alpha: number): string {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
   if (!m) return `rgba(13,15,18,${alpha})`;
   const n = Number.parseInt(m[1], 16);
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
+/** The deposit signature behind a candidate: (reading − noise) / nodes. */
+function signatureOf(reading: number | null, c: OverlayCandidate): number | null {
+  if (reading == null || !c.nodes) return null;
+  const sig = Math.round((reading - (c.noise ?? 0)) / c.nodes);
+  return sig > 0 ? sig : null;
+}
+
+/** Score (0..1) → confidence-bar color. */
+function scoreColor(pct: number): string {
+  if (pct >= 60) return '#34d399';
+  if (pct >= 30) return '#fbbf24';
+  return '#f87171';
 }
 
 export function Overlay() {
@@ -96,8 +118,10 @@ export function Overlay() {
     resizeStart.current = null;
   };
 
-  const { reading, candidates } = payload;
+  const { reading, candidates, settling } = payload;
   const sz = SCALE[config.scale];
+  const compact = config.scale === 'compact';
+  const secFont = Math.max(11, Math.round(sz.font * 0.7));
   // Show whenever we have *anything* useful: candidates, or a reading (so the
   // "no match" message is visible), or — when the user has it enabled — the
   // "scanning…" placeholder. Idle fade handles eventual disappearance.
@@ -105,8 +129,24 @@ export function Overlay() {
   const visible = editing || (!hidden && hasContent && (config.idleMs <= 0 || !idle));
   const cardBg = hexToRgba(config.bgColor, config.bgOpacity);
 
+  const top = candidates[0];
+  const topPct = top ? Math.max(0, Math.min(100, Math.round(top.score * 100))) : 0;
+  const topSig = top ? signatureOf(reading, top) : null;
+
+  /** Pulsing while the voter confirms a new value; solid once locked. */
+  const dot = (
+    <span
+      style={{
+        ...S.dot,
+        background: settling ? '#fbbf24' : '#4fd1ff',
+        animation: settling ? 'scoDot 1s ease-in-out infinite' : 'none',
+      }}
+    />
+  );
+
   return (
     <div style={{ ...S.root, opacity: visible ? 1 : 0, fontFamily: config.fontFamily }}>
+      <style>{KEYFRAMES}</style>
       <div
         style={{
           ...S.card,
@@ -121,25 +161,73 @@ export function Overlay() {
           ...(editing ? DRAG_REGION : null),
         }}
       >
-        {candidates.length > 0 ? (
-          candidates.map((c, i) => (
-            <div key={`${c.name}-${c.noise ?? 'n'}-${c.loose ? 'L' : 'S'}-${i}`} style={{ ...S.row, opacity: i === 0 ? 1 : 0.85 }}>
-              <span style={{ ...S.name, fontSize: sz.font }}>
-                {c.name}
-                {c.noise != null && (
-                  <span style={{ ...S.noiseBadge, fontSize: Math.max(10, sz.font * 0.45) }}>
-                    +{c.noise.toLocaleString()}
-                  </span>
-                )}
-                {c.loose && (
-                  <span style={{ ...S.looseBadge, fontSize: Math.max(10, sz.font * 0.45) }}>
-                    loose
-                  </span>
-                )}
-              </span>
-              <span style={{ ...S.nodes, fontSize: sz.font }}>×{c.nodes}</span>
+        {top && compact ? (
+          // Compact: top candidate only, on a single line.
+          <div key={`${top.name}-${top.noise ?? 'n'}-${top.loose ? 'L' : 'S'}`} style={{ ...S.row, animation: 'scoEnter 160ms ease-out' }}>
+            {dot}
+            <span style={{ ...S.name, fontSize: sz.font }}>{top.name}</span>
+            <span style={{ ...S.nodes, fontSize: sz.font }}>×{top.nodes}</span>
+          </div>
+        ) : top ? (
+          <>
+            {/* Primary candidate — emphasized. */}
+            <div key={`${top.name}-${top.noise ?? 'n'}-${top.loose ? 'L' : 'S'}`} style={{ ...S.primaryBlock, animation: 'scoEnter 160ms ease-out' }}>
+              <div style={S.row}>
+                {dot}
+                <span style={{ ...S.name, fontSize: sz.font }}>
+                  {top.name}
+                  {top.noise != null && (
+                    <span style={{ ...S.noiseBadge, fontSize: Math.max(10, sz.font * 0.45) }}>
+                      +{top.noise.toLocaleString()}
+                    </span>
+                  )}
+                  {top.loose && (
+                    <span style={{ ...S.looseBadge, fontSize: Math.max(10, sz.font * 0.45) }}>loose</span>
+                  )}
+                </span>
+                <span style={{ ...S.nodes, fontSize: sz.font }}>×{top.nodes}</span>
+              </div>
+              {config.showSignature && topSig != null && (
+                <div style={{ ...S.sig, fontSize: Math.max(9, Math.round(sz.muted * 0.85)) }}>
+                  {topSig.toLocaleString()}×{top.nodes}
+                </div>
+              )}
+              <div style={S.bar}>
+                <div style={{ ...S.barFill, width: `${topPct}%`, background: scoreColor(topPct) }} />
+              </div>
             </div>
-          ))
+
+            {/* Secondary overlap candidates — demoted below a divider. */}
+            {candidates.length > 1 && <div style={S.divider} />}
+            {candidates.slice(1).map((c, i) => {
+              const sig = signatureOf(reading, c);
+              return (
+                <div
+                  key={`${c.name}-${c.noise ?? 'n'}-${c.loose ? 'L' : 'S'}-${i}`}
+                  style={{ ...S.secRow, animation: 'scoEnter 160ms ease-out' }}
+                >
+                  <span style={{ ...S.secName, fontSize: secFont }}>
+                    {c.name}
+                    {c.noise != null && (
+                      <span style={{ ...S.noiseBadge, fontSize: Math.max(9, secFont * 0.5) }}>
+                        +{c.noise.toLocaleString()}
+                      </span>
+                    )}
+                    {c.loose && (
+                      <span style={{ ...S.looseBadge, fontSize: Math.max(9, secFont * 0.5) }}>loose</span>
+                    )}
+                    {config.showSignature && sig != null && (
+                      <span style={S.secSig}>
+                        {' '}
+                        {sig.toLocaleString()}×{c.nodes}
+                      </span>
+                    )}
+                  </span>
+                  <span style={{ ...S.secNodes, fontSize: secFont }}>×{c.nodes}</span>
+                </div>
+              );
+            })}
+          </>
         ) : reading != null ? (
           // Number is on screen but matches nothing — always show this; it's
           // diagnostic, not a "placeholder". showPlaceholder gates only the
@@ -151,7 +239,13 @@ export function Overlay() {
             — no match
           </div>
         ) : config.showPlaceholder ? (
-          <div style={{ ...S.muted, fontSize: sz.muted }}>scanning…</div>
+          // Settling = the voter is accumulating a value but hasn't locked yet
+          // (or is re-locking a changed reading), so `stableRs` is null and no
+          // candidate is shown. Surface that with a pulsing dot + "locking…".
+          <div style={{ ...S.muted, fontSize: sz.muted, display: 'flex', alignItems: 'center' }}>
+            {settling && dot}
+            {settling ? 'locking…' : 'scanning…'}
+          </div>
         ) : null}
       </div>
       {editing && (
@@ -199,7 +293,17 @@ const S: Record<string, CSSProperties> = {
     backdropFilter: 'blur(2px)',
     boxSizing: 'border-box',
   },
+  primaryBlock: { display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 },
   row: { display: 'flex', alignItems: 'baseline', lineHeight: 1.1, minWidth: 0 },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: '50%',
+    flex: '0 0 auto',
+    alignSelf: 'center',
+    marginRight: 7,
+    boxShadow: '0 0 4px rgba(0,0,0,0.6)',
+  },
   name: {
     fontWeight: 700,
     color: '#fff',
@@ -216,6 +320,40 @@ const S: Record<string, CSSProperties> = {
     marginLeft: 'auto',
     paddingLeft: 8,
   },
+  sig: {
+    color: '#9fb3c8',
+    fontVariantNumeric: 'tabular-nums',
+    paddingLeft: 14,
+    textShadow: '0 1px 2px rgba(0,0,0,0.9)',
+    lineHeight: 1,
+  },
+  bar: {
+    height: 3,
+    borderRadius: 2,
+    background: 'rgba(255,255,255,0.12)',
+    overflow: 'hidden',
+    marginLeft: 14,
+  },
+  barFill: { height: '100%', borderRadius: 2, transition: 'width 200ms ease-out, background 200ms' },
+  divider: { height: 1, background: 'rgba(255,255,255,0.14)', margin: '1px 0' },
+  secRow: { display: 'flex', alignItems: 'baseline', lineHeight: 1.1, minWidth: 0, opacity: 0.7 },
+  secName: {
+    fontWeight: 600,
+    color: '#dbe4ee',
+    textShadow: '0 1px 3px rgba(0,0,0,0.9)',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  secNodes: {
+    fontWeight: 600,
+    color: '#4fd1ff',
+    fontVariantNumeric: 'tabular-nums',
+    textShadow: '0 1px 3px rgba(0,0,0,0.9)',
+    marginLeft: 'auto',
+    paddingLeft: 8,
+  },
+  secSig: { color: '#9fb3c8', fontVariantNumeric: 'tabular-nums', fontWeight: 400, fontSize: 10 },
   muted: { color: '#9fb3c8', textShadow: '0 1px 3px rgba(0,0,0,0.9)' },
   noiseBadge: {
     marginLeft: 6,

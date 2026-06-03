@@ -39,6 +39,12 @@ export interface OverlayPayload {
   detail?: QualityDetail | null;
   /** The scanned rock's SCAN RESULTS reading (for the scan overlay); null = none. */
   scan?: ScanResult | null;
+  /**
+   * True while the temporal voter is confirming a *new* reading that differs
+   * from the one currently shown — i.e. the displayed value may be about to
+   * change. The overlay renders this as a pulsing (vs solid) confidence dot.
+   */
+  settling?: boolean;
 }
 
 /** Commands raised by global hotkeys in the main process. */
@@ -70,6 +76,8 @@ export interface OverlayConfig {
   showDetail: boolean;
   /** Show the "scanned rock" overlay box (SCU-per-quality from the scan). */
   showScan: boolean;
+  /** Echo the deposit signature under each ore name (`sig×n`). */
+  showSignature: boolean;
 }
 
 /** Default overlay appearance. */
@@ -85,6 +93,7 @@ export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
   showPlaceholder: true,
   showDetail: false,
   showScan: false,
+  showSignature: false,
 };
 
 /** A rebindable global-hotkey action. */

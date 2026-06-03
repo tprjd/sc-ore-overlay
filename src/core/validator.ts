@@ -99,6 +99,10 @@ export interface Voter {
   push(reading: number | null): number | null;
   /** The current stable reading without advancing. */
   readonly stable: number | null;
+  /** The value currently accumulating votes (may differ from `stable`). */
+  readonly candidate: number | null;
+  /** How many consecutive frames `candidate` has held. */
+  readonly count: number;
   /** Clear all state. */
   reset(): void;
 }
@@ -116,6 +120,12 @@ export function createVoter(opts: VoteOptions): Voter {
     },
     get stable() {
       return stable;
+    },
+    get candidate() {
+      return state.candidate;
+    },
+    get count() {
+      return state.count;
     },
     reset() {
       state = initialVoteState;

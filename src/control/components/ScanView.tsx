@@ -128,8 +128,14 @@ export function ScanView({
     voter.current = createVoter({ quorum: params.quorum });
   }, [params.quorum]);
   const [stableRs, setStableRs] = useState<number | null>(null);
+  // True while the voter is accumulating a *different* value than the one shown
+  // (it latches `stable` to the candidate exactly at quorum, so an in-progress
+  // candidate that isn't yet `stable` means the display may be about to change).
+  const [settling, setSettling] = useState(false);
   useEffect(() => {
-    setStableRs(voter.current.push(readout.rs));
+    const s = voter.current.push(readout.rs);
+    setStableRs(s);
+    setSettling(voter.current.candidate != null && voter.current.candidate !== s);
   }, [readout]);
 
   const systemGroups = useMemo(() => groupLocations(table), [table]);
@@ -193,8 +199,9 @@ export function ScanView({
       })),
       detail,
       scan: frozenScan,
+      settling,
     });
-  }, [stableRs, matches, table, location, frozenScan]);
+  }, [stableRs, matches, table, location, frozenScan, settling]);
 
   // Global-hotkey commands relayed from the main process. Recalibrate clears
   // both the regions *and* the frozen scan so the next rock takes over.
@@ -546,6 +553,16 @@ export function ScanView({
                   }
                 />
                 Show scanned-rock box (SCU per quality)
+              </label>
+              <label style={S.checkRow}>
+                <input
+                  type="checkbox"
+                  checked={overlayConfig.showSignature}
+                  onChange={(e) =>
+                    onOverlayConfigChange({ ...overlayConfig, showSignature: e.target.checked })
+                  }
+                />
+                Echo signature under ore name (sig×n)
               </label>
               <p style={S.dim}>In edit mode (Alt+Shift+E): drag to move, drag the corner grip to resize.</p>
             </Section>
