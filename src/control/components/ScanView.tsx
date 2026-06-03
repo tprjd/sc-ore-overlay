@@ -275,6 +275,27 @@ export function ScanView({
   // PP-OCR scores run high; treat <90% as worth noticing, <70% as bad.
   const confColor = confPct == null ? '#9fb3c8' : confPct >= 90 ? C.green : confPct >= 70 ? C.amber : '#f87171';
 
+  // Header health pill — one-glance pipeline rollup, colored by the worst
+  // stage: source connected → RS region drawn → frames flowing → OCR confidence.
+  const hasRsRegion = regions.some((r) => r.role === 'rs' && r.enabled);
+  const capturing = !paused && tickRate > 0;
+  const health = paused
+    ? { color: '#9fb3c8', label: 'paused' }
+    : !hasRsRegion
+      ? { color: '#f87171', label: 'add RS region' }
+      : !capturing
+        ? { color: C.amber, label: 'starting…' }
+        : confPct == null
+          ? { color: C.amber, label: 'no reading' }
+          : confPct >= 90
+            ? { color: C.green, label: 'ready' }
+            : confPct >= 70
+              ? { color: C.amber, label: 'low conf' }
+              : { color: '#f87171', label: 'poor conf' };
+  const healthTip =
+    `source ✓ · RS region ${hasRsRegion ? '✓' : '✗'} · ` +
+    `reads ${capturing ? '✓' : '✗'} · conf ${confPct != null ? `${confPct}%` : '—'}`;
+
   return (
     <div style={S.page}>
       <header style={S.header}>
@@ -284,6 +305,11 @@ export function ScanView({
           {source.label}
         </span>
         <span style={S.spacer} />
+        <span style={S.health} title={healthTip}>
+          <span style={{ ...S.healthDot, background: health.color }} />
+          <span style={{ color: health.color }}>{health.label}</span>
+          {confPct != null && <span style={S.healthConf}>{confPct}%</span>}
+        </span>
         <button style={S.btn} onClick={onSetup} title="Re-run the guided setup (source, region, location)">
           Setup
         </button>
@@ -724,6 +750,9 @@ const S: Record<string, CSSProperties> = {
   header: { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: `1px solid ${C.border}` },
   srcLabel: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, opacity: 0.9 },
   spacer: { flex: 1 },
+  health: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 999, background: C.surface, border: `1px solid ${C.border}` },
+  healthDot: { width: 8, height: 8, borderRadius: '50%', flex: '0 0 auto' },
+  healthConf: { color: '#9fb3c8', fontVariantNumeric: 'tabular-nums' },
   body: { display: 'flex', flex: 1, minHeight: 0 },
   panel: { width: 380, borderLeft: `1px solid ${C.border}`, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', minHeight: 0 },
   // Always-visible Results pane: caps its own height and scrolls internally so
