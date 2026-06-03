@@ -44,6 +44,19 @@ overlay mechanism. OCR is locked to **PP-OCR via @gutenye/ocr-browser on ONNX Ru
 in-renderer) after Tesseract.js and a small TrOCR model both proved unreliable on the HUD font. If
 you believe a locked choice genuinely cannot work, stop and flag it rather than swapping silently.
 
+> **Sanctioned deviation (2026-06-03, TASKS.md R4):** OCR may also run on a **native
+> `onnxruntime-node` + DirectML** backend in an Electron `utilityProcess` (`electron/ocr-host.ts`),
+> selected by `ocrBackend: 'directml'`. This amends "no native OCR binary" / the WASM-in-renderer
+> lock **with the human's explicit approval**, to get vendor-agnostic GPU OCR (any DX12 GPU) without
+> the overlay-vs-WebGPU contention documented in OCR-ISSUES.md. The **OCR engine is unchanged** —
+> same PP-OCR (`ch_PP-OCRv4_det/rec`) models; only the runtime *host* moves out of the renderer. The
+> WASM-in-renderer path remains the automatic fallback, so the locked path is never removed. Do
+> **not** "fix" this back to web-only.
+>
+> **R5 update:** `directml` is now the **launch default** (selectable in the Capture tab; the active
+> engine shows in the status footer). It auto-falls back to the WASM worker when the native host
+> can't start, so non-DX12 machines stay safe.
+
 ---
 
 ## Verified domain knowledge (build on this — it was confirmed against the live API)

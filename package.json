@@ -19,11 +19,14 @@
   },
   "dependencies": {
     "@gutenye/ocr-browser": "^1.4.8",
+    "onnxruntime-node": "^1.26.0",
     "onnxruntime-web": "^1.17.3",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
+    "@gutenye/ocr-node": "^1.4.8",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
@@ -42,6 +45,17 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*"
+    ],
+    "asarUnpack": [
+      "**/node_modules/onnxruntime-node/**",
+      "**/node_modules/sharp/**",
+      "**/node_modules/@img/**"
+    ],
+    "extraResources": [
+      {
+        "from": "public/models",
+        "to": "models"
+      }
     ],
     "win": {
       "target": "nsis"

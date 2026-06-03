@@ -8,6 +8,7 @@ import type {
   CaptureSource,
   HotkeyAction,
   HotkeyMap,
+  OcrLine,
   OverlayCommand,
   OverlayConfig,
   OverlayPayload,
@@ -61,6 +62,10 @@ const api: ScoBridge = {
 
   getSurveyLog: () => ipcRenderer.invoke('sco:get-survey-log') as Promise<SurveyEntry[]>,
   saveSurveyLog: (entries) => ipcRenderer.send('sco:save-survey-log', entries),
+
+  ocrAvailable: () => ipcRenderer.invoke('sco:ocr-available') as Promise<boolean>,
+  ocrRecognize: (dataUrl: string) =>
+    ipcRenderer.invoke('sco:ocr-recognize', dataUrl) as Promise<OcrLine[]>,
 };
 
 contextBridge.exposeInMainWorld('sco', api);

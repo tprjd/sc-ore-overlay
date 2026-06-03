@@ -5,8 +5,8 @@
 //
 // Built as CommonJS by vite-plugin-electron, so `__dirname` is available.
 
-import { app, BrowserWindow, desktopCapturer, globalShortcut, ipcMain } from 'electron';
-import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron';
+import { app, BrowserWindow, desktopCapturer, globalShortcut, ipcMain, utilityProcess } from 'electron';
+import type { IpcMainEvent, IpcMainInvokeEvent, UtilityProcess } from 'electron';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { DEFAULT_HOTKEYS } from '../src/shared/bridge';
@@ -15,6 +15,7 @@ import type {
   CaptureSource,
   HotkeyAction,
   HotkeyMap,
+  OcrLine,
   OverlayCommand,
   OverlayConfig,
   OverlayPayload,
@@ -119,6 +120,88 @@ ipcMain.on('sco:save-survey-log', (_e: IpcMainEvent, entries: SurveyEntry[]) => 
   } catch {
     // ignore write errors
   }
+});
+
+// --- Native OCR host (utility process) ---------------------------------------
+// A Node child with its own D3D12 device runs onnxruntime-node + DirectML, so
+// GPU OCR doesn't contend with the overlay the way in-renderer WebGPU does (see
+// electron/ocr-host.ts / TASKS.md R4). Spawned lazily on first probe; the
+// renderer falls back to the in-renderer WASM worker if it can't start.
+let ocrHost: UtilityProcess | null = null;
+let ocrReady: Promise<boolean> | null = null;
+let ocrSeq = 0;
+const ocrPending = new Map<number, { resolve: (lines: OcrLine[]) => void; reject: (err: Error) => void }>();
+
+/** Absolute dir holding the PP-OCR models (dev: public/models; prod: resources). */
+function ocrModelDir(): string {
+  return DEV_SERVER_URL
+    ? path.join(dirname, '..', 'public', 'models')
+    : path.join(process.resourcesPath, 'models');
+}
+
+/** Fork the OCR host (once) and resolve true when DirectML/CPU init succeeds. */
+function startOcrHost(): Promise<boolean> {
+  if (ocrReady) return ocrReady;
+  ocrReady = new Promise<boolean>((resolve) => {
+    let host: UtilityProcess;
+    try {
+      host = utilityProcess.fork(path.join(dirname, 'ocr-host.js'), [], {
+        serviceName: 'sco-ocr-host',
+        stdio: 'inherit',
+      });
+    } catch (err) {
+      console.error('[ocr] failed to fork host:', err);
+      ocrReady = null;
+      resolve(false);
+      return;
+    }
+    ocrHost = host;
+    const dir = ocrModelDir();
+    host.on('spawn', () => {
+      host.postMessage({
+        type: 'init',
+        models: {
+          detectionPath: path.join(dir, 'ch_PP-OCRv4_det_infer.onnx'),
+          recognitionPath: path.join(dir, 'ch_PP-OCRv4_rec_infer.onnx'),
+          dictionaryPath: path.join(dir, 'ppocr_keys_v1.txt'),
+        },
+      });
+    });
+    host.on('message', (msg: { type: string; id?: number; lines?: OcrLine[]; error?: string }) => {
+      if (msg.type === 'ready') {
+        resolve(true);
+      } else if (msg.type === 'init-error') {
+        console.error('[ocr] host init error:', msg.error);
+        resolve(false);
+      } else if (msg.type === 'result' && typeof msg.id === 'number') {
+        const p = ocrPending.get(msg.id);
+        if (!p) return;
+        ocrPending.delete(msg.id);
+        if (msg.error) p.reject(new Error(msg.error));
+        else p.resolve(msg.lines ?? []);
+      }
+    });
+    host.on('exit', (code) => {
+      console.warn('[ocr] host exited:', code);
+      ocrHost = null;
+      ocrReady = null; // allow a re-spawn on the next probe
+      for (const p of ocrPending.values()) p.reject(new Error('OCR host exited'));
+      ocrPending.clear();
+      resolve(false); // no-op if already resolved (e.g. ready earlier)
+    });
+  });
+  return ocrReady;
+}
+
+ipcMain.handle('sco:ocr-available', (): Promise<boolean> => startOcrHost());
+ipcMain.handle('sco:ocr-recognize', async (_e: IpcMainInvokeEvent, dataUrl: string): Promise<OcrLine[]> => {
+  const ok = await startOcrHost();
+  if (!ok || !ocrHost) throw new Error('OCR host unavailable');
+  const id = ++ocrSeq;
+  return new Promise<OcrLine[]>((resolve, reject) => {
+    ocrPending.set(id, { resolve, reject });
+    ocrHost!.postMessage({ type: 'recognize', id, dataUrl });
+  });
 });
 
 // --- Windows -----------------------------------------------------------------
@@ -403,7 +486,10 @@ void app.whenReady().then(() => {
   });
 });
 
-app.on('will-quit', () => globalShortcut.unregisterAll());
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
+  ocrHost?.kill();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

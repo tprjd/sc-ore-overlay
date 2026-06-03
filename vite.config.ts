@@ -33,6 +33,19 @@ export default defineConfig(({ command }) => {
         entry: 'electron/preload.ts',
         onstart: (args: { reload: () => void }) => args.reload(),
       },
+      {
+        // Native DirectML OCR host (Electron utilityProcess). Emitted CJS as
+        // dist-electron/ocr-host.js and forked from main. @gutenye/ocr-common is
+        // ESM and Electron 33's Node can't require() ESM, so it's bundled in;
+        // only the native addons (onnxruntime-node, sharp) stay external and load
+        // from node_modules at runtime (asarUnpack'd in the packaged build).
+        entry: 'electron/ocr-host.ts',
+        vite: {
+          build: {
+            rollupOptions: { external: ['onnxruntime-node', 'sharp'] },
+          },
+        },
+      },
     ]),
   ],
   // OCR now runs in a Web Worker (src/control/ocr.worker.ts). Emit ESM workers so
