@@ -33,6 +33,7 @@ import {
   snapMaterial,
 } from '../../core';
 import type { ScanResult, SignatureTable, Voter } from '../../core';
+import { DEFAULT_OVERLAY_CONFIG } from '../../shared/bridge';
 import type {
   HotkeyAction,
   HotkeyMap,
@@ -62,6 +63,18 @@ const PANEL_TABS: Array<[PanelTab, string]> = [
   ['match', 'Match'],
   ['overlay', 'Overlay'],
   ['hotkeys', 'Hotkeys'],
+];
+
+/**
+ * One-click overlay presets. Each patches only scale + what shows (boxes/stats/
+ * border), leaving the user's appearance fine-tuning (color, opacity, padding,
+ * gap, fade, font) untouched. Reset (a separate button) restores everything.
+ */
+type OverlayPreset = 'minimal' | 'standard' | 'detailed';
+const OVERLAY_PRESETS: Array<[OverlayPreset, string, Partial<OverlayConfig>]> = [
+  ['minimal', 'Minimal', { scale: 'compact', border: false, showPlaceholder: false, showDetail: false, showScan: false, showOcrStats: false }],
+  ['standard', 'Standard', { scale: 'normal', border: true, showPlaceholder: true, showDetail: false, showScan: false, showOcrStats: false }],
+  ['detailed', 'Detailed', { scale: 'normal', border: true, showPlaceholder: true, showDetail: true, showScan: true, showOcrStats: true }],
 ];
 
 export interface ScanViewProps {
@@ -295,6 +308,12 @@ export function ScanView({
   const healthTip =
     `source ✓ · RS region ${hasRsRegion ? '✓' : '✗'} · ` +
     `reads ${capturing ? '✓' : '✗'} · conf ${confPct != null ? `${confPct}%` : '—'}`;
+
+  // Which overlay preset (if any) the current config matches — for highlighting.
+  const activePreset =
+    OVERLAY_PRESETS.find(([, , patch]) =>
+      Object.entries(patch).every(([k, v]) => overlayConfig[k as keyof OverlayConfig] === v),
+    )?.[0] ?? null;
 
   return (
     <div style={S.page}>
@@ -563,6 +582,27 @@ export function ScanView({
               </div>
             </div>
             <Section title="Overlay">
+              <div style={S.presetRow}>
+                <span style={S.presetLabel}>Preset</span>
+                {OVERLAY_PRESETS.map(([id, label, patch]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    style={{ ...S.presetBtn, ...(activePreset === id ? S.presetBtnActive : null) }}
+                    onClick={() => onOverlayConfigChange({ ...overlayConfig, ...patch })}
+                  >
+                    {label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  style={{ ...S.presetBtn, marginLeft: 'auto' }}
+                  onClick={() => onOverlayConfigChange(DEFAULT_OVERLAY_CONFIG)}
+                  title="Restore all overlay settings to defaults"
+                >
+                  Reset
+                </button>
+              </div>
               <label style={S.selectRow}>
                 <span style={S.sliderLabel}>Fade after</span>
                 <select
@@ -787,6 +827,10 @@ const S: Record<string, CSSProperties> = {
   statusKey: { opacity: 0.5, textTransform: 'uppercase', letterSpacing: 0.4 },
   statusVal: { color: C.text, fontWeight: 600 },
   stateDot: { width: 7, height: 7, borderRadius: '50%', flex: '0 0 auto' },
+  presetRow: { display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, flexWrap: 'wrap' },
+  presetLabel: { fontSize: 12, opacity: 0.8, marginRight: 2 },
+  presetBtn: { background: C.btn, color: C.text, border: `1px solid ${C.borderStrong}`, borderRadius: R.md, padding: '4px 10px', cursor: 'pointer', fontSize: 12 },
+  presetBtnActive: { borderColor: C.accent, color: C.accent },
   previewWrap: { marginBottom: 14 },
   previewLabel: {
     fontSize: 12,
