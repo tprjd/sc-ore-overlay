@@ -224,7 +224,6 @@ const S: Record<string, CSSProperties> = {
     borderRadius: 10,
     boxSizing: 'border-box',
     overflow: 'auto',
-    backdropFilter: 'blur(2px)',
   },
   titleRow: {
     display: 'flex',

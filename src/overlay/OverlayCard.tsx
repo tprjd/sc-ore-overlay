@@ -182,7 +182,6 @@ const S: Record<string, CSSProperties> = {
     flexDirection: 'column',
     justifyContent: 'flex-start',
     overflow: 'hidden',
-    backdropFilter: 'blur(2px)',
     boxSizing: 'border-box',
   },
   primaryBlock: { display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0, borderRadius: 6 },
