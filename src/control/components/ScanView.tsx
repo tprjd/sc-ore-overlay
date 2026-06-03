@@ -18,6 +18,8 @@ import { ROLE_META } from './roles';
 import { Section, Slider, NoiseEditor, KeyCapture, HOTKEY_ROWS } from './controls';
 import { C, R } from './tokens';
 import { OverlayCard } from '../../overlay/OverlayCard';
+import { DetailCard } from '../../overlay/DetailCard';
+import { ScanCard } from '../../overlay/ScanCard';
 import type { PickedSource } from './SourcePicker';
 import { useSurveyCapture } from '../useSurveyCapture';
 import type { ActiveSurveyRegion } from '../useSurveyCapture';
@@ -188,6 +190,14 @@ export function ScanView({
     [matches],
   );
 
+  // Top identified ore — headlined in the Results pane. Its quality breakdown
+  // feeds both the detail overlay box (via IPC) and the live preview.
+  const top = matches[0];
+  const detail = useMemo(
+    () => (top ? getQualityDetail(table, top.name, top.signature, location) : null),
+    [top, table, location],
+  );
+
   // Known-ore vocabulary used to snap OCR'd material names to their nearest
   // legal table entry. The HUD font + tag leakage routinely turns "Agricium"
   // into "Agricius" or "Titanium (Cf)" into "Titaniumicf)" — snapMaterial
@@ -224,8 +234,6 @@ export function ScanView({
   // is null and stable, so the send effect doesn't re-fire every tick.
   const ocrPush = overlayConfig.showOcrStats ? readout.ocr : null;
   useEffect(() => {
-    const top = matches[0];
-    const detail = top ? getQualityDetail(table, top.name, top.signature, location) : null;
     window.sco?.sendMatches?.({
       reading: stableRs,
       candidates: overlayCandidates,
@@ -234,7 +242,7 @@ export function ScanView({
       settling,
       ocr: ocrPush ? { score: ocrPush.score, ms: ocrPush.ms, lineCount: ocrPush.lineCount } : null,
     });
-  }, [stableRs, matches, overlayCandidates, table, location, frozenScan, settling, ocrPush]);
+  }, [stableRs, overlayCandidates, detail, frozenScan, settling, ocrPush]);
 
   // Global-hotkey commands relayed from the main process. Recalibrate clears
   // both the regions *and* the frozen scan so the next rock takes over.
@@ -268,8 +276,6 @@ export function ScanView({
   const confPct = ocr ? Math.round(ocr.score * 100) : null;
   // PP-OCR scores run high; treat <90% as worth noticing, <70% as bad.
   const confColor = confPct == null ? '#9fb3c8' : confPct >= 90 ? C.green : confPct >= 70 ? C.amber : '#f87171';
-  // Top identified ore — headlined in the always-visible Results pane.
-  const top = matches[0];
 
   return (
     <div style={S.page}>
@@ -526,13 +532,25 @@ export function ScanView({
             <div style={S.previewWrap}>
               <div style={S.previewLabel}>Live preview</div>
               <div style={S.previewStage}>
-                <OverlayCard
-                  reading={stableRs}
-                  candidates={overlayCandidates}
-                  settling={settling}
-                  ocr={overlayConfig.showOcrStats ? readout.ocr : null}
-                  config={overlayConfig}
-                />
+                <div style={S.previewBox}>
+                  <OverlayCard
+                    reading={stableRs}
+                    candidates={overlayCandidates}
+                    settling={settling}
+                    ocr={overlayConfig.showOcrStats ? readout.ocr : null}
+                    config={overlayConfig}
+                  />
+                </div>
+                {overlayConfig.showDetail && (
+                  <div style={S.previewBoxTall}>
+                    <DetailCard detail={detail} config={overlayConfig} />
+                  </div>
+                )}
+                {overlayConfig.showScan && (
+                  <div style={S.previewBoxTall}>
+                    <ScanCard scan={frozenScan} config={overlayConfig} />
+                  </div>
+                )}
               </div>
             </div>
             <Section title="Overlay">
@@ -782,14 +800,19 @@ const S: Record<string, CSSProperties> = {
     marginBottom: 6,
   },
   previewStage: {
-    height: 96,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+    padding: 8,
     borderRadius: R.lg,
-    overflow: 'hidden',
     border: `1px solid ${C.border}`,
-    // Checkerboard backdrop so the card's translucency reads like it would over
+    // Checkerboard backdrop so the cards' translucency reads like it would over
     // the game (the overlay is transparent in-game).
     background: 'repeating-conic-gradient(#3a3f4b 0% 25%, #2b2f38 0% 50%) 0 / 18px 18px',
   },
+  // Each preview card sits in its own sized box (the cards are height:100%).
+  previewBox: { position: 'relative', height: 96, borderRadius: R.lg, overflow: 'hidden' },
+  previewBoxTall: { position: 'relative', height: 140, borderRadius: R.lg, overflow: 'hidden' },
   dim: { opacity: 0.45, fontSize: 12 },
   sliderLabel: { width: 82, fontSize: 12, opacity: 0.8 },
   checkRow: { display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, marginBottom: 10, lineHeight: 1.35 },

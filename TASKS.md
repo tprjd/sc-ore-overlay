@@ -80,6 +80,20 @@ Do the restructure (T1–T3) first; the calibration/robustness items below land 
 **Acceptance**
 - Match tab contains only patch/location/cluster/noise; no live output renders inside it.
 
+### T4 — Preview parity for the detail + scan boxes
+**Tasks**
+- The Overlay-tab live preview only covers the base `OverlayCard`; the ore-detail box (`Detail.tsx`)
+  and scanned-rock box (`ScanOverlay.tsx`) have toggles but no preview, because both are
+  window-coupled (own `window.sco` IPC + resize inside the component).
+- Extract each into a pure presentational card mirroring `OverlayCard`: `DetailCard` (props: detail,
+  config) + thin window wrapper, and `ScanCard` (props: scan, config) + wrapper.
+- Stack all three cards in the Overlay-tab preview, honoring `showDetail` / `showScan`, fed by the
+  `detail` memo + `frozenScan` already in ScanView.
+
+**Acceptance**
+- Toggling "ore detail box" / "scanned-rock box" reflects live in the preview, matching what the
+  windows render.
+
 ## A — Calibration & confidence
 
 The hardest user task is getting the RS box right; today the only feedback is the footer.
