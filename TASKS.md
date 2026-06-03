@@ -217,6 +217,36 @@ stall is gone with stable latency. Do not claim it works without those confirmed
 
 ---
 
+## R5 — Make DirectML the default + add a UI backend toggle
+
+R4's `directml` backend is confirmed working in-app on real Windows hardware
+(read correct, flat ~28–33 ms, overlay-up stall gone). Promote it from an opt-in
+DevTools knob to the default, with a visible control.
+
+**Tasks**
+- **Default to `directml`.** Change the launch default (`App.tsx`, currently
+  `s.ocrBackend ?? 'wasm'`) to `'directml'`. The native host already auto-falls
+  back to the WASM worker if it can't start or DirectML init fails, so non-DX12 /
+  broken-driver machines stay safe. Update CLAUDE.md + OCR-ISSUES.md to say the
+  default is now `directml` (wasm = fallback).
+- **UI toggle.** Add an OCR-backend selector in the control window (Capture tab,
+  near the Timing controls — same area as `quorum`/`interval`/`scale`). Options:
+  `DirectML (GPU)` / `WASM (CPU)` / `WebGPU (experimental)`. Persist via
+  `setSettings({ ocrBackend })`. Note that a change needs a relaunch (the engine
+  is chosen once before capture) — show that hint inline, or trigger a relaunch.
+- **Surface the effective backend.** The selected backend may differ from the
+  active one (directml → wasm fallback). Plumb the resolved transport out of
+  `src/control/ocr.ts` (it already logs it) and show it in the status footer /
+  OCR-stats line so the user sees which path is actually live.
+
+**Acceptance**
+- Fresh install defaults to DirectML and reads on the GPU with no manual setting.
+- The toggle switches backend (after relaunch) and persists across restarts.
+- On a machine without a usable DX12 device, the default still works (falls back
+  to WASM) and the footer shows `wasm`.
+
+---
+
 ## Reminders that apply to every item
 
 - Run the acceptance check before continuing.
