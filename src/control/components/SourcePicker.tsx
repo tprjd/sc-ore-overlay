@@ -1,6 +1,7 @@
 // Step 1: choose what to capture. Lists desktopCapturer screens/windows, and
-// also accepts a static image file — handy for tuning the OCR against a saved
-// HUD screenshot without Star Citizen running.
+// also accepts a static image file or a video file — handy for tuning the OCR
+// against a saved HUD screenshot or a recorded mining clip without Star Citizen
+// running (a looping video gives reproducible live-ish frames for debugging).
 
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, CSSProperties } from 'react';
@@ -8,10 +9,12 @@ import type { CaptureSource } from '../../shared/bridge';
 
 /** What the picker hands back to the app once a source is chosen. */
 export interface PickedSource {
-  kind: 'desktop' | 'image';
+  kind: 'desktop' | 'image' | 'video';
   label: string;
   stream?: MediaStream;
   imageUrl?: string;
+  /** Object URL for a chosen video file (kind 'video'). */
+  videoUrl?: string;
   /** desktopCapturer id (desktop sources only) — persisted for auto-reconnect. */
   sourceId?: string;
 }
@@ -83,6 +86,11 @@ export function SourcePicker({
     if (file) onPick({ kind: 'image', label: file.name, imageUrl: URL.createObjectURL(file) });
   };
 
+  const pickVideo = (e: ChangeEvent<HTMLInputElement>): void => {
+    const file = e.target.files?.[0];
+    if (file) onPick({ kind: 'video', label: file.name, videoUrl: URL.createObjectURL(file) });
+  };
+
   return (
     <div style={S.page}>
       <header style={S.header}>
@@ -97,6 +105,10 @@ export function SourcePicker({
         <label style={{ ...S.btn, ...S.fileBtn }}>
           Load image…
           <input type="file" accept="image/*" onChange={pickImage} style={{ display: 'none' }} />
+        </label>
+        <label style={{ ...S.btn, ...S.fileBtn }} title="Use a recorded clip as the source — loops for reproducible debugging">
+          Load video…
+          <input type="file" accept="video/*" onChange={pickVideo} style={{ display: 'none' }} />
         </label>
       </div>
 

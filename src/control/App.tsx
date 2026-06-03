@@ -178,6 +178,7 @@ export function App() {
     setAutoReconnect(false); // explicit "← Sources" — don't auto-reconnect again
     source?.stream?.getTracks().forEach((t) => t.stop());
     if (source?.imageUrl) URL.revokeObjectURL(source.imageUrl);
+    if (source?.videoUrl) URL.revokeObjectURL(source.videoUrl);
     setSource(null);
   };
 

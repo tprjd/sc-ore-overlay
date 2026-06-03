@@ -60,11 +60,20 @@ export function CapturePreview({ source, mediaRef, regions, onDraw, hint }: Capt
   const [zoom, setZoom] = useState(1);
   const [drag, setDrag] = useState<DragBox | null>(null);
 
-  // Attach the live stream to the <video> element and expose it via mediaRef.
+  // Attach the source to the <video> element and expose it via mediaRef. A
+  // desktop capture uses srcObject (a MediaStream); a video file uses src and
+  // loops, so a recorded clip gives continuous frames for debugging.
   useEffect(() => {
-    if (source.kind === 'desktop' && source.stream && videoRef.current) {
-      const video = videoRef.current;
+    const video = videoRef.current;
+    if (!video) return;
+    if (source.kind === 'desktop' && source.stream) {
       video.srcObject = source.stream;
+      mediaRef.current = video;
+      void video.play().catch(() => undefined);
+    } else if (source.kind === 'video' && source.videoUrl) {
+      video.srcObject = null;
+      video.src = source.videoUrl;
+      video.loop = true;
       mediaRef.current = video;
       void video.play().catch(() => undefined);
     }
@@ -154,8 +163,8 @@ export function CapturePreview({ source, mediaRef, regions, onDraw, hint }: Capt
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
         >
-          {source.kind === 'desktop' ? (
-            <video ref={videoRef} muted playsInline style={S.media} />
+          {source.kind === 'desktop' || source.kind === 'video' ? (
+            <video ref={videoRef} muted playsInline loop={source.kind === 'video'} style={S.media} />
           ) : (
             <img
               ref={imgRef}
