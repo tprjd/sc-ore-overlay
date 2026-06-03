@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "setup:models": "node scripts/copy-models.mjs",
-    "predev": "npm run setup:models",
+    "predev": "npm run setup:models && node scripts/ensure-electron.mjs",
     "prebuild": "npm run setup:models",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run",
