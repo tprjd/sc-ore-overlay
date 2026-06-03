@@ -6,80 +6,20 @@ persistence, ore-quality detail box). See `CLAUDE.md` for the domain knowledge a
 and git history for how each shipped.
 
 Both v1 human-verification gates passed (2026-06-03) and **v1.0.0 shipped** (ship mining: capture
-→ OCR → match → live overlay, confirmed in-game). The **UI/UX** chapter then shipped as
-**v1.1.0** — Survey behind a feature flag, in-game overlay polish (confidence dot, score bar,
-hierarchy, signature echo, motion, compact mode), control-panel restructure into sub-tabs with
-shared design tokens, a first-run setup wizard, and a status bar + live overlay preview. See git
-history (commits tagged `U0`–`U4`).
+→ OCR → match → live overlay, confirmed in-game). The **UI/UX** chapter shipped as **v1.1.0**
+(Survey feature-flag, overlay polish, panel restructure, setup wizard, status bar + live preview;
+commits `U0`–`U4`). **v1.2.0** then dropped the low-value signature echo and added live OCR stats
+(confidence / latency / line count / raw text) to the status footer and, behind a toggle, the
+overlay card (commits `F1`–`F3`).
 
-What's left below: a small **footer/OCR-stats** cleanup (Part I), then the **deferred/optional**
-feature work (Part II). Read `CLAUDE.md` first — locked stack, guardrails, and matcher spec live
-there.
+What's left below: the **deferred/optional** feature work. Read `CLAUDE.md` first — locked stack,
+guardrails, and matcher spec live there.
 
-Current version: **1.1.0**. Part I lands as 1.2.x; Part II (other mining methods) is the next
-minor/major.
+Current version: **1.2.0**. Part I below (other mining methods) is the next minor/major.
 
 ---
 
-# Part I — Footer OCR stats (replace signature echo)
-
-The overlay's "signature echo" (`sig×n` under the ore name) is low-value noise — the deposit
-signature isn't actionable while mining. Drop it, and surface useful OCR diagnostics in the
-control-window status footer instead, so a bad read is obvious at a glance.
-
-## F1 — Remove the signature echo
-
-**Tasks**
-- Drop `OverlayConfig.showSignature` + its default (`src/shared/bridge.ts`).
-- Remove the sig rendering from `OverlayCard.tsx` — the primary block, the secondary rows, and the
-  compact inline case — plus the now-unused `signatureOf` helper and the `sig` / `secSig` styles.
-- Remove the "Echo signature under ore name" checkbox from the Overlay tab (`ScanView.tsx`).
-
-**Acceptance**
-- No signature line anywhere in the overlay or live preview; no `showSignature` references remain;
-  typecheck + tests green.
-
-## F2 — OCR stats in the status footer
-
-OCR already returns per-line mean confidence (`OcrLine.score`, 0..1, in `src/control/ocr.ts`); the
-capture loop just doesn't surface it. Thread it (plus timing) through and show it.
-
-**Tasks**
-- In `useSurveyCapture.ts`: time each `recognize()` call (ms) and capture the confidence of the
-  line `bestReading` picked, plus the detected-line count. Add them to `RegionDebug` (e.g. `score`,
-  `ms`, `lineCount`) and/or a small `readout.ocr` summary scoped to the RS region.
-- Extend the footer in `ScanView.tsx` with live OCR stats for the RS region: confidence %, OCR
-  latency (ms), detected-line count, and the raw detected text (truncated/ellipsized). Keep the
-  existing RS / state / rate; drop "last match" if space is tight (the match is already on the
-  overlay).
-- Colour the confidence with the existing green/amber/red bands so a poor read stands out.
-
-**Acceptance**
-- While scanning, the footer shows live OCR confidence + latency + raw text for the RS region; the
-  confidence colour tracks read quality; no per-scan wiki/network calls are added.
-
-## F3 — OCR stats on the overlay card
-
-Surface the same useful stats on the in-game overlay (and its live preview, since both render the
-shared `OverlayCard`) — taking over the slot the signature echo used to occupy, gated by a toggle
-so the overlay stays clean by default.
-
-**Tasks**
-- Add an `ocr?` field to `OverlayPayload` (`bridge.ts`): `{ score, ms, lineCount }` (+ optional raw
-  `text`) for the RS region. Populate it in `ScanView`'s `sendMatches` from the F2 readout data.
-- Add an `OverlayConfig.showOcrStats` toggle (reuse the Overlay-tab checkbox slot freed by F1;
-  default `false`).
-- In `OverlayCard.tsx`: when `showOcrStats` is on, render a small muted stats line (e.g.
-  `conf 0.98 · 42ms`) under the top candidate, confidence colour-banded as in F2. Pass the OCR
-  stats to the preview `OverlayCard` in `ScanView` too, so the preview matches.
-
-**Acceptance**
-- With the toggle on, the in-game overlay and the live preview both show the OCR confidence +
-  latency line; off by default; still click-through, idle-fade intact, no hot-path network.
-
----
-
-# Part II — Post-v1 roadmap
+# Part I — Post-v1 roadmap
 
 Bigger feature work beyond shipped v1. Not blocking.
 
