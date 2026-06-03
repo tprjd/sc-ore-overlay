@@ -23,16 +23,17 @@ export function Detail() {
   const resizeStart = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   // Auto-fit window height to the card content (width stays user-controlled).
   const contentRef = useRef<HTMLDivElement | null>(null);
+  const autoResize = config.autoResize;
   useEffect(() => {
     const el = contentRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
+    if (!autoResize || !el || typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(() => {
       const h = Math.ceil(el.getBoundingClientRect().height);
       if (h > 0) window.sco?.resizeDetail?.({ width: window.innerWidth, height: h });
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [autoResize]);
 
   useEffect(() => {
     const sco = window.sco;
@@ -96,7 +97,7 @@ export function Detail() {
     editing || (!hidden && config.showDetail && detail != null && (config.idleMs <= 0 || !idle));
 
   return (
-    <div ref={contentRef} style={{ ...S.root, opacity: visible ? 1 : 0 }}>
+    <div ref={contentRef} style={{ ...S.root, height: autoResize ? 'auto' : '100%', opacity: visible ? 1 : 0 }}>
       <DetailCard detail={detail} config={config} editing={editing} />
       {editing && (
         <div style={GRIP} onPointerDown={onGripDown} onPointerMove={onGripMove} onPointerUp={onGripUp} />

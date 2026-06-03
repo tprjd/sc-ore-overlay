@@ -24,16 +24,17 @@ export function Overlay() {
   // Auto-fit the window height to the card's content so the overlay is never
   // taller than what it shows. Width stays user-controlled (grip / drag).
   const contentRef = useRef<HTMLDivElement | null>(null);
+  const autoResize = config.autoResize;
   useEffect(() => {
     const el = contentRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
+    if (!autoResize || !el || typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(() => {
       const h = Math.ceil(el.getBoundingClientRect().height);
       if (h > 0) window.sco?.resizeOverlay?.({ width: window.innerWidth, height: h });
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [autoResize]);
 
   useEffect(() => {
     const sco = window.sco;
@@ -103,7 +104,7 @@ export function Overlay() {
   const visible = !sourceLost && (editing || (!hidden && hasContent && (config.idleMs <= 0 || !idle)));
 
   return (
-    <div ref={contentRef} style={{ ...S.root, opacity: visible ? 1 : 0 }}>
+    <div ref={contentRef} style={{ ...S.root, height: autoResize ? 'auto' : '100%', opacity: visible ? 1 : 0 }}>
       <OverlayCard reading={reading} candidates={candidates} settling={settling} ocr={ocr} status={status} config={config} editing={editing} />
       {editing && (
         <div style={GRIP} onPointerDown={onGripDown} onPointerMove={onGripMove} onPointerUp={onGripUp} />

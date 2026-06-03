@@ -880,6 +880,17 @@ export function ScanView({
               <label style={S.checkRow}>
                 <input
                   type="checkbox"
+                  checked={overlayConfig.autoResize}
+                  onChange={(e) => onOverlayConfigChange({ ...overlayConfig, autoResize: e.target.checked })}
+                />
+                <span style={S.checkLabel}>
+                  Auto-fit height to content
+                  <span style={S.checkHint}>On: each box is exactly as tall as its content (grip resizes width only). Off: fixed height — drag the grip to resize height too.</span>
+                </span>
+              </label>
+              <label style={S.checkRow}>
+                <input
+                  type="checkbox"
                   checked={overlayConfig.showPlaceholder}
                   onChange={(e) =>
                     onOverlayConfigChange({ ...overlayConfig, showPlaceholder: e.target.checked })

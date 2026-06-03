@@ -138,6 +138,11 @@ export interface OverlayConfig {
   showScan: boolean;
   /** Show an OCR stats line (confidence · latency · lines) on the overlay card. */
   showOcrStats: boolean;
+  /**
+   * Auto-fit each overlay window's height to its card content (default true). When
+   * off, the window keeps a fixed height and the edit-mode grip resizes height too.
+   */
+  autoResize: boolean;
   /** Scanned-rock card sort column (SCU / quality / percent). */
   scanSort: ScanSort;
   /** Scanned-rock card sort direction. */
@@ -159,6 +164,7 @@ export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
   showDetail: false,
   showScan: false,
   showOcrStats: false,
+  autoResize: true,
   scanSort: 'scu',
   scanSortDir: 'desc',
 };
