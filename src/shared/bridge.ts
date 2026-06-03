@@ -155,6 +155,12 @@ export interface AppSettings {
   };
   /** Survey Mode: persisted capture regions + their roles, and the scout name. */
   survey?: { regions?: SurveyRegionSetting[]; scout?: string };
+  /**
+   * Feature flags. `survey` gates the Survey tab — off by default so the
+   * default UI is just Mining. Flip via settings.json (or the DevTools console:
+   * `window.sco.setSettings({ features: { survey: true } })`) and relaunch.
+   */
+  features?: { survey?: boolean };
 }
 
 /** The typed, sandboxed API exposed to the renderer as `window.sco`. */

@@ -64,6 +64,9 @@ export function App() {
   const [overlayConfig, setOverlayConfig] = useState<OverlayConfig>(DEFAULT_OVERLAY_CONFIG);
   const [autoReconnect, setAutoReconnect] = useState(true);
   const [tab, setTab] = useState<Tab>('mining');
+  // Survey is gated behind a feature flag (off by default). Code stays; the tab
+  // just doesn't render unless enabled. See AppSettings.features.survey.
+  const [surveyEnabled, setSurveyEnabled] = useState(false);
   const [surveyRegions, setSurveyRegions] = useState<SurveyRegionSetting[]>([]);
   const [surveyScout, setSurveyScout] = useState<string>('');
   const lastSource = useRef<{ id?: string; name?: string }>({});
@@ -100,6 +103,7 @@ export function App() {
         setOverlayConfig({ ...DEFAULT_OVERLAY_CONFIG, ...(s.overlay ?? {}) });
         if (s.survey?.regions) setSurveyRegions(s.survey.regions);
         if (s.survey?.scout) setSurveyScout(s.survey.scout);
+        if (typeof s.features?.survey === 'boolean') setSurveyEnabled(s.features.survey);
         lastSource.current = { id: s.sourceId, name: s.sourceName };
       })
       .finally(finish);
@@ -180,24 +184,29 @@ export function App() {
       />
     );
   }
+  // With Survey gated off, Mining is the only view — force it and drop the
+  // tab bar entirely (no orphan single tab).
+  const activeTab: Tab = surveyEnabled ? tab : 'mining';
   return (
     <div style={shell.root}>
-      <nav style={shell.tabs}>
-        <button
-          style={{ ...shell.tab, ...(tab === 'mining' ? shell.tabActive : null) }}
-          onClick={() => setTab('mining')}
-        >
-          Mining
-        </button>
-        <button
-          style={{ ...shell.tab, ...(tab === 'survey' ? shell.tabActive : null) }}
-          onClick={() => setTab('survey')}
-        >
-          Survey
-        </button>
-      </nav>
+      {surveyEnabled && (
+        <nav style={shell.tabs}>
+          <button
+            style={{ ...shell.tab, ...(activeTab === 'mining' ? shell.tabActive : null) }}
+            onClick={() => setTab('mining')}
+          >
+            Mining
+          </button>
+          <button
+            style={{ ...shell.tab, ...(activeTab === 'survey' ? shell.tabActive : null) }}
+            onClick={() => setTab('survey')}
+          >
+            Survey
+          </button>
+        </nav>
+      )}
       <div style={shell.view}>
-        {tab === 'mining' ? (
+        {activeTab === 'mining' ? (
           <ScanView
             source={source}
             regions={miningRegions}
