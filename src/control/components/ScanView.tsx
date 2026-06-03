@@ -56,14 +56,13 @@ function sameRock(a: ScanResult, b: ScanResult): boolean {
   return true;
 }
 
-/** Settings-panel groups. */
-type PanelTab = 'match' | 'tuning' | 'overlay' | 'hotkeys' | 'regions';
+/** Settings-panel groups, ordered by pipeline stage: Capture → Match → Show. */
+type PanelTab = 'capture' | 'match' | 'overlay' | 'hotkeys';
 const PANEL_TABS: Array<[PanelTab, string]> = [
+  ['capture', 'Capture'],
   ['match', 'Match'],
-  ['tuning', 'Tuning'],
   ['overlay', 'Overlay'],
   ['hotkeys', 'Hotkeys'],
-  ['regions', 'Regions'],
 ];
 
 export interface ScanViewProps {
@@ -491,9 +490,33 @@ export function ScanView({
             </>
           )}
 
-          {panelTab === 'tuning' && (
+          {panelTab === 'capture' && (
             <>
-              <Section title="Capture">
+              <Section title="Source">
+                <div style={S.sourceRow}>
+                  <span style={S.badge}>{source.kind}</span>
+                  <span style={S.sourceName} title={source.label}>{source.label}</span>
+                  <button type="button" style={S.btn} onClick={onBack}>
+                    Change
+                  </button>
+                </div>
+                <p style={S.dim}>Switch the captured screen/window, or reconnect if the source was lost.</p>
+              </Section>
+
+              <Section title="Regions">
+                <RegionList
+                  regions={regions}
+                  onRegionsChange={onRegionsChange}
+                  activeId={activeId}
+                  onActiveChange={setActiveId}
+                  debug={readout.regions}
+                  roles={['rs', 'scanResult']}
+                  defaultScale={params.scale}
+                  hint="Box the RS number and the SCAN RESULTS panel."
+                />
+              </Section>
+
+              <Section title="Upscale">
                 <Slider
                   label="Upscale"
                   min={1}
@@ -502,7 +525,7 @@ export function ScanView({
                   onChange={(v) => set('scale', v)}
                   suffix="×"
                 />
-                <p style={S.dim}>Default upscale; override per region in the Regions tab.</p>
+                <p style={S.dim}>Global crop upscale before OCR; override per region above.</p>
               </Section>
 
               <Section title="Timing">
@@ -700,20 +723,6 @@ export function ScanView({
             </Section>
           )}
 
-          {panelTab === 'regions' && (
-            <Section title="Regions">
-              <RegionList
-                regions={regions}
-                onRegionsChange={onRegionsChange}
-                activeId={activeId}
-                onActiveChange={setActiveId}
-                debug={readout.regions}
-                roles={['rs', 'scanResult']}
-                defaultScale={params.scale}
-                hint="Box the RS number and the SCAN RESULTS panel."
-              />
-            </Section>
-          )}
           </div>
         </div>
       </div>
@@ -820,6 +829,8 @@ const S: Record<string, CSSProperties> = {
   checkHint: { fontSize: 11, opacity: 0.5 },
   btn: { background: C.btn, color: C.text, border: `1px solid ${C.borderStrong}`, borderRadius: R.md, padding: '6px 10px', cursor: 'pointer', fontSize: 13 },
   badge: { fontSize: 10, textTransform: 'uppercase', background: C.border, borderRadius: R.sm, padding: '2px 5px', opacity: 0.8 },
+  sourceRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 },
+  sourceName: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13 },
   selectRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 },
   select: { flex: 1, background: C.bg, color: C.text, border: `1px solid ${C.borderStrong}`, borderRadius: R.md, padding: '6px 8px', fontSize: 13 },
   candList: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 },
