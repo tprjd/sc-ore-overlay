@@ -10,6 +10,18 @@ import { DEFAULT_RECT, ROLE_META, newRegionId } from './roles';
 import type { RegionDebug } from '../useSurveyCapture';
 import type { SurveyRegionSetting, SurveyRole } from '../../shared/bridge';
 
+// Calibration verdict for a region: grey = not ready, red = read text but
+// didn't parse/match (or low confidence), amber = parsed but borderline, green
+// = parsed with high OCR confidence. PP-OCR runs high, so the bands are tight.
+// Tints the crop border + the confidence chip so a region is tunable at a glance.
+function verdictColor(dbg?: RegionDebug): string {
+  if (!dbg || dbg.score == null) return '#9fb3c8';
+  if (!dbg.ok) return '#f87171';
+  if (dbg.score >= 0.9) return '#6ee7b7';
+  if (dbg.score >= 0.7) return '#fbbf24';
+  return '#f87171';
+}
+
 export interface RegionListProps {
   regions: SurveyRegionSetting[];
   onRegionsChange: (regions: SurveyRegionSetting[]) => void;
@@ -62,6 +74,7 @@ export function RegionList({
         <div style={S.regionList}>
           {regions.map((r) => {
             const dbg = debug[r.id];
+            const verdict = verdictColor(dbg);
             return (
               <div
                 key={r.id}
@@ -120,7 +133,7 @@ export function RegionList({
                   </button>
                 </div>
                 <div style={S.regionBody}>
-                  <div style={S.cropWrap}>
+                  <div style={{ ...S.cropWrap, borderColor: verdict }}>
                     {dbg?.dataUrl ? (
                       <img src={dbg.dataUrl} alt="crop" style={S.crop} />
                     ) : (
@@ -128,8 +141,15 @@ export function RegionList({
                     )}
                   </div>
                   <div style={S.regionMeta}>
-                    <div style={{ ...S.parsed, color: dbg?.ok ? '#6ee7b7' : '#9fb3c8' }}>
-                      {dbg?.parsed ?? '—'}
+                    <div style={S.parsedRow}>
+                      <span style={{ ...S.parsed, color: dbg?.ok ? '#6ee7b7' : '#9fb3c8' }}>
+                        {dbg?.parsed ?? '—'}
+                      </span>
+                      {dbg?.score != null && (
+                        <span style={{ ...S.conf, color: verdict, borderColor: verdict }}>
+                          {Math.round(dbg.score * 100)}%
+                        </span>
+                      )}
                     </div>
                     <div style={S.raw}>{dbg?.rawText ?? '(waiting)'}</div>
                   </div>
@@ -162,6 +182,8 @@ const S: Record<string, CSSProperties> = {
   cropWrap: { minWidth: 96, minHeight: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000', border: '1px solid #2c323d', borderRadius: 4, padding: 2 },
   crop: { maxWidth: 140, maxHeight: 60, imageRendering: 'pixelated' },
   regionMeta: { flex: 1, minWidth: 0 },
-  parsed: { fontFamily: 'ui-monospace, monospace', fontSize: 13, wordBreak: 'break-all' },
+  parsedRow: { display: 'flex', alignItems: 'baseline', gap: 6, justifyContent: 'space-between' },
+  parsed: { fontFamily: 'ui-monospace, monospace', fontSize: 13, wordBreak: 'break-all', minWidth: 0 },
+  conf: { fontSize: 11, fontWeight: 600, fontVariantNumeric: 'tabular-nums', border: '1px solid', borderRadius: 4, padding: '0 5px', flex: '0 0 auto' },
   raw: { fontSize: 11, opacity: 0.5, marginTop: 2, wordBreak: 'break-all' },
 };
