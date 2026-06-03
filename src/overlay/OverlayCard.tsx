@@ -98,10 +98,19 @@ export function OverlayCard({ reading, candidates, settling = false, config, edi
     >
       <style>{KEYFRAMES}</style>
       {top && compact ? (
-        // Compact: top candidate only, on a single line.
+        // Compact: top candidate only, on a single line. No bar/hierarchy, but
+        // still honor the signature toggle (inline, so it stays one line).
         <div key={`${top.name}-${top.noise ?? 'n'}-${top.loose ? 'L' : 'S'}`} style={{ ...S.row, animation: 'scoEnter 160ms ease-out' }}>
           {dot}
-          <span style={{ ...S.name, fontSize: sz.font }}>{top.name}</span>
+          <span style={{ ...S.name, fontSize: sz.font }}>
+            {top.name}
+            {config.showSignature && topSig != null && (
+              <span style={S.secSig}>
+                {' '}
+                {topSig.toLocaleString()}×{top.nodes}
+              </span>
+            )}
+          </span>
           <span style={{ ...S.nodes, fontSize: sz.font }}>×{top.nodes}</span>
         </div>
       ) : top ? (
