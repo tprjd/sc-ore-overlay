@@ -158,8 +158,6 @@ export function ScanView({
     }
   }, [paused]);
 
-  // Last accepted match, kept after the current reading clears, for the status bar.
-  const [lastMatch, setLastMatch] = useState<{ text: string; at: number } | null>(null);
 
   const systemGroups = useMemo(() => groupLocations(table), [table]);
   const matches = useMemo(
@@ -189,11 +187,6 @@ export function ScanView({
       })),
     [matches],
   );
-
-  useEffect(() => {
-    const top = matches[0];
-    if (top) setLastMatch({ text: `${top.name} ×${top.nodes}`, at: Date.now() });
-  }, [matches]);
 
   // Known-ore vocabulary used to snap OCR'd material names to their nearest
   // legal table entry. The HUD font + tag leakage routinely turns "Agricium"
@@ -267,7 +260,10 @@ export function ScanView({
   // Status-bar derived state.
   const voterState = paused ? 'paused' : settling ? 'settling' : stableRs != null ? 'locked' : 'idle';
   const stateColor = voterState === 'locked' ? C.green : voterState === 'settling' ? C.amber : '#9fb3c8';
-  const matchAgo = lastMatch ? Math.max(0, Math.round((Date.now() - lastMatch.at) / 1000)) : null;
+  const ocr = readout.ocr;
+  const confPct = ocr ? Math.round(ocr.score * 100) : null;
+  // PP-OCR scores run high; treat <90% as worth noticing, <70% as bad.
+  const confColor = confPct == null ? '#9fb3c8' : confPct >= 90 ? C.green : confPct >= 70 ? C.amber : '#f87171';
 
   return (
     <div style={S.page}>
@@ -661,10 +657,18 @@ export function ScanView({
           <span style={S.statusKey}>rate</span>
           <span style={S.statusVal}>{paused ? '—' : tickRate > 0 ? `${tickRate.toFixed(1)}/s` : '…'}</span>
         </span>
-        <span style={{ ...S.statusItem, marginLeft: 'auto', minWidth: 0 }}>
-          <span style={S.statusKey}>last</span>
-          <span style={{ ...S.statusVal, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {lastMatch ? `${lastMatch.text}${matchAgo != null ? ` · ${matchAgo}s` : ''}` : '—'}
+        <span style={S.statusItem} title="RS OCR confidence (best detected line)">
+          <span style={S.statusKey}>conf</span>
+          <span style={{ ...S.statusVal, color: confColor }}>{confPct != null ? `${confPct}%` : '—'}</span>
+        </span>
+        <span style={S.statusItem} title="OCR latency · detected line count">
+          <span style={S.statusKey}>ocr</span>
+          <span style={S.statusVal}>{ocr ? `${ocr.ms}ms · ${ocr.lineCount}L` : '—'}</span>
+        </span>
+        <span style={{ ...S.statusItem, marginLeft: 'auto', minWidth: 0 }} title={ocr?.rawText || ''}>
+          <span style={S.statusKey}>raw</span>
+          <span style={{ ...S.statusVal, fontWeight: 400, opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {ocr?.rawText || '—'}
           </span>
         </span>
       </footer>

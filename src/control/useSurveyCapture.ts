@@ -34,6 +34,24 @@ export interface RegionDebug {
   rawText: string;
   parsed: string;
   ok: boolean;
+  /** OCR mean confidence of the best detected line (0..1). */
+  score?: number;
+  /** recognize() wall time in ms (0 on a cache-skipped frame). */
+  ms?: number;
+  /** Number of text lines PP-OCR detected in the crop. */
+  lineCount?: number;
+}
+
+/** OCR stats for the RS region, surfaced in the status footer + overlay. */
+export interface OcrStat {
+  /** Best detected-line confidence (0..1). */
+  score: number;
+  /** recognize() wall time in ms. */
+  ms: number;
+  /** Detected text-line count. */
+  lineCount: number;
+  /** Raw detected text (joined lines). */
+  rawText: string;
 }
 
 /** Aggregated live readout across all roles. */
@@ -45,6 +63,8 @@ export interface SurveyReadout {
   system: string | null;
   scan: ScanResult | null;
   regions: Record<string, RegionDebug>;
+  /** OCR stats for the RS region (null until one is read). */
+  ocr: OcrStat | null;
   error: string | null;
 }
 
@@ -56,6 +76,7 @@ const EMPTY: SurveyReadout = {
   system: null,
   scan: null,
   regions: {},
+  ocr: null,
   error: null,
 };
 
@@ -69,6 +90,10 @@ interface Cached {
   pos: { zone: string; pos: Vec3 } | null;
   system: string | null;
   scan: ScanResult | null;
+  /** OCR stats from the last real recognize() (carried across cache hits). */
+  score: number;
+  ms: number;
+  lineCount: number;
 }
 
 /** Format a position vector in km for the debug line (full precision). */
@@ -118,10 +143,14 @@ export function useSurveyCapture(
             next.set(reg.id, { ...prev, dataUrl: pre.dataUrl });
             continue;
           }
+          const t0 = performance.now();
           const lines = await recognize(pre.dataUrl);
+          const ms = Math.round(performance.now() - t0);
           if (cancelled) return;
           const texts = lines.map((l) => l.text);
           const rawText = texts.length ? texts.join(' | ') : '(no text)';
+          const score = lines.reduce((m, l) => Math.max(m, l.score), 0);
+          const lineCount = lines.length;
 
           let rs: number | null = null;
           let pos: { zone: string; pos: Vec3 } | null = null;
@@ -138,7 +167,7 @@ export function useSurveyCapture(
           } else {
             system = parseSystemName(texts.join(' '));
           }
-          next.set(reg.id, { hash, role: reg.role, dataUrl: pre.dataUrl, rawText, rs, pos, system, scan });
+          next.set(reg.id, { hash, role: reg.role, dataUrl: pre.dataUrl, rawText, rs, pos, system, scan, score, ms, lineCount });
         }
         cache.current = next;
         if (cancelled) return;
@@ -148,6 +177,7 @@ export function useSurveyCapture(
         let posZone: string | null = null;
         let system: string | null = null;
         let scan: ScanResult | null = null;
+        let ocr: OcrStat | null = null;
         const regionsDebug: Record<string, RegionDebug> = {};
         for (const reg of current) {
           const c = next.get(reg.id);
@@ -158,6 +188,8 @@ export function useSurveyCapture(
           let parsed = '—';
           let ok = false;
           if (c.role === 'rs') {
+            // Surface RS OCR stats whether or not the reading matched an ore.
+            ocr = { score: c.score, ms: c.ms, lineCount: c.lineCount, rawText: c.rawText };
             if (c.rs != null) {
               rs = c.rs;
               parsed = String(c.rs);
@@ -181,10 +213,10 @@ export function useSurveyCapture(
             parsed = c.system;
             ok = true;
           }
-          regionsDebug[reg.id] = { role: c.role, dataUrl: c.dataUrl, rawText: c.rawText, parsed, ok };
+          regionsDebug[reg.id] = { role: c.role, dataUrl: c.dataUrl, rawText: c.rawText, parsed, ok, score: c.score, ms: c.ms, lineCount: c.lineCount };
         }
         const candidates = rs != null ? matchOre(rs, table, { method: 'Ship' }) : [];
-        setState({ rs, candidates, pos, posZone, system, scan, regions: regionsDebug, error: null });
+        setState({ rs, candidates, pos, posZone, system, scan, regions: regionsDebug, ocr, error: null });
       } catch (err) {
         if (!cancelled) {
           setState((s) => ({ ...s, error: err instanceof Error ? err.message : String(err) }));
