@@ -17,6 +17,7 @@ import { RegionList } from './RegionList';
 import { ROLE_META } from './roles';
 import { Section, Slider, NoiseEditor, KeyCapture, HOTKEY_ROWS } from './controls';
 import { C, R } from './tokens';
+import { OverlayCard } from '../../overlay/OverlayCard';
 import type { PickedSource } from './SourcePicker';
 import { useSurveyCapture } from '../useSurveyCapture';
 import type { ActiveSurveyRegion } from '../useSurveyCapture';
@@ -132,11 +133,30 @@ export function ScanView({
   // (it latches `stable` to the candidate exactly at quorum, so an in-progress
   // candidate that isn't yet `stable` means the display may be about to change).
   const [settling, setSettling] = useState(false);
+  // Measured capture cadence for the status bar — a rolling rate over the last
+  // few ticks (the loop targets ~1–2/s; actual depends on OCR cost).
+  const tickTimes = useRef<number[]>([]);
+  const [tickRate, setTickRate] = useState(0);
   useEffect(() => {
     const s = voter.current.push(readout.rs);
     setStableRs(s);
     setSettling(voter.current.candidate != null && voter.current.candidate !== s);
+    const now = performance.now();
+    const t = tickTimes.current;
+    t.push(now);
+    if (t.length > 8) t.shift();
+    setTickRate(t.length >= 2 ? (t.length - 1) / ((t[t.length - 1] - t[0]) / 1000) : 0);
   }, [readout]);
+  // Clear the rate window when paused so resuming doesn't show a stale gap.
+  useEffect(() => {
+    if (paused) {
+      tickTimes.current = [];
+      setTickRate(0);
+    }
+  }, [paused]);
+
+  // Last accepted match, kept after the current reading clears, for the status bar.
+  const [lastMatch, setLastMatch] = useState<{ text: string; at: number } | null>(null);
 
   const systemGroups = useMemo(() => groupLocations(table), [table]);
   const matches = useMemo(
@@ -152,6 +172,25 @@ export function ScanView({
         : [],
     [stableRs, table, location, noiseSignatures, enforceCluster],
   );
+
+  // Overlay-shaped candidates — shared by the live preview and the IPC payload
+  // so both render identically.
+  const overlayCandidates = useMemo(
+    () =>
+      matches.map((c) => ({
+        name: c.name,
+        nodes: c.nodes,
+        score: c.score,
+        noise: c.noise ?? null,
+        loose: c.loose ?? false,
+      })),
+    [matches],
+  );
+
+  useEffect(() => {
+    const top = matches[0];
+    if (top) setLastMatch({ text: `${top.name} ×${top.nodes}`, at: Date.now() });
+  }, [matches]);
 
   // Known-ore vocabulary used to snap OCR'd material names to their nearest
   // legal table entry. The HUD font + tag leakage routinely turns "Agricium"
@@ -190,18 +229,12 @@ export function ScanView({
     const detail = top ? getQualityDetail(table, top.name, top.signature, location) : null;
     window.sco?.sendMatches?.({
       reading: stableRs,
-      candidates: matches.map((c) => ({
-        name: c.name,
-        nodes: c.nodes,
-        score: c.score,
-        noise: c.noise ?? null,
-        loose: c.loose ?? false,
-      })),
+      candidates: overlayCandidates,
       detail,
       scan: frozenScan,
       settling,
     });
-  }, [stableRs, matches, table, location, frozenScan, settling]);
+  }, [stableRs, matches, overlayCandidates, table, location, frozenScan, settling]);
 
   // Global-hotkey commands relayed from the main process. Recalibrate clears
   // both the regions *and* the frozen scan so the next rock takes over.
@@ -227,6 +260,11 @@ export function ScanView({
   };
   const set = <K extends keyof LoopParams>(key: K, val: LoopParams[K]): void =>
     onParamsChange({ ...params, [key]: val });
+
+  // Status-bar derived state.
+  const voterState = paused ? 'paused' : settling ? 'settling' : stableRs != null ? 'locked' : 'idle';
+  const stateColor = voterState === 'locked' ? C.green : voterState === 'settling' ? C.amber : '#9fb3c8';
+  const matchAgo = lastMatch ? Math.max(0, Math.round((Date.now() - lastMatch.at) / 1000)) : null;
 
   return (
     <div style={S.page}>
@@ -438,6 +476,18 @@ export function ScanView({
           )}
 
           {panelTab === 'overlay' && (
+            <>
+            <div style={S.previewWrap}>
+              <div style={S.previewLabel}>Live preview</div>
+              <div style={S.previewStage}>
+                <OverlayCard
+                  reading={stableRs}
+                  candidates={overlayCandidates}
+                  settling={settling}
+                  config={overlayConfig}
+                />
+              </div>
+            </div>
             <Section title="Overlay">
               <label style={S.selectRow}>
                 <span style={S.sliderLabel}>Fade after</span>
@@ -566,6 +616,7 @@ export function ScanView({
               </label>
               <p style={S.dim}>In edit mode (Alt+Shift+E): drag to move, drag the corner grip to resize.</p>
             </Section>
+            </>
           )}
 
           {panelTab === 'hotkeys' && (
@@ -600,6 +651,27 @@ export function ScanView({
           )}
         </div>
       </div>
+
+      <footer style={S.statusbar}>
+        <span style={S.statusItem}>
+          <span style={S.statusKey}>RS</span>
+          <span style={S.statusVal}>{stableRs != null ? stableRs.toLocaleString() : '—'}</span>
+        </span>
+        <span style={S.statusItem}>
+          <span style={{ ...S.stateDot, background: stateColor }} />
+          <span style={{ color: stateColor }}>{voterState}</span>
+        </span>
+        <span style={S.statusItem}>
+          <span style={S.statusKey}>rate</span>
+          <span style={S.statusVal}>{paused ? '—' : tickRate > 0 ? `${tickRate.toFixed(1)}/s` : '…'}</span>
+        </span>
+        <span style={{ ...S.statusItem, marginLeft: 'auto', minWidth: 0 }}>
+          <span style={S.statusKey}>last</span>
+          <span style={{ ...S.statusVal, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {lastMatch ? `${lastMatch.text}${matchAgo != null ? ` · ${matchAgo}s` : ''}` : '—'}
+          </span>
+        </span>
+      </footer>
     </div>
   );
 }
@@ -619,6 +691,38 @@ const S: Record<string, CSSProperties> = {
   subtabs: { display: 'flex', gap: 2, marginBottom: 14, borderBottom: `1px solid ${C.border}` },
   subtab: { flex: 1, background: 'none', color: C.text, opacity: 0.5, border: 'none', borderBottom: '2px solid transparent', padding: '6px 4px', cursor: 'pointer', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4 },
   subtabActive: { opacity: 1, color: C.accent, borderBottom: `2px solid ${C.accent}` },
+  statusbar: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 16,
+    padding: '6px 14px',
+    borderTop: `1px solid ${C.border}`,
+    background: C.surfaceAlt,
+    fontSize: 11,
+    fontVariantNumeric: 'tabular-nums',
+  },
+  statusItem: { display: 'flex', alignItems: 'center', gap: 5 },
+  statusKey: { opacity: 0.5, textTransform: 'uppercase', letterSpacing: 0.4 },
+  statusVal: { color: C.text, fontWeight: 600 },
+  stateDot: { width: 7, height: 7, borderRadius: '50%', flex: '0 0 auto' },
+  previewWrap: { marginBottom: 14 },
+  previewLabel: {
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    opacity: 0.65,
+    fontWeight: 600,
+    marginBottom: 6,
+  },
+  previewStage: {
+    height: 96,
+    borderRadius: R.lg,
+    overflow: 'hidden',
+    border: `1px solid ${C.border}`,
+    // Checkerboard backdrop so the card's translucency reads like it would over
+    // the game (the overlay is transparent in-game).
+    background: 'repeating-conic-gradient(#3a3f4b 0% 25%, #2b2f38 0% 50%) 0 / 18px 18px',
+  },
   dim: { opacity: 0.45, fontSize: 12 },
   sliderLabel: { width: 82, fontSize: 12, opacity: 0.8 },
   checkRow: { display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, marginBottom: 10, lineHeight: 1.35 },
