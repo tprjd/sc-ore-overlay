@@ -191,6 +191,13 @@ export interface AppSettings {
   /** True once the first-run setup wizard has been completed or skipped. */
   setupComplete?: boolean;
   /**
+   * OCR execution backend. 'wasm' (CPU, default) never touches the GPU, so it
+   * can't be starved by the overlay window's compositor. 'webgpu' is faster
+   * but fights the visible overlay for the GPU on some setups (OCR latency
+   * spikes into the seconds). Set via settings.json / DevTools and relaunch.
+   */
+  ocrBackend?: 'wasm' | 'webgpu';
+  /**
    * Feature flags. `survey` gates the Survey tab — off by default so the
    * default UI is just Mining. Flip via settings.json (or the DevTools console:
    * `window.sco.setSettings({ features: { survey: true } })`) and relaunch.

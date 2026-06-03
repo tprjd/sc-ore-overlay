@@ -4,6 +4,10 @@
 // worker now. The worker serializes jobs, so concurrent callers (the live loop
 // and image scans) can't corrupt a shared ORT session.
 
+/** OCR execution backend. WASM = CPU (default, never contends with the GPU);
+ *  WebGPU = faster but fights the overlay window's compositor for the GPU. */
+export type OcrBackend = 'wasm' | 'webgpu';
+
 /** One detected text line and its mean confidence (0..1). */
 export interface OcrLine {
   text: string;
@@ -39,9 +43,18 @@ function getWorker(): Worker {
   return worker;
 }
 
+/**
+ * Select the OCR backend (and warm the worker). Must be called before the first
+ * `recognize()` — once the engine is built the choice is fixed. Defaults to
+ * WASM (CPU) so OCR never contends with the overlay's GPU compositor.
+ */
+export function setOcrBackend(backend: OcrBackend): void {
+  getWorker().postMessage({ type: 'init', backend });
+}
+
 /** Spawn/warm the OCR worker (and begin loading models) ahead of first use. */
-export function loadOcr(): void {
-  getWorker();
+export function loadOcr(backend: OcrBackend = 'wasm'): void {
+  setOcrBackend(backend);
 }
 
 /** Detect + recognize all text lines in a crop given as a PNG data URL. */
@@ -50,6 +63,6 @@ export function recognize(imageDataUrl: string): Promise<OcrLine[]> {
   const id = ++seq;
   return new Promise<OcrLine[]>((resolve, reject) => {
     pending.set(id, { resolve, reject });
-    w.postMessage({ id, dataUrl: imageDataUrl });
+    w.postMessage({ type: 'recognize', id, dataUrl: imageDataUrl });
   });
 }

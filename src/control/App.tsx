@@ -14,6 +14,7 @@ import { newRegionId } from './components/roles';
 import type { LoopParams } from './useCaptureLoop';
 import { loadSignatureTable } from '../core';
 import type { SignatureTable } from '../core';
+import { setOcrBackend } from './ocr';
 import { DEFAULT_HOTKEYS, DEFAULT_OVERLAY_CONFIG } from '../shared/bridge';
 import type {
   HotkeyAction,
@@ -83,6 +84,7 @@ export function App() {
     };
     const pending = window.sco?.getSettings?.();
     if (!pending) {
+      setOcrBackend('wasm'); // no persistence → safe default
       setShowWizard(true); // no persistence → treat as a fresh first run
       finish();
       return;
@@ -90,6 +92,9 @@ export function App() {
     void pending
       .then((s) => {
         if (!alive || !s) return;
+        // Pick the OCR backend before any capture starts (default WASM/CPU so
+        // it can't be starved by the overlay's GPU compositor).
+        setOcrBackend(s.ocrBackend ?? 'wasm');
         if (s.mining?.regions) setMiningRegions(s.mining.regions);
         else if (s.region) {
           // Migrate the legacy single RS region to the new region list.

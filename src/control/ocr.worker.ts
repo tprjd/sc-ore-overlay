@@ -79,41 +79,52 @@ interface Engine {
 }
 type CreateOpts = Parameters<typeof Ocr.create>[0];
 
-// Prefer the GPU (WebGPU EP) — large speedup on the real target where a GPU is
-// always present — and fall back to WASM if WebGPU can't initialize (e.g. dev on
-// WSL with hardware acceleration disabled).
+// Default to WASM (CPU): it's the documented backend and it never touches the
+// GPU, so it can't contend with the overlay window's compositor (a visible
+// always-on-top overlay over a moving background otherwise starves the WebGPU
+// execution provider — OCR latency spikes into the seconds and freezes). The
+// renderer can opt into WebGPU via an 'init' message before the first job.
+let preferred: 'wasm' | 'webgpu' = 'wasm';
+
 async function createEngine(): Promise<Engine> {
-  try {
-    const engine = await Ocr.create({
-      models: MODELS,
-      onnxOptions: { executionProviders: ['webgpu'] },
-    } as CreateOpts);
-    console.info('[ocr] backend: webgpu');
-    return engine as Engine;
-  } catch (err) {
-    console.warn('[ocr] webgpu unavailable, falling back to wasm:', err);
-    const engine = await Ocr.create({ models: MODELS });
-    console.info('[ocr] backend: wasm');
-    return engine as Engine;
+  if (preferred === 'webgpu') {
+    try {
+      const engine = await Ocr.create({
+        models: MODELS,
+        onnxOptions: { executionProviders: ['webgpu'] },
+      } as CreateOpts);
+      console.info('[ocr] backend: webgpu');
+      return engine as Engine;
+    } catch (err) {
+      console.warn('[ocr] webgpu unavailable, falling back to wasm:', err);
+    }
   }
+  const engine = await Ocr.create({ models: MODELS });
+  console.info('[ocr] backend: wasm');
+  return engine as Engine;
 }
 
 let enginePromise: Promise<Engine> | null = null;
 const getEngine = (): Promise<Engine> => (enginePromise ??= createEngine());
 
-interface Req {
-  id: number;
-  dataUrl: string;
-}
+type Msg =
+  | { type: 'init'; backend: 'wasm' | 'webgpu' }
+  | { type: 'recognize'; id: number; dataUrl: string };
 const ctx = self as unknown as {
-  onmessage: ((e: MessageEvent<Req>) => void) | null;
+  onmessage: ((e: MessageEvent<Msg>) => void) | null;
   postMessage: (m: unknown) => void;
 };
 
 // Serialize jobs: one ORT session can't run concurrently.
 let chain: Promise<void> = Promise.resolve();
-ctx.onmessage = (e: MessageEvent<Req>): void => {
-  const { id, dataUrl } = e.data;
+ctx.onmessage = (e: MessageEvent<Msg>): void => {
+  const msg = e.data;
+  if (msg.type === 'init') {
+    // Backend can only be chosen before the engine is built.
+    if (!enginePromise) preferred = msg.backend;
+    return;
+  }
+  const { id, dataUrl } = msg;
   chain = chain.then(async () => {
     try {
       const ocr = await getEngine();
