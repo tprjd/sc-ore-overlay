@@ -167,6 +167,13 @@ export function App() {
     window.sco?.setOverlayConfig?.(cfg);
   };
 
+  // Config can also change from the overlay side (e.g. sorting the scanned-rock
+  // card in edit mode); main echoes every change here. Update state only — do
+  // NOT re-send, or it would loop.
+  useEffect(() => {
+    return window.sco?.onOverlayConfig?.((cfg) => setOverlayConfig(cfg));
+  }, []);
+
   const handleBack = (): void => {
     setAutoReconnect(false); // explicit "← Sources" — don't auto-reconnect again
     source?.stream?.getTracks().forEach((t) => t.stop());

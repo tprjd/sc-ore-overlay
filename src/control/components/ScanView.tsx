@@ -576,7 +576,11 @@ export function ScanView({
                 )}
                 {overlayConfig.showScan && (
                   <div style={S.previewBoxTall}>
-                    <ScanCard scan={frozenScan} config={overlayConfig} />
+                    <ScanCard
+                      scan={frozenScan}
+                      config={overlayConfig}
+                      onSortChange={(scanSort) => onOverlayConfigChange({ ...overlayConfig, scanSort })}
+                    />
                   </div>
                 )}
               </div>

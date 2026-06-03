@@ -65,6 +65,9 @@ export type OverlayCommand = 'pause' | 'recalibrate';
 /** Overlay text-size preset. */
 export type OverlayScale = 'compact' | 'normal' | 'large';
 
+/** Scanned-rock composition sort column. */
+export type ScanSort = 'scu' | 'quality' | 'percent';
+
 /** Live-tunable overlay appearance. */
 export interface OverlayConfig {
   /** Idle fade-out delay in ms; 0 = never fade. */
@@ -90,6 +93,8 @@ export interface OverlayConfig {
   showScan: boolean;
   /** Show an OCR stats line (confidence · latency · lines) on the overlay card. */
   showOcrStats: boolean;
+  /** Scanned-rock card sort column (SCU / quality / percent). */
+  scanSort: ScanSort;
 }
 
 /** Default overlay appearance. */
@@ -106,6 +111,7 @@ export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
   showDetail: false,
   showScan: false,
   showOcrStats: false,
+  scanSort: 'scu',
 };
 
 /** A rebindable global-hotkey action. */

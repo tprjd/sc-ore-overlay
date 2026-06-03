@@ -8,7 +8,7 @@
 // bands, dimmed inert rows.
 
 import type { CSSProperties } from 'react';
-import type { OverlayConfig } from '../shared/bridge';
+import type { OverlayConfig, ScanSort } from '../shared/bridge';
 import { cleanMaterial } from '../core';
 import type { ScanResult, ScanComposition } from '../core';
 
@@ -60,28 +60,49 @@ function fmtNum(n: number | undefined, digits = 0): string {
 
 // In edit mode the whole card is a drag region. Not typed on CSSProperties.
 const DRAG_REGION = { WebkitAppRegion: 'drag' } as unknown as CSSProperties;
+// Header cells opt out of the drag region so a click sorts (not moves the window).
+const NO_DRAG = { WebkitAppRegion: 'no-drag' } as unknown as CSSProperties;
 
 export interface ScanCardProps {
   scan: ScanResult | null;
   config: OverlayConfig;
   /** Real window only: dashed border + drag region. Always false in preview. */
   editing?: boolean;
+  /** When set, column headers become clickable and call this with the column. */
+  onSortChange?: (sort: ScanSort) => void;
 }
 
-export function ScanCard({ scan, config, editing = false }: ScanCardProps) {
+export function ScanCard({ scan, config, editing = false, onSortChange }: ScanCardProps) {
   const cardBg = hexToRgba(config.bgColor, config.bgOpacity);
+  const sort = config.scanSort ?? 'scu';
+  const metric = (r: ScanComposition): number =>
+    sort === 'quality' ? r.quality : sort === 'percent' ? r.percent : r.scu ?? r.percent;
 
-  // Sort rows: inert always last; otherwise SCU desc (fallback percent).
+  // Sort rows: inert always last; otherwise by the chosen column, desc.
   const rows: ScanComposition[] = scan
     ? [...scan.composition].sort((a, b) => {
         const aI = isInert(a.material) ? 1 : 0;
         const bI = isInert(b.material) ? 1 : 0;
         if (aI !== bI) return aI - bI;
-        const aS = a.scu ?? a.percent;
-        const bS = b.scu ?? b.percent;
-        return bS - aS;
+        return metric(b) - metric(a);
       })
     : [];
+
+  const sortable = !!onSortChange;
+  const headCell = (col: ScanSort, label: string, style: CSSProperties) => (
+    <span
+      style={{
+        ...style,
+        ...(sortable ? { ...NO_DRAG, cursor: 'pointer' } : null),
+        ...(sort === col ? { color: COLORS.accent, opacity: 1 } : null),
+      }}
+      onClick={sortable ? () => onSortChange?.(col) : undefined}
+      title={sortable ? `Sort by ${label}` : undefined}
+    >
+      {label}
+      {sort === col ? ' ▾' : ''}
+    </span>
+  );
 
   const useful = rows
     .filter((r) => !isInert(r.material))
@@ -127,10 +148,10 @@ export function ScanCard({ scan, config, editing = false }: ScanCardProps) {
             </span>
           </div>
           <div style={S.head}>
-            <span style={S.colPct}>%</span>
+            {headCell('percent', '%', S.colPct)}
             <span style={S.colMat}>content</span>
-            <span style={S.colQual}>qual</span>
-            <span style={S.colScu}>SCU</span>
+            {headCell('quality', 'qual', S.colQual)}
+            {headCell('scu', 'SCU', S.colScu)}
           </div>
           {rows.map((c, i) => {
             const inert = isInert(c.material);

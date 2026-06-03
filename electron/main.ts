@@ -85,7 +85,11 @@ ipcMain.on('sco:set-settings', (_e: IpcMainEvent, patch: Partial<AppSettings>) =
 });
 ipcMain.on('sco:overlay-config', (_e: IpcMainEvent, config: OverlayConfig) => {
   writeSettings({ ...readSettings(), overlay: config });
-  for (const w of overlayWindows()) w.webContents.send('sco:overlay-config', config);
+  // Broadcast to the overlay boxes AND the control window: the control holds
+  // the canonical config in React state, and a change can originate from the
+  // overlay itself (e.g. sorting the scanned-rock card in edit mode), so it
+  // must hear back to stay in sync.
+  for (const w of [controlWin, ...overlayWindows()]) w?.webContents.send('sco:overlay-config', config);
 });
 ipcMain.on('sco:overlay-resize', (_e: IpcMainEvent, size: { width: number; height: number }) => {
   overlayWin?.setSize(Math.max(140, Math.round(size.width)), Math.max(70, Math.round(size.height)));
