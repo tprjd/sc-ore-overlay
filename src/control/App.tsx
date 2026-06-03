@@ -9,6 +9,7 @@ import { SourcePicker } from './components/SourcePicker';
 import type { PickedSource } from './components/SourcePicker';
 import { ScanView } from './components/ScanView';
 import { SurveyView } from './components/SurveyView';
+import { SetupWizard } from './components/SetupWizard';
 import { newRegionId } from './components/roles';
 import type { LoopParams } from './useCaptureLoop';
 import { loadSignatureTable } from '../core';
@@ -69,6 +70,9 @@ export function App() {
   const [surveyEnabled, setSurveyEnabled] = useState(false);
   const [surveyRegions, setSurveyRegions] = useState<SurveyRegionSetting[]>([]);
   const [surveyScout, setSurveyScout] = useState<string>('');
+  // First-run wizard: shown (after the source pick) until setup is completed or
+  // skipped. Decided once on restore; re-openable from the Mining panel.
+  const [showWizard, setShowWizard] = useState(false);
   const lastSource = useRef<{ id?: string; name?: string }>({});
 
   // Restore persisted settings once (Electron userData).
@@ -79,6 +83,7 @@ export function App() {
     };
     const pending = window.sco?.getSettings?.();
     if (!pending) {
+      setShowWizard(true); // no persistence → treat as a fresh first run
       finish();
       return;
     }
@@ -104,6 +109,10 @@ export function App() {
         if (s.survey?.regions) setSurveyRegions(s.survey.regions);
         if (s.survey?.scout) setSurveyScout(s.survey.scout);
         if (typeof s.features?.survey === 'boolean') setSurveyEnabled(s.features.survey);
+        // Show the wizard only for a genuinely fresh profile: not yet completed
+        // and no existing regions (so current users skip straight to the panel).
+        const hasRegions = !!(s.mining?.regions?.length || s.region);
+        setShowWizard(!(s.setupComplete === true || hasRegions));
         lastSource.current = { id: s.sourceId, name: s.sourceName };
       })
       .finally(finish);
@@ -165,6 +174,20 @@ export function App() {
     setSource(null);
   };
 
+  const completeSetup = (region: SurveyRegionSetting, loc: string | null): void => {
+    // Replace just the RS region; keep any other regions (e.g. scanResult) the
+    // user added, so re-running setup isn't destructive.
+    setMiningRegions((prev) => [region, ...prev.filter((r) => r.role !== 'rs')]);
+    setLocation(loc);
+    setShowWizard(false);
+    window.sco?.setSettings?.({ setupComplete: true });
+  };
+
+  const skipSetup = (): void => {
+    setShowWizard(false);
+    window.sco?.setSettings?.({ setupComplete: true });
+  };
+
   const table = tables[activePatch] ?? tables[patches[0] ?? ''];
 
   if (!loaded) return null;
@@ -181,6 +204,17 @@ export function App() {
       <SourcePicker
         onPick={handlePick}
         lastSourceId={autoReconnect ? lastSource.current.id : undefined}
+      />
+    );
+  }
+  if (showWizard) {
+    return (
+      <SetupWizard
+        source={source}
+        table={table}
+        onComplete={completeSetup}
+        onSkip={skipSetup}
+        onBack={handleBack}
       />
     );
   }
@@ -229,6 +263,7 @@ export function App() {
             overlayConfig={overlayConfig}
             onOverlayConfigChange={handleOverlayConfig}
             onBack={handleBack}
+            onSetup={() => setShowWizard(true)}
           />
         ) : (
           <SurveyView

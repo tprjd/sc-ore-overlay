@@ -86,6 +86,8 @@ export interface ScanViewProps {
   overlayConfig: OverlayConfig;
   onOverlayConfigChange: (config: OverlayConfig) => void;
   onBack: () => void;
+  /** Re-open the first-run setup wizard. */
+  onSetup: () => void;
 }
 
 export function ScanView({
@@ -110,6 +112,7 @@ export function ScanView({
   overlayConfig,
   onOverlayConfigChange,
   onBack,
+  onSetup,
 }: ScanViewProps) {
   const mediaRef = useRef<DrawableSource | null>(null);
   const [paused, setPaused] = useState(false);
@@ -275,6 +278,9 @@ export function ScanView({
           {source.label}
         </span>
         <span style={S.spacer} />
+        <button style={S.btn} onClick={onSetup} title="Re-run the guided setup (source, region, location)">
+          Setup
+        </button>
         <button style={S.btn} onClick={() => setPaused((p) => !p)}>
           {paused ? 'Resume' : 'Pause'}
         </button>

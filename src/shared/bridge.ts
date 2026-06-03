@@ -164,6 +164,8 @@ export interface AppSettings {
   };
   /** Survey Mode: persisted capture regions + their roles, and the scout name. */
   survey?: { regions?: SurveyRegionSetting[]; scout?: string };
+  /** True once the first-run setup wizard has been completed or skipped. */
+  setupComplete?: boolean;
   /**
    * Feature flags. `survey` gates the Survey tab — off by default so the
    * default UI is just Mining. Flip via settings.json (or the DevTools console:
