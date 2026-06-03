@@ -32,13 +32,6 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
-/** Score (0..1, shown as %) → confidence-bar color. */
-function scoreColor(pct: number): string {
-  if (pct >= 60) return '#34d399';
-  if (pct >= 30) return '#fbbf24';
-  return '#f87171';
-}
-
 /** OCR confidence (0..1) → color. PP-OCR runs high, so the bands are tighter. */
 function ocrColor(score: number): string {
   if (score >= 0.9) return '#34d399';
@@ -67,7 +60,6 @@ export function OverlayCard({ reading, candidates, settling = false, ocr = null,
   const cardBg = hexToRgba(config.bgColor, config.bgOpacity);
 
   const top = candidates[0];
-  const topPct = top ? Math.max(0, Math.min(100, Math.round(top.score * 100))) : 0;
 
   /** Pulsing while the voter confirms a new value; solid once locked. */
   const dot = (
@@ -123,9 +115,6 @@ export function OverlayCard({ reading, candidates, settling = false, ocr = null,
                 )}
               </span>
               <span style={{ ...S.nodes, fontSize: sz.font }}>×{top.nodes}</span>
-            </div>
-            <div style={S.bar}>
-              <div style={{ ...S.barFill, width: `${topPct}%`, background: scoreColor(topPct) }} />
             </div>
           </div>
 
@@ -216,14 +205,6 @@ const S: Record<string, CSSProperties> = {
     marginLeft: 'auto',
     paddingLeft: 8,
   },
-  bar: {
-    height: 3,
-    borderRadius: 2,
-    background: 'rgba(255,255,255,0.12)',
-    overflow: 'hidden',
-    marginLeft: 14,
-  },
-  barFill: { height: '100%', borderRadius: 2, transition: 'width 200ms ease-out, background 200ms' },
   divider: { height: 1, background: 'rgba(255,255,255,0.14)', margin: '1px 0' },
   secRow: { display: 'flex', alignItems: 'baseline', lineHeight: 1.1, minWidth: 0, opacity: 0.7 },
   secName: {
