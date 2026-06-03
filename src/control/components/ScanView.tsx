@@ -610,16 +610,6 @@ export function ScanView({
                 />
                 Show scanned-rock box (SCU per quality)
               </label>
-              <label style={S.checkRow}>
-                <input
-                  type="checkbox"
-                  checked={overlayConfig.showSignature}
-                  onChange={(e) =>
-                    onOverlayConfigChange({ ...overlayConfig, showSignature: e.target.checked })
-                  }
-                />
-                Echo signature under ore name (sig×n)
-              </label>
               <p style={S.dim}>In edit mode (Alt+Shift+E): drag to move, drag the corner grip to resize.</p>
             </Section>
             </>

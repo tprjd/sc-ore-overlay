@@ -32,13 +32,6 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
-/** The deposit signature behind a candidate: (reading − noise) / nodes. */
-function signatureOf(reading: number | null, c: OverlayCandidate): number | null {
-  if (reading == null || !c.nodes) return null;
-  const sig = Math.round((reading - (c.noise ?? 0)) / c.nodes);
-  return sig > 0 ? sig : null;
-}
-
 /** Score (0..1, shown as %) → confidence-bar color. */
 function scoreColor(pct: number): string {
   if (pct >= 60) return '#34d399';
@@ -67,7 +60,6 @@ export function OverlayCard({ reading, candidates, settling = false, config, edi
 
   const top = candidates[0];
   const topPct = top ? Math.max(0, Math.min(100, Math.round(top.score * 100))) : 0;
-  const topSig = top ? signatureOf(reading, top) : null;
 
   /** Pulsing while the voter confirms a new value; solid once locked. */
   const dot = (
@@ -102,15 +94,7 @@ export function OverlayCard({ reading, candidates, settling = false, config, edi
         // still honor the signature toggle (inline, so it stays one line).
         <div key={`${top.name}-${top.noise ?? 'n'}-${top.loose ? 'L' : 'S'}`} style={{ ...S.row, animation: 'scoEnter 160ms ease-out' }}>
           {dot}
-          <span style={{ ...S.name, fontSize: sz.font }}>
-            {top.name}
-            {config.showSignature && topSig != null && (
-              <span style={S.secSig}>
-                {' '}
-                {topSig.toLocaleString()}×{top.nodes}
-              </span>
-            )}
-          </span>
+          <span style={{ ...S.name, fontSize: sz.font }}>{top.name}</span>
           <span style={{ ...S.nodes, fontSize: sz.font }}>×{top.nodes}</span>
         </div>
       ) : top ? (
@@ -132,11 +116,6 @@ export function OverlayCard({ reading, candidates, settling = false, config, edi
               </span>
               <span style={{ ...S.nodes, fontSize: sz.font }}>×{top.nodes}</span>
             </div>
-            {config.showSignature && topSig != null && (
-              <div style={{ ...S.sig, fontSize: Math.max(9, Math.round(sz.muted * 0.85)) }}>
-                {topSig.toLocaleString()}×{top.nodes}
-              </div>
-            )}
             <div style={S.bar}>
               <div style={{ ...S.barFill, width: `${topPct}%`, background: scoreColor(topPct) }} />
             </div>
@@ -144,34 +123,25 @@ export function OverlayCard({ reading, candidates, settling = false, config, edi
 
           {/* Secondary overlap candidates — demoted below a divider. */}
           {candidates.length > 1 && <div style={S.divider} />}
-          {candidates.slice(1).map((c, i) => {
-            const sig = signatureOf(reading, c);
-            return (
-              <div
-                key={`${c.name}-${c.noise ?? 'n'}-${c.loose ? 'L' : 'S'}-${i}`}
-                style={{ ...S.secRow, animation: 'scoEnter 160ms ease-out' }}
-              >
-                <span style={{ ...S.secName, fontSize: secFont }}>
-                  {c.name}
-                  {c.noise != null && (
-                    <span style={{ ...S.noiseBadge, fontSize: Math.max(9, secFont * 0.5) }}>
-                      +{c.noise.toLocaleString()}
-                    </span>
-                  )}
-                  {c.loose && (
-                    <span style={{ ...S.looseBadge, fontSize: Math.max(9, secFont * 0.5) }}>loose</span>
-                  )}
-                  {config.showSignature && sig != null && (
-                    <span style={S.secSig}>
-                      {' '}
-                      {sig.toLocaleString()}×{c.nodes}
-                    </span>
-                  )}
-                </span>
-                <span style={{ ...S.secNodes, fontSize: secFont }}>×{c.nodes}</span>
-              </div>
-            );
-          })}
+          {candidates.slice(1).map((c, i) => (
+            <div
+              key={`${c.name}-${c.noise ?? 'n'}-${c.loose ? 'L' : 'S'}-${i}`}
+              style={{ ...S.secRow, animation: 'scoEnter 160ms ease-out' }}
+            >
+              <span style={{ ...S.secName, fontSize: secFont }}>
+                {c.name}
+                {c.noise != null && (
+                  <span style={{ ...S.noiseBadge, fontSize: Math.max(9, secFont * 0.5) }}>
+                    +{c.noise.toLocaleString()}
+                  </span>
+                )}
+                {c.loose && (
+                  <span style={{ ...S.looseBadge, fontSize: Math.max(9, secFont * 0.5) }}>loose</span>
+                )}
+              </span>
+              <span style={{ ...S.secNodes, fontSize: secFont }}>×{c.nodes}</span>
+            </div>
+          ))}
         </>
       ) : reading != null ? (
         // Number on screen but matches nothing — diagnostic, always shown.
@@ -232,13 +202,6 @@ const S: Record<string, CSSProperties> = {
     marginLeft: 'auto',
     paddingLeft: 8,
   },
-  sig: {
-    color: '#9fb3c8',
-    fontVariantNumeric: 'tabular-nums',
-    paddingLeft: 14,
-    textShadow: '0 1px 2px rgba(0,0,0,0.9)',
-    lineHeight: 1,
-  },
   bar: {
     height: 3,
     borderRadius: 2,
@@ -265,7 +228,6 @@ const S: Record<string, CSSProperties> = {
     marginLeft: 'auto',
     paddingLeft: 8,
   },
-  secSig: { color: '#9fb3c8', fontVariantNumeric: 'tabular-nums', fontWeight: 400, fontSize: 10 },
   muted: { color: '#9fb3c8', textShadow: '0 1px 3px rgba(0,0,0,0.9)' },
   noiseBadge: {
     marginLeft: 6,

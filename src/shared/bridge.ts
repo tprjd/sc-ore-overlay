@@ -76,8 +76,6 @@ export interface OverlayConfig {
   showDetail: boolean;
   /** Show the "scanned rock" overlay box (SCU-per-quality from the scan). */
   showScan: boolean;
-  /** Echo the deposit signature under each ore name (`sig×n`). */
-  showSignature: boolean;
 }
 
 /** Default overlay appearance. */
@@ -93,7 +91,6 @@ export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
   showPlaceholder: true,
   showDetail: false,
   showScan: false,
-  showSignature: false,
 };
 
 /** A rebindable global-hotkey action. */
