@@ -156,15 +156,20 @@ The Overlay tab is ~11 controls — sprawl.
 - The live overlay window is click-through (`setIgnoreMouseEvents`), so header clicks can't fire
   there during play. Drive the sort from a **persisted** `scanSort` field on `OverlayConfig`
   (default `'scu'`) that both the preview and the overlay obey.
-- Make `ScanCard` take an optional `onSortChange?`: the overlay window passes nothing (static
-  headers); the control-window preview passes a handler so clicking a column header in the preview
-  updates `overlayConfig.scanSort` (persists + re-sorts both). Active column shows a direction arrow;
-  inert rows stay pinned last.
+- Make `ScanCard` take an optional `onSortChange?`: when set, column headers become clickable and
+  update `overlayConfig.scanSort` (persists + re-sorts everywhere). Active column shows a direction
+  arrow; inert rows stay pinned last.
+- Wire `onSortChange` in: the control-window **preview** (always interactive) and the live overlay
+  window **only while editing** — `setEditMode` already flips `setIgnoreMouseEvents` off, so the
+  overlay takes clicks in edit mode. The card is a `WebkitAppRegion: 'drag'` region then, so mark the
+  header cells `WebkitAppRegion: 'no-drag'` (like the resize grip) so a header click sorts instead of
+  dragging the window. During normal play the overlay stays click-through and the headers are inert
+  (sort still applies from the persisted config).
 - Optional: apply the same pattern to `DetailCard` (quality / % columns).
 
 **Acceptance**
-- Clicking a scanned-rock column header in the preview re-sorts it and the live overlay box to match,
-  and the choice survives a restart.
+- Clicking a scanned-rock column header in the preview (or on the overlay while in edit mode)
+  re-sorts it and the live overlay box to match, and the choice survives a restart.
 
 ## D — Robustness & help
 
