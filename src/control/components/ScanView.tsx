@@ -24,6 +24,7 @@ import type { PickedSource } from './SourcePicker';
 import { useSurveyCapture } from '../useSurveyCapture';
 import type { ActiveSurveyRegion } from '../useSurveyCapture';
 import type { LoopParams } from '../useCaptureLoop';
+import type { OcrBackend } from '../ocr';
 import type { DrawableSource, NormRegion } from '../preprocess';
 import {
   createVoter,
@@ -87,6 +88,11 @@ export interface ScanViewProps {
   onEnforceClusterChange: (next: boolean) => void;
   params: LoopParams;
   onParamsChange: (p: LoopParams) => void;
+  /** Selected OCR backend (what the user picked). */
+  ocrBackend: OcrBackend;
+  /** Backend actually serving reads (directml may fall back to wasm); null until resolved. */
+  effectiveBackend: OcrBackend | null;
+  onOcrBackendChange: (backend: OcrBackend) => void;
   table: SignatureTable;
   location: string | null;
   onLocationChange: (location: string | null) => void;
@@ -112,6 +118,9 @@ export function ScanView({
   enforceCluster,
   onEnforceClusterChange,
   params,
+  ocrBackend,
+  effectiveBackend,
+  onOcrBackendChange,
   onParamsChange,
   table,
   location,
@@ -552,6 +561,30 @@ export function ScanView({
                   suffix=" frames"
                 />
               </Section>
+
+              <Section title="OCR backend">
+                <label style={S.selectRow}>
+                  <span style={S.sliderLabel}>Engine</span>
+                  <select
+                    style={S.select}
+                    value={ocrBackend}
+                    onChange={(e) => onOcrBackendChange(e.target.value as OcrBackend)}
+                  >
+                    <option value="directml">DirectML (GPU)</option>
+                    <option value="wasm">WASM (CPU)</option>
+                    <option value="webgpu">WebGPU (experimental)</option>
+                  </select>
+                </label>
+                <p style={S.dim}>
+                  {effectiveBackend && effectiveBackend !== ocrBackend
+                    ? `Selected ${ocrBackend} — running on ${effectiveBackend} (fell back). `
+                    : effectiveBackend
+                      ? `Running on ${effectiveBackend}. `
+                      : ''}
+                  DirectML uses any DX12 GPU and falls back to WASM if unavailable.
+                  Changing the engine takes effect after a relaunch.
+                </p>
+              </Section>
             </>
           )}
 
@@ -779,6 +812,10 @@ export function ScanView({
         <span style={S.statusItem} title="OCR latency · detected line count">
           <span style={S.statusKey}>ocr</span>
           <span style={S.statusVal}>{ocr ? `${ocr.ms}ms · ${ocr.lineCount}L` : '—'}</span>
+        </span>
+        <span style={S.statusItem} title="Active OCR engine (after any directml→wasm fallback)">
+          <span style={S.statusKey}>eng</span>
+          <span style={S.statusVal}>{effectiveBackend ?? '…'}</span>
         </span>
         <span style={{ ...S.statusItem, marginLeft: 'auto', minWidth: 0 }} title={ocr?.rawText || ''}>
           <span style={S.statusKey}>raw</span>

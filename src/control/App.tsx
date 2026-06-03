@@ -14,7 +14,8 @@ import { newRegionId } from './components/roles';
 import type { LoopParams } from './useCaptureLoop';
 import { loadSignatureTable } from '../core';
 import type { SignatureTable } from '../core';
-import { setOcrBackend } from './ocr';
+import { setOcrBackend, getEffectiveBackend } from './ocr';
+import type { OcrBackend } from './ocr';
 import { DEFAULT_HOTKEYS, DEFAULT_OVERLAY_CONFIG } from '../shared/bridge';
 import type {
   HotkeyAction,
@@ -65,6 +66,10 @@ export function App() {
   const [hotkeyStatus, setHotkeyStatus] = useState<Partial<Record<HotkeyAction, boolean>>>({});
   const [overlayConfig, setOverlayConfig] = useState<OverlayConfig>(DEFAULT_OVERLAY_CONFIG);
   const [autoReconnect, setAutoReconnect] = useState(true);
+  // OCR backend the user selected, and the one actually serving reads (directml
+  // silently falls back to wasm if the native host can't start).
+  const [ocrBackend, setOcrBackendState] = useState<OcrBackend>('directml');
+  const [effectiveBackend, setEffectiveBackend] = useState<OcrBackend | null>(null);
   const [tab, setTab] = useState<Tab>('mining');
   // Survey is gated behind a feature flag (off by default). Code stays; the tab
   // just doesn't render unless enabled. See AppSettings.features.survey.
@@ -82,9 +87,15 @@ export function App() {
     const finish = (): void => {
       if (alive) setLoaded(true);
     };
+    const resolveEffective = (): void => {
+      void getEffectiveBackend().then((e) => {
+        if (alive) setEffectiveBackend(e);
+      });
+    };
     const pending = window.sco?.getSettings?.();
     if (!pending) {
-      setOcrBackend('wasm'); // no persistence → safe default
+      setOcrBackend('directml'); // no persistence → default, auto-falls back to wasm
+      resolveEffective();
       setShowWizard(true); // no persistence → treat as a fresh first run
       finish();
       return;
@@ -92,9 +103,13 @@ export function App() {
     void pending
       .then((s) => {
         if (!alive || !s) return;
-        // Pick the OCR backend before any capture starts (default WASM/CPU so
-        // it can't be starved by the overlay's GPU compositor).
-        setOcrBackend(s.ocrBackend ?? 'wasm');
+        // Pick the OCR backend before any capture starts. Default DirectML (GPU,
+        // vendor-agnostic); it auto-falls back to the WASM worker if the native
+        // host can't start, so non-DX12 machines stay safe.
+        const backend = s.ocrBackend ?? 'directml';
+        setOcrBackendState(backend);
+        setOcrBackend(backend);
+        resolveEffective();
         if (s.mining?.regions) setMiningRegions(s.mining.regions);
         else if (s.region) {
           // Migrate the legacy single RS region to the new region list.
@@ -165,6 +180,13 @@ export function App() {
     setHotkeys(map);
     const results = await window.sco?.setHotkeys?.(map);
     if (results) setHotkeyStatus(results);
+  };
+
+  const handleOcrBackend = (backend: OcrBackend): void => {
+    setOcrBackendState(backend);
+    setOcrBackend(backend);
+    window.sco?.setSettings?.({ ocrBackend: backend });
+    void getEffectiveBackend().then(setEffectiveBackend);
   };
 
   const handleOverlayConfig = (cfg: OverlayConfig): void => {
@@ -264,6 +286,9 @@ export function App() {
             onEnforceClusterChange={setEnforceCluster}
             params={params}
             onParamsChange={setParams}
+            ocrBackend={ocrBackend}
+            effectiveBackend={effectiveBackend}
+            onOcrBackendChange={handleOcrBackend}
             table={table}
             location={location}
             onLocationChange={setLocation}

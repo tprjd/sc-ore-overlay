@@ -114,14 +114,15 @@ no ramp, no freeze, video stays smooth, overlay can be shown.
 
 ## Knobs
 
-- **Backend** — default `wasm`. Options:
-  - `directml` — **native GPU OCR, recommended on Windows** (see "Update (R4)"
-    below). GPU-accelerated on any DX12 GPU without the overlay contention. In
-    DevTools: `window.sco.setSettings({ ocrBackend: 'directml' })` then relaunch.
-    Falls back to `wasm` automatically if the native host can't start.
+- **Backend** — **default `directml`** (R5), selectable in the UI (Capture tab →
+  "OCR backend"). The active engine is shown in the status footer (`eng`).
+  - `directml` — native GPU OCR (default). GPU-accelerated on any DX12 GPU
+    without the overlay contention. Auto-falls back to `wasm` if the native host
+    can't start, so non-DX12 machines stay safe.
+  - `wasm` — CPU, in-renderer. The fallback; never touches the GPU. ~1–2 s/read.
   - `webgpu` — in-renderer GPU. Faster than wasm when it works, but **stalls with
     the overlay on some setups** (the bug this doc is about). Not recommended;
-    kept for the curious: `window.sco.setSettings({ ocrBackend: 'webgpu' })`.
+    kept for the curious.
 - **WASM is single-thread** (`env.wasm.numThreads = 1` in `ocr.worker.ts`, no
   cross-origin isolation), so a *new* read costs ~1–2 s. Mitigate by **tightening
   the RS box and lowering upscale** (Capture tab) — less area = faster inference.

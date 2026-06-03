@@ -70,9 +70,19 @@ function recognizeWorker(imageDataUrl: string): Promise<OcrLine[]> {
 // stray early recognize() before setOcrBackend() still works (on WASM).
 let transportReady: Promise<'worker' | 'native'> = Promise.resolve('worker');
 
+// The backend the user asked for; the *effective* one can differ (directml that
+// fails to start resolves to 'wasm'). getEffectiveBackend() reports the truth.
+let selectedBackend: OcrBackend = 'wasm';
+
+/** The backend actually serving reads, after any directml→wasm fallback. */
+export function getEffectiveBackend(): Promise<OcrBackend> {
+  return transportReady.then((t) => (t === 'native' ? 'directml' : selectedBackend));
+}
+
 /** Switch to the WASM worker for the rest of the session (native fell through). */
 function fallbackToWasm(reason: unknown): 'worker' {
   console.warn('[ocr] native DirectML host unavailable; falling back to WASM:', reason);
+  selectedBackend = 'wasm';
   initWorker('wasm');
   transportReady = Promise.resolve('worker');
   return 'worker';
@@ -97,6 +107,7 @@ async function probeNative(): Promise<'worker' | 'native'> {
  * back to WASM if it can't start; 'wasm'/'webgpu' use the in-renderer worker.
  */
 export function setOcrBackend(backend: OcrBackend): void {
+  selectedBackend = backend;
   if (backend === 'directml') {
     transportReady = probeNative();
   } else {
