@@ -68,6 +68,9 @@ export type OverlayScale = 'compact' | 'normal' | 'large';
 /** Scanned-rock composition sort column. */
 export type ScanSort = 'scu' | 'quality' | 'percent';
 
+/** Sort direction. */
+export type SortDir = 'asc' | 'desc';
+
 /** Live-tunable overlay appearance. */
 export interface OverlayConfig {
   /** Idle fade-out delay in ms; 0 = never fade. */
@@ -95,6 +98,8 @@ export interface OverlayConfig {
   showOcrStats: boolean;
   /** Scanned-rock card sort column (SCU / quality / percent). */
   scanSort: ScanSort;
+  /** Scanned-rock card sort direction. */
+  scanSortDir: SortDir;
 }
 
 /** Default overlay appearance. */
@@ -112,6 +117,7 @@ export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
   showScan: false,
   showOcrStats: false,
   scanSort: 'scu',
+  scanSortDir: 'desc',
 };
 
 /** A rebindable global-hotkey action. */

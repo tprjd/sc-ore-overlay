@@ -579,7 +579,9 @@ export function ScanView({
                     <ScanCard
                       scan={frozenScan}
                       config={overlayConfig}
-                      onSortChange={(scanSort) => onOverlayConfigChange({ ...overlayConfig, scanSort })}
+                      onSortChange={(scanSort, scanSortDir) =>
+                        onOverlayConfigChange({ ...overlayConfig, scanSort, scanSortDir })
+                      }
                     />
                   </div>
                 )}

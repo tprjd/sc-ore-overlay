@@ -8,7 +8,7 @@
 // bands, dimmed inert rows.
 
 import type { CSSProperties } from 'react';
-import type { OverlayConfig, ScanSort } from '../shared/bridge';
+import type { OverlayConfig, ScanSort, SortDir } from '../shared/bridge';
 import { cleanMaterial } from '../core';
 import type { ScanResult, ScanComposition } from '../core';
 
@@ -68,41 +68,54 @@ export interface ScanCardProps {
   config: OverlayConfig;
   /** Real window only: dashed border + drag region. Always false in preview. */
   editing?: boolean;
-  /** When set, column headers become clickable and call this with the column. */
-  onSortChange?: (sort: ScanSort) => void;
+  /** When set, headers become clickable; called with the next column + direction. */
+  onSortChange?: (sort: ScanSort, dir: SortDir) => void;
 }
 
 export function ScanCard({ scan, config, editing = false, onSortChange }: ScanCardProps) {
   const cardBg = hexToRgba(config.bgColor, config.bgOpacity);
   const sort = config.scanSort ?? 'scu';
+  const dir = config.scanSortDir ?? 'desc';
   const metric = (r: ScanComposition): number =>
     sort === 'quality' ? r.quality : sort === 'percent' ? r.percent : r.scu ?? r.percent;
 
-  // Sort rows: inert always last; otherwise by the chosen column, desc.
+  // Sort rows: inert always pinned last (regardless of direction); otherwise by
+  // the chosen column in the chosen direction.
   const rows: ScanComposition[] = scan
     ? [...scan.composition].sort((a, b) => {
         const aI = isInert(a.material) ? 1 : 0;
         const bI = isInert(b.material) ? 1 : 0;
         if (aI !== bI) return aI - bI;
-        return metric(b) - metric(a);
+        const cmp = metric(a) - metric(b);
+        return dir === 'asc' ? cmp : -cmp;
       })
     : [];
 
   const sortable = !!onSortChange;
-  const headCell = (col: ScanSort, label: string, style: CSSProperties) => (
-    <span
-      style={{
-        ...style,
-        ...(sortable ? { ...NO_DRAG, cursor: 'pointer' } : null),
-        ...(sort === col ? { color: COLORS.accent, opacity: 1 } : null),
-      }}
-      onClick={sortable ? () => onSortChange?.(col) : undefined}
-      title={sortable ? `Sort by ${label}` : undefined}
-    >
-      {label}
-      {sort === col ? ' ▾' : ''}
-    </span>
-  );
+  // 3-click cycle on a column: desc → asc → reset to the default (SCU desc).
+  const cycle = (col: ScanSort): void => {
+    if (!onSortChange) return;
+    if (sort !== col) onSortChange(col, 'desc');
+    else if (dir === 'desc') onSortChange(col, 'asc');
+    else onSortChange('scu', 'desc');
+  };
+  const headCell = (col: ScanSort, label: string, style: CSSProperties) => {
+    const active = sort === col;
+    return (
+      <span
+        style={{
+          ...style,
+          ...(sortable ? { ...NO_DRAG, cursor: 'pointer' } : null),
+          ...(active ? { color: COLORS.accent, opacity: 1 } : null),
+        }}
+        onClick={sortable ? () => cycle(col) : undefined}
+        title={sortable ? `Sort by ${label}` : undefined}
+      >
+        {label}
+        {active ? (dir === 'asc' ? ' ▴' : ' ▾') : ''}
+      </span>
+    );
+  };
 
   const useful = rows
     .filter((r) => !isInert(r.material))

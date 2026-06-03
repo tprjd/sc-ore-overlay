@@ -89,7 +89,11 @@ export function ScanOverlay() {
         // Sortable only while editing (the overlay is click-through otherwise).
         // Route through setOverlayConfig so the change persists + syncs to the
         // control window and the other boxes.
-        onSortChange={editing ? (scanSort) => window.sco?.setOverlayConfig?.({ ...config, scanSort }) : undefined}
+        onSortChange={
+          editing
+            ? (scanSort, scanSortDir) => window.sco?.setOverlayConfig?.({ ...config, scanSort, scanSortDir })
+            : undefined
+        }
       />
       {editing && (
         <div style={GRIP} onPointerDown={onGripDown} onPointerMove={onGripMove} onPointerUp={onGripUp} />
