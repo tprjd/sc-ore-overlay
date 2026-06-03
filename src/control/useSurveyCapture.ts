@@ -96,6 +96,26 @@ interface Cached {
   lineCount: number;
 }
 
+// OCR backoff: once a region's parsed result repeats this many times, it's
+// "stable" and we stop re-running inference every tick — over a live game the
+// crop's *background* changes every frame, so the exact-pixel cache almost
+// never skips and OCR would otherwise run forever, ramping WebGPU memory until
+// it stalls. While stable we re-OCR at most every STABLE_INTERVAL_MS (a
+// heartbeat that still catches a genuine change), reusing the last result and
+// refreshing the crop so the preview stays live.
+const STABLE_RUNS = 3;
+const STABLE_INTERVAL_MS = 1000;
+
+/** Per-region backoff bookkeeping. */
+interface StableMeta {
+  /** A key identifying the parsed result (so we know when it changed). */
+  key: string;
+  /** How many consecutive OCR runs produced this key. */
+  runs: number;
+  /** performance.now() of the last real recognize() for this region. */
+  at: number;
+}
+
 /** Format a position vector in km for the debug line (full precision). */
 function fmtKm(p: Vec3): string {
   const km = (m: number): string => (m / 1000).toLocaleString(undefined, { maximumFractionDigits: 4 });
@@ -112,6 +132,7 @@ export function useSurveyCapture(
   const [state, setState] = useState<SurveyReadout>(EMPTY);
   const busy = useRef(false);
   const cache = useRef<Map<string, Cached>>(new Map());
+  const stableMeta = useRef<Map<string, StableMeta>>(new Map());
   const regionsRef = useRef(regions);
   regionsRef.current = regions;
 
@@ -124,6 +145,7 @@ export function useSurveyCapture(
   useEffect(() => {
     if (!enabled) return;
     cache.current = new Map();
+    stableMeta.current = new Map();
     let cancelled = false;
 
     const tick = async (): Promise<void> => {
@@ -141,6 +163,21 @@ export function useSurveyCapture(
           const prev = cache.current.get(reg.id);
           if (prev && prev.hash === hash && prev.role === reg.role) {
             next.set(reg.id, { ...prev, dataUrl: pre.dataUrl });
+            continue;
+          }
+          // Backoff: result has been stable, so skip inference within the
+          // heartbeat — reuse the last result, refresh hash + crop. Bounds
+          // WebGPU work over a live game whose background churns every frame.
+          const meta = stableMeta.current.get(reg.id);
+          const nowMs = performance.now();
+          if (
+            prev &&
+            prev.role === reg.role &&
+            meta &&
+            meta.runs >= STABLE_RUNS &&
+            nowMs - meta.at < STABLE_INTERVAL_MS
+          ) {
+            next.set(reg.id, { ...prev, hash, dataUrl: pre.dataUrl });
             continue;
           }
           const t0 = performance.now();
@@ -168,6 +205,17 @@ export function useSurveyCapture(
             system = parseSystemName(texts.join(' '));
           }
           next.set(reg.id, { hash, role: reg.role, dataUrl: pre.dataUrl, rawText, rs, pos, system, scan, score, ms, lineCount });
+          // Track result stability to drive the backoff above.
+          const key =
+            reg.role === 'rs'
+              ? `rs:${rs}`
+              : reg.role === 'scanResult'
+                ? `scan:${scan ? `${scan.ore}/${scan.composition.length}` : ''}`
+                : reg.role === 'shipPos'
+                  ? `pos:${pos ? pos.zone : ''}`
+                  : `sys:${system ?? ''}`;
+          const runs = meta && meta.key === key ? meta.runs + 1 : 1;
+          stableMeta.current.set(reg.id, { key, runs, at: performance.now() });
         }
         cache.current = next;
         if (cancelled) return;

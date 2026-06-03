@@ -32,74 +32,92 @@ describe('isPlausibleReading', () => {
   });
 });
 
-describe('voteStep', () => {
-  const quorum3 = { quorum: 3 };
+describe('voteStep (windowed majority)', () => {
+  const q3 = { quorum: 3 }; // window defaults to quorum + 1 = 4
 
-  it('accepts a value only after the quorum of consecutive frames', () => {
+  it('latches once a value reaches quorum within the window', () => {
     let s: VoteState = initialVoteState;
-
-    let r = voteStep(s, 4270, quorum3);
-    expect(r.stable).toBeNull(); // count 1
-    s = r.state;
-
-    r = voteStep(s, 4270, quorum3);
-    expect(r.stable).toBeNull(); // count 2
-    s = r.state;
-
-    r = voteStep(s, 4270, quorum3);
-    expect(r.stable).toBe(4270); // count 3 → accepted
-    s = r.state;
-
-    r = voteStep(s, 4270, quorum3);
-    expect(r.stable).toBe(4270); // still stable past quorum
+    expect(voteStep(s, 4270, q3).stable).toBeNull(); // 1 of 3
+    s = voteStep(s, 4270, q3).state;
+    expect(voteStep(s, 4270, q3).stable).toBeNull(); // 2 of 3
+    s = voteStep(s, 4270, q3).state;
+    const r = voteStep(s, 4270, q3); // 3 of 3 → accepted
+    expect(r.stable).toBe(4270);
   });
 
-  it('resets the streak when a different reading arrives', () => {
+  it('tolerates a stray frame during the initial lock', () => {
     let s: VoteState = initialVoteState;
-    for (const v of [42, 42, 42]) s = voteStep(s, v, quorum3).state;
-    expect(voteStep(s, 42, quorum3).stable).toBe(42);
+    s = voteStep(s, 7, q3).state;
+    s = voteStep(s, 7, q3).state;
+    s = voteStep(s, 999, q3).state; // a single OCR misread
+    const r = voteStep(s, 7, q3); // window [7,7,999,7] → 7 wins 3/4
+    expect(r.stable).toBe(7);
+  });
 
-    // A different reading drops the stable output immediately (reset)...
-    const reset = voteStep(s, 99, quorum3);
-    expect(reset.stable).toBeNull();
-    expect(reset.state).toEqual({ candidate: 99, count: 1 });
+  it('keeps the latched value through a stray frame (no flicker to null)', () => {
+    let s: VoteState = initialVoteState;
+    for (const v of [7, 7, 7]) s = voteStep(s, v, q3).state; // latched 7
+    const stray = voteStep(s, 12345, q3); // window [7,7,7,12345] → 7 still 3/4
+    expect(stray.stable).toBe(7);
+  });
 
-    // ...and the new value must earn its own quorum.
-    s = reset.state;
-    s = voteStep(s, 99, quorum3).state;
-    expect(voteStep(s, 99, quorum3).stable).toBe(99);
+  it('flips to a new value only once it wins the window', () => {
+    let s: VoteState = initialVoteState;
+    for (const v of [7, 7, 7]) s = voteStep(s, v, q3).state; // latched 7
+    let r = voteStep(s, 9, q3); // [7,7,7,9] → 7
+    expect(r.stable).toBe(7);
+    s = r.state;
+    r = voteStep(s, 9, q3); // [7,7,9,9] tie → stays 7 (sticky)
+    expect(r.stable).toBe(7);
+    s = r.state;
+    r = voteStep(s, 9, q3); // [7,9,9,9] → 9 wins
+    expect(r.stable).toBe(9);
   });
 
   it('ignores dropped/garbage frames (null) so the stable reading persists', () => {
     let s: VoteState = initialVoteState;
-    for (const v of [7, 7, 7]) s = voteStep(s, v, quorum3).state; // latched 7
-    const dropped = voteStep(s, null, quorum3);
-    expect(dropped.stable).toBe(7); // still latched
-    expect(dropped.state).toEqual(s); // state unchanged
+    for (const v of [5, 5, 5]) s = voteStep(s, v, q3).state; // latched 5
+    const dropped = voteStep(s, null, q3);
+    expect(dropped.stable).toBe(5); // still latched
+    expect(dropped.state).toEqual(s); // window unchanged
   });
 
   it('accepts immediately when quorum is 1', () => {
-    const r = voteStep(initialVoteState, 123, { quorum: 1 });
-    expect(r.stable).toBe(123);
+    expect(voteStep(initialVoteState, 123, { quorum: 1 }).stable).toBe(123);
   });
 });
 
-describe('createVoter', () => {
-  it('latches a stable value after the quorum and resets on change', () => {
-    const voter = createVoter({ quorum: 2 });
+describe('createVoter (windowed majority)', () => {
+  it('latches a stable value after the quorum and reset clears', () => {
+    const voter = createVoter({ quorum: 2 }); // window 3
     expect(voter.push(4270)).toBeNull();
     expect(voter.push(4270)).toBe(4270);
     expect(voter.stable).toBe(4270);
 
-    expect(voter.push(8540)).toBeNull(); // reset to new candidate
-    expect(voter.push(8540)).toBe(8540);
-
     voter.reset();
     expect(voter.stable).toBeNull();
+    expect(voter.candidate).toBeNull();
+    expect(voter.count).toBe(0);
   });
 
-  it('exposes the in-progress candidate and streak count', () => {
-    const voter = createVoter({ quorum: 3 });
+  it('does not drop the latched value on a single stray reading', () => {
+    const voter = createVoter({ quorum: 2 }); // window 3
+    voter.push(100);
+    expect(voter.push(100)).toBe(100); // locked
+    // One stray plausible value no longer unseats the latch — 100 still leads
+    // the window — which is what fixes the never-locks-then-runs-away loop.
+    expect(voter.push(200)).toBe(100);
+    expect(voter.stable).toBe(100);
+    // A sustained new value (wins the window) does flip it.
+    expect(voter.push(200)).toBe(200);
+
+    // A dropped (null) frame keeps the latched value — not a reset.
+    expect(voter.push(null)).toBe(200);
+    expect(voter.candidate).toBe(200);
+  });
+
+  it('exposes the window leader as candidate + count', () => {
+    const voter = createVoter({ quorum: 3 }); // window 4
     voter.push(4270);
     expect(voter.candidate).toBe(4270);
     expect(voter.count).toBe(1);
@@ -107,32 +125,6 @@ describe('createVoter', () => {
 
     voter.push(4270);
     expect(voter.count).toBe(2);
-    // A new value mid-stream: candidate switches to it while `stable` is still
-    // null (never locked) — this is the "settling" signal the overlay uses.
-    voter.push(8540);
-    expect(voter.candidate).toBe(8540);
-    expect(voter.count).toBe(1);
     expect(voter.stable).toBeNull();
-
-    voter.reset();
-    expect(voter.candidate).toBeNull();
-    expect(voter.count).toBe(0);
-  });
-
-  it('drops the latched value when a different reading starts accumulating', () => {
-    const voter = createVoter({ quorum: 2 });
-    voter.push(100);
-    expect(voter.push(100)).toBe(100); // locked
-    // A different plausible value resets the streak: `stable` goes null until
-    // the new value reaches quorum. `candidate` tracks it the whole time, so
-    // `candidate != null && candidate !== stable` is the overlay's "settling".
-    expect(voter.push(200)).toBeNull();
-    expect(voter.candidate).toBe(200);
-    expect(voter.stable).toBeNull();
-    expect(voter.push(200)).toBe(200); // now locked on the new value
-
-    // A dropped (null) frame keeps the latched value — not a reset.
-    expect(voter.push(null)).toBe(200);
-    expect(voter.candidate).toBe(200);
   });
 });
