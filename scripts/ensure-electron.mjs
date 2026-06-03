@@ -9,13 +9,16 @@
 //   Error: Electron failed to install correctly, please delete
 //   node_modules/electron and try installing again
 //
-// Rather than make the user delete + reinstall, we detect the mismatch (by
-// inspecting electron/path.txt vs the current platform) and re-run Electron's
-// own installer, which downloads the correct binary (cached by @electron/get,
-// so switching back and forth doesn't re-download). No-op on the platform that
-// already matches — WSL dev is unaffected.
+// We detect the mismatch (electron/path.txt vs the current platform) and, when
+// it's wrong, do exactly what the error suggests but scoped to the binary:
+// remove the stale dist/ + path.txt, then re-run Electron's own install.js so
+// it extracts into a clean directory and rewrites path.txt. (Just running
+// install.js over the other OS's dist can finish without producing the right
+// executable, which is why a plain reinstall wasn't enough.) The download zip
+// is cached by @electron/get, so flipping between WSL and Windows re-extracts
+// but doesn't re-download. No-op on the platform that already matches.
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -31,19 +34,31 @@ try {
 }
 
 const pathFile = join(electronDir, 'path.txt');
+const distDir = join(electronDir, 'dist');
 const expectsExe = process.platform === 'win32';
 
-let ok = false;
-if (existsSync(pathFile)) {
+/** Is the right-for-this-OS binary present and pointed at by path.txt? */
+function installed() {
+  if (!existsSync(pathFile)) return false;
   const bin = readFileSync(pathFile, 'utf8').trim();
   // Windows binary is electron.exe; every other platform is a non-.exe name.
   const platformMatches = expectsExe ? bin.endsWith('.exe') : !bin.endsWith('.exe');
-  ok = platformMatches && existsSync(join(electronDir, 'dist', bin));
+  return platformMatches && existsSync(join(distDir, bin));
 }
 
-if (ok) process.exit(0);
+if (installed()) process.exit(0);
 
-console.log(`[ensure-electron] Electron binary missing or built for another OS — installing for ${process.platform}…`);
+console.log(`[ensure-electron] Electron binary missing or built for another OS — reinstalling for ${process.platform}…`);
+
+// Clear stale platform state so install.js extracts into a clean dist and
+// rewrites path.txt instead of short-circuiting or merging over the other OS.
+try {
+  rmSync(pathFile, { force: true });
+  rmSync(distDir, { recursive: true, force: true });
+} catch (err) {
+  console.warn('[ensure-electron] could not clear the stale binary:', err.message);
+}
+
 try {
   execFileSync(process.execPath, [join(electronDir, 'install.js')], {
     cwd: electronDir,
@@ -54,3 +69,12 @@ try {
   console.error('[ensure-electron] fallback: delete node_modules/electron and run `npm install`.');
   process.exit(1);
 }
+
+if (installed()) {
+  console.log('[ensure-electron] ready:', readFileSync(pathFile, 'utf8').trim());
+  process.exit(0);
+}
+
+console.error('[ensure-electron] still not installed after reinstall. The download may be blocked');
+console.error('[ensure-electron] (proxy/firewall) — check the output above, or set ELECTRON_MIRROR.');
+process.exit(1);
