@@ -18,6 +18,13 @@ export interface CaptureSource {
   type: 'screen' | 'window';
 }
 
+/** One OCR-detected text line and its mean confidence (0..1). Shared so the
+ *  preload bridge can type the native (utility-process) OCR transport. */
+export interface OcrLine {
+  text: string;
+  score: number;
+}
+
 /** One ore candidate as shown on the overlay. */
 export interface OverlayCandidate {
   name: string;
@@ -191,12 +198,20 @@ export interface AppSettings {
   /** True once the first-run setup wizard has been completed or skipped. */
   setupComplete?: boolean;
   /**
-   * OCR execution backend. 'wasm' (CPU, default) never touches the GPU, so it
-   * can't be starved by the overlay window's compositor. 'webgpu' is faster
-   * but fights the visible overlay for the GPU on some setups (OCR latency
-   * spikes into the seconds). Set via settings.json / DevTools and relaunch.
+   * OCR execution backend.
+   * - 'wasm' (CPU, default): never touches the GPU, so it can't be starved by
+   *   the overlay window's compositor. Slowest (~1–2 s/fresh read).
+   * - 'directml': native onnxruntime-node in a utility process, DirectML EP —
+   *   GPU OCR on any DX12 GPU (NVIDIA/AMD/Intel). Its own D3D12 device sits
+   *   outside Chromium's GPU process, so it does NOT contend with the overlay
+   *   the way in-renderer WebGPU does. ~28 ms/read once warm. Falls back to
+   *   'wasm' if the host can't start or DirectML init fails. (See TASKS.md R4.)
+   * - 'webgpu': in-renderer ONNX-Runtime-Web WebGPU. Faster than wasm but
+   *   fights the visible overlay for the GPU on some setups (latency spikes
+   *   into the seconds); kept for the adventurous, not the default.
+   * Set via settings.json / DevTools and relaunch.
    */
-  ocrBackend?: 'wasm' | 'webgpu';
+  ocrBackend?: 'wasm' | 'webgpu' | 'directml';
   /**
    * Feature flags. `survey` gates the Survey tab — off by default so the
    * default UI is just Mining. Flip via settings.json (or the DevTools console:
@@ -237,6 +252,14 @@ export interface ScoBridge {
   resizeDetail(size: { width: number; height: number }): void;
   /** Scan box → main: resize the scanned-rock window to the given content size. */
   resizeScan(size: { width: number; height: number }): void;
+  /**
+   * Probe whether the native (utility-process) DirectML OCR host is up. Spawns
+   * it on first call and resolves true once DirectML/CPU init succeeds, false if
+   * the host can't start or the EP fails — the renderer then falls back to WASM.
+   */
+  ocrAvailable(): Promise<boolean>;
+  /** Run OCR on a PNG data-URL crop via the native host. Rejects if it's down. */
+  ocrRecognize(dataUrl: string): Promise<OcrLine[]>;
   /** Survey Mode: load the persisted scan log (separate file from settings). */
   getSurveyLog(): Promise<SurveyEntry[]>;
   /** Survey Mode: persist the full scan log (append-only, managed in renderer). */

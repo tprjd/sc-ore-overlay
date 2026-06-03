@@ -114,9 +114,14 @@ no ramp, no freeze, video stays smooth, overlay can be shown.
 
 ## Knobs
 
-- **Backend** — default `wasm`. To try WebGPU (faster when it works; may stall
-  with the overlay on some setups): in DevTools
-  `window.sco.setSettings({ ocrBackend: 'webgpu' })` then relaunch.
+- **Backend** — default `wasm`. Options:
+  - `directml` — **native GPU OCR, recommended on Windows** (see "Update (R4)"
+    below). GPU-accelerated on any DX12 GPU without the overlay contention. In
+    DevTools: `window.sco.setSettings({ ocrBackend: 'directml' })` then relaunch.
+    Falls back to `wasm` automatically if the native host can't start.
+  - `webgpu` — in-renderer GPU. Faster than wasm when it works, but **stalls with
+    the overlay on some setups** (the bug this doc is about). Not recommended;
+    kept for the curious: `window.sco.setSettings({ ocrBackend: 'webgpu' })`.
 - **WASM is single-thread** (`env.wasm.numThreads = 1` in `ocr.worker.ts`, no
   cross-origin isolation), so a *new* read costs ~1–2 s. Mitigate by **tightening
   the RS box and lowering upscale** (Capture tab) — less area = faster inference.
@@ -124,14 +129,43 @@ no ramp, no freeze, video stays smooth, overlay can be shown.
 
 ---
 
+## Update (R4) — native DirectML backend (GPU OCR without the contention)
+
+The real fix for "use the GPU without stalling." WebGPU stalled not because the
+GPU is weak (a single small crop is trivial for any modern GPU) but because of
+**two web-stack weaknesses**: Chromium serializes WebGPU and the overlay
+compositor through one GPU process / one command queue, and onnxruntime-web
+1.17.3's WebGPU EP leaks (the *ramp* signature). Neither is the hardware.
+
+So OCR moved onto a **native `onnxruntime-node` process using the DirectML
+execution provider** (`ocrBackend: 'directml'`):
+
+- Runs in an **Electron `utilityProcess`** (`electron/ocr-host.ts`) — a Node child
+  with **its own D3D12 device**, outside Chromium's GPU process. No compositor
+  serialization, and native ORT memory management (no ORT-web leak).
+- **DirectML** → vendor-agnostic: any DX12 GPU (NVIDIA / AMD / Intel), not CUDA.
+- **Same PP-OCR models** (`ch_PP-OCRv4_det/rec`); only the runtime host changed.
+  The renderer reaches it via `window.sco.ocrRecognize` (preload bridge → main →
+  utility process). `src/control/ocr.ts` picks the transport from the backend
+  setting and **auto-falls back to the WASM worker** if the host can't start or
+  dies. WASM stays the in-renderer fallback; WebGPU is kept but off by default.
+- **Measured (R4.0 gate, real Windows GPU):** read "17,080" @ 0.99; latency
+  ~1.3 s warmup then **flat ~28–33 ms**, no ramp. vs WASM ~1–2 s, vs broken
+  WebGPU ramping to 24,000 ms.
+
+Sanctioned locked-stack deviation (see TASKS.md R4 / CLAUDE.md). **Still needs the
+in-app Windows verification checkpoint** — the R4.0 gate proved the engine in
+isolation; confirm the overlay-up stall is gone in the running app.
+
 ## Possible follow-ups (not yet done)
 
-- **Multi-threaded WASM** via cross-origin isolation (COOP/COEP headers so
-  `SharedArrayBuffer` is available) — ~4–8× faster CPU OCR, still off the GPU.
-  Would recover most of WebGPU's speed without the contention.
-- **Auto-fallback**: keep WebGPU as default but watch OCR latency; if it climbs
-  past a threshold (contention/degradation), recreate the engine on WASM.
+- **Make `directml` the default** once the in-app Windows checkpoint confirms it
+  (currently opt-in via settings; default stays `wasm`).
+- **Raw-RGBA image transport** to the host (transferable `ArrayBuffer` + dims)
+  instead of a PNG data URL, skipping a PNG encode/decode on the hot path; and
+  `MessageChannelMain` so the renderer talks to the utility process directly
+  rather than bouncing image data through main.
+- **Multi-threaded WASM** via cross-origin isolation (COOP/COEP → `SharedArrayBuffer`)
+  — ~4–8× faster CPU OCR for the non-DX12 fallback path, still off the GPU.
 - **Reduce per-tick overlay re-renders**: throttle the OCR-stats field so
   `sendMatches` doesn't fire every tick (relevant again if WebGPU is re-enabled).
-- **Investigate ORT-web WebGPU memory growth** (onnxruntime-web 1.17.3) as a
-  secondary contributor to the per-run latency climb.
