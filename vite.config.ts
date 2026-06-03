@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { resolve as resolvePath } from 'node:path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -6,8 +7,23 @@ import electron from 'vite-plugin-electron';
 // Vite ↔ Electron integration (locked stack). The renderer is a normal Vite
 // app; the plugin compiles the main + preload processes and launches Electron
 // in `vite dev`. Window wiring lands in Phase 1/3.
-export default defineConfig({
-  plugins: [
+export default defineConfig(({ command }) => {
+  // Before `vite dev` spawns Electron, make sure the installed binary matches
+  // this OS — the repo is run from both WSL and native Windows against one
+  // shared node_modules, so the binary is often built for the other platform.
+  // Run the guard here (not only in the `predev` npm hook) so it can't be
+  // skipped by a script runner that ignores pre-scripts. No-op when matched.
+  if (command === 'serve') {
+    try {
+      execFileSync(process.execPath, [resolvePath(process.cwd(), 'scripts/ensure-electron.mjs')], {
+        stdio: 'inherit',
+      });
+    } catch {
+      // ensure-electron prints its own guidance; don't block config load.
+    }
+  }
+  return {
+   plugins: [
     react(),
     // Package is CommonJS, so the plugin emits CJS main + preload (a sandboxed
     // preload must be CommonJS). The renderer is still bundled as ESM by Vite.
@@ -40,4 +56,5 @@ export default defineConfig({
       },
     },
   },
+  };
 });
