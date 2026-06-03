@@ -19,6 +19,7 @@ export { matchOre, matchWithNoise, clusterProb, DEFAULT_REL_TOL } from './matche
 
 export {
   isPlausibleReading,
+  isExpired,
   voteStep,
   createVoter,
   initialVoteState,

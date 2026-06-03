@@ -9,7 +9,7 @@ import { DEFAULT_OVERLAY_CONFIG } from '../shared/bridge';
 import type { OverlayConfig, OverlayPayload } from '../shared/bridge';
 import { OverlayCard } from './OverlayCard';
 
-const EMPTY: OverlayPayload = { reading: null, candidates: [] };
+const EMPTY: OverlayPayload = { reading: null, candidates: [], status: 'no-rs' };
 
 export function Overlay() {
   const [payload, setPayload] = useState<OverlayPayload>(EMPTY);
@@ -80,16 +80,18 @@ export function Overlay() {
     resizeStart.current = null;
   };
 
-  const { reading, candidates, settling, ocr } = payload;
+  const { reading, candidates, settling, ocr, status } = payload;
+  // Source lost → the overlay vanishes entirely, regardless of idle/content/edit.
+  const sourceLost = status === 'source-lost';
   // Show whenever we have *anything* useful: candidates, or a reading (so the
   // "no match" message is visible), or — when enabled — the "scanning…"
   // placeholder. Idle fade handles eventual disappearance.
   const hasContent = candidates.length > 0 || reading != null || config.showPlaceholder;
-  const visible = editing || (!hidden && hasContent && (config.idleMs <= 0 || !idle));
+  const visible = !sourceLost && (editing || (!hidden && hasContent && (config.idleMs <= 0 || !idle)));
 
   return (
     <div style={{ ...S.root, opacity: visible ? 1 : 0 }}>
-      <OverlayCard reading={reading} candidates={candidates} settling={settling} ocr={ocr} config={config} editing={editing} />
+      <OverlayCard reading={reading} candidates={candidates} settling={settling} ocr={ocr} status={status} config={config} editing={editing} />
       {editing && (
         <div style={GRIP} onPointerDown={onGripDown} onPointerMove={onGripMove} onPointerUp={onGripUp} />
       )}

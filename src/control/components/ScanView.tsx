@@ -28,12 +28,14 @@ import type { OcrBackend } from '../ocr';
 import type { DrawableSource, NormRegion } from '../preprocess';
 import {
   createVoter,
+  isExpired,
   matchWithNoise,
   groupLocations,
   getQualityDetail,
   snapMaterial,
 } from '../../core';
 import type { ScanResult, SignatureTable, Voter } from '../../core';
+import type { OverlayStatus } from '../../shared/bridge';
 import { DEFAULT_OVERLAY_CONFIG } from '../../shared/bridge';
 import type {
   HotkeyAction,
@@ -158,19 +160,52 @@ export function ScanView({
   // (it latches `stable` to the candidate exactly at quorum, so an in-progress
   // candidate that isn't yet `stable` means the display may be about to change).
   const [settling, setSettling] = useState(false);
+  // Read-pipeline reason for what the overlay shows — feeds the status footer +
+  // overlay reason chip so a blank overlay explains itself.
+  const [readState, setReadState] = useState<'reading' | 'held' | 'expired' | 'low-conf' | 'no-rs'>('no-rs');
+  // performance.now() of the last *valid* RS reading — drives hold-then-drop.
+  const lastValidAt = useRef<number | null>(null);
+  // Whether a valid reading has ever been seen (expired vs never-read).
+  const hadReading = useRef(false);
   // Measured capture cadence for the status bar — a rolling rate over the last
   // few ticks (the loop targets ~1–2/s; actual depends on OCR cost).
   const tickTimes = useRef<number[]>([]);
   const [tickRate, setTickRate] = useState(0);
+
+  const minConf = params.minConfidence ?? 0;
+  const holdMs = overlayConfig.holdMs;
+
   useEffect(() => {
-    const s = voter.current.push(readout.rs);
-    setStableRs(s);
-    setSettling(voter.current.candidate != null && voter.current.candidate !== s);
+    const reading = readout.rs;
     const now = performance.now();
+    const ocr = readout.ocr;
+    // A read below the confidence gate arrives as null (gated upstream); detect
+    // the low-conf case here so we can say *why* nothing showed.
+    const lowConf = ocr != null && ocr.score < minConf;
+    if (reading != null) {
+      lastValidAt.current = now;
+      hadReading.current = true;
+      const s = voter.current.push(reading);
+      setStableRs(s);
+      setSettling(voter.current.candidate != null && voter.current.candidate !== s);
+      setReadState('reading');
+    } else if (!isExpired(lastValidAt.current, now, holdMs)) {
+      // No fresh read but within the hold window: keep the last value on screen.
+      const shown = voter.current.stable;
+      setReadState(shown != null ? 'held' : lowConf ? 'low-conf' : 'no-rs');
+    } else {
+      // Hold elapsed: drop the latched value so the overlay clears.
+      voter.current.reset();
+      lastValidAt.current = null;
+      setStableRs(null);
+      setSettling(false);
+      setReadState(lowConf ? 'low-conf' : hadReading.current ? 'expired' : 'no-rs');
+    }
     const t = tickTimes.current;
     t.push(now);
     if (t.length > 8) t.shift();
     setTickRate(t.length >= 2 ? (t.length - 1) / ((t[t.length - 1] - t[0]) / 1000) : 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readout]);
   // Clear the rate window when paused so resuming doesn't show a stale gap.
   useEffect(() => {
@@ -179,6 +214,27 @@ export function ScanView({
       setTickRate(0);
     }
   }, [paused]);
+
+  // Source-lost detection: a captured desktop/window stream can die (game closed,
+  // display unplugged). Watch its video tracks for `ended`/poll `readyState`;
+  // when lost, the overlay is told to vanish entirely. Image/video-file sources
+  // can't be "lost", so this only arms for live streams.
+  const [sourceLost, setSourceLost] = useState(false);
+  useEffect(() => {
+    setSourceLost(false);
+    const stream = source.stream;
+    if (!stream) return;
+    const tracks = stream.getVideoTracks();
+    const onEnded = (): void => setSourceLost(true);
+    tracks.forEach((t) => t.addEventListener('ended', onEnded));
+    const id = window.setInterval(() => {
+      if (tracks.some((t) => t.readyState === 'ended')) setSourceLost(true);
+    }, 1000);
+    return () => {
+      tracks.forEach((t) => t.removeEventListener('ended', onEnded));
+      window.clearInterval(id);
+    };
+  }, [source]);
 
 
   const systemGroups = useMemo(() => groupLocations(table), [table]);
@@ -231,10 +287,23 @@ export function ScanView({
   // Materials are snap-corrected against the table vocabulary at freeze time
   // so the overlay/IPC consumers see clean names without doing their own fuzzy
   // matching.
+  // performance.now() of the last valid SCAN RESULTS parse — drives the same
+  // hold-then-drop as the RS reading so the scan box clears when the panel goes.
   const [frozenScan, setFrozenScan] = useState<ScanResult | null>(null);
+  const lastScanAt = useRef<number | null>(null);
   useEffect(() => {
     const next = readout.scan;
-    if (!next) return;
+    const now = performance.now();
+    if (!next) {
+      // No panel detected (parseScanResult is strict): clear once the hold
+      // window elapses, so stale composition doesn't linger after the rock's gone.
+      if (frozenScan && isExpired(lastScanAt.current, now, holdMs)) {
+        setFrozenScan(null);
+        lastScanAt.current = null;
+      }
+      return;
+    }
+    lastScanAt.current = now;
     const snapped: ScanResult = {
       ...next,
       ore: snapMaterial(next.ore, oreVocab),
@@ -245,7 +314,7 @@ export function ScanView({
     };
     if (frozenScan && sameRock(frozenScan, snapped)) return;
     setFrozenScan(snapped);
-  }, [readout, frozenScan, oreVocab]);
+  }, [readout, frozenScan, oreVocab, holdMs]);
 
   // Push matches + top-candidate quality + the frozen scanned rock to the
   // overlay boxes. Effect deps only fire on meaningful changes so the overlay
@@ -253,16 +322,46 @@ export function ScanView({
   // Only push OCR stats to the overlay when its toggle is on — otherwise this
   // is null and stable, so the send effect doesn't re-fire every tick.
   const ocrPush = overlayConfig.showOcrStats ? readout.ocr : null;
+
+  // Is a SCAN RESULTS region enabled? Only then is a missing scan panel worth
+  // reporting (no-scan) rather than silence.
+  const hasScanRegion = regions.some((r) => r.role === 'scanResult' && r.enabled);
+
+  // Single source of truth for *why* the overlay shows (or doesn't) what it
+  // does — threaded to both the control footer and the overlay so the reason
+  // isn't re-derived twice and can't drift.
+  const overlayStatus: OverlayStatus =
+    sourceLost
+      ? 'source-lost'
+      : paused
+        ? 'paused'
+        : readState === 'held'
+          ? 'held'
+          : stableRs != null
+            ? matches.length > 0
+              ? 'ok'
+              : 'no-match'
+            : readState === 'low-conf'
+              ? 'low-conf'
+              : readState === 'expired'
+                ? 'expired'
+                : hasScanRegion && !frozenScan && readout.rs == null
+                  ? 'no-scan'
+                  : 'no-rs';
+
   useEffect(() => {
+    // On source loss, clear everything so the overlay vanishes — don't ship a
+    // frozen last frame. The status tells the overlay to force-hide.
     window.sco?.sendMatches?.({
-      reading: stableRs,
-      candidates: overlayCandidates,
-      detail,
-      scan: frozenScan,
+      reading: sourceLost ? null : stableRs,
+      candidates: sourceLost ? [] : overlayCandidates,
+      detail: sourceLost ? null : detail,
+      scan: sourceLost ? null : frozenScan,
       settling,
       ocr: ocrPush ? { score: ocrPush.score, ms: ocrPush.ms, lineCount: ocrPush.lineCount } : null,
+      status: overlayStatus,
     });
-  }, [stableRs, overlayCandidates, detail, frozenScan, settling, ocrPush]);
+  }, [stableRs, overlayCandidates, detail, frozenScan, settling, ocrPush, overlayStatus, sourceLost]);
 
   // Global-hotkey commands relayed from the main process. Recalibrate clears
   // both the regions *and* the frozen scan so the next rock takes over.
@@ -289,9 +388,25 @@ export function ScanView({
   const set = <K extends keyof LoopParams>(key: K, val: LoopParams[K]): void =>
     onParamsChange({ ...params, [key]: val });
 
-  // Status-bar derived state.
-  const voterState = paused ? 'paused' : settling ? 'settling' : stableRs != null ? 'locked' : 'idle';
-  const stateColor = voterState === 'locked' ? C.green : voterState === 'settling' ? C.amber : '#9fb3c8';
+  // Status-bar derived state. Maps the overlay status (plus the settling
+  // sub-state) to a human label + color so the footer says *why* nothing shows.
+  const STATUS_META: Record<OverlayStatus, { label: string; color: string }> = {
+    ok: { label: 'locked', color: C.green },
+    'no-match': { label: 'no match', color: C.amber },
+    held: { label: 'held', color: C.amber },
+    expired: { label: 'expired', color: '#f87171' },
+    'low-conf': { label: 'low conf', color: '#f87171' },
+    'no-scan': { label: 'no scan panel', color: C.amber },
+    'no-rs': { label: 'no RS', color: '#9fb3c8' },
+    'source-lost': { label: 'source lost', color: '#f87171' },
+    paused: { label: 'paused', color: '#9fb3c8' },
+  };
+  const voterMeta =
+    !paused && !sourceLost && settling && overlayStatus === 'ok'
+      ? { label: 'settling', color: C.amber }
+      : STATUS_META[overlayStatus];
+  const voterState = voterMeta.label;
+  const stateColor = voterMeta.color;
   const ocr = readout.ocr;
   const confPct = ocr ? Math.round(ocr.score * 100) : null;
   // PP-OCR scores run high; treat <90% as worth noticing, <70% as bad.
@@ -300,8 +415,10 @@ export function ScanView({
   // Header health pill — one-glance pipeline rollup, colored by the worst
   // stage: source connected → RS region drawn → frames flowing → OCR confidence.
   const hasRsRegion = regions.some((r) => r.role === 'rs' && r.enabled);
-  const capturing = !paused && tickRate > 0;
-  const health = paused
+  const capturing = !paused && !sourceLost && tickRate > 0;
+  const health = sourceLost
+    ? { color: '#f87171', label: 'source lost' }
+    : paused
     ? { color: '#9fb3c8', label: 'paused' }
     : !hasRsRegion
       ? { color: '#f87171', label: 'add RS region' }
@@ -315,7 +432,7 @@ export function ScanView({
               ? { color: C.amber, label: 'low conf' }
               : { color: '#f87171', label: 'poor conf' };
   const healthTip =
-    `source ✓ · RS region ${hasRsRegion ? '✓' : '✗'} · ` +
+    `source ${sourceLost ? '✗ lost' : '✓'} · RS region ${hasRsRegion ? '✓' : '✗'} · ` +
     `reads ${capturing ? '✓' : '✗'} · conf ${confPct != null ? `${confPct}%` : '—'}`;
 
   // Which overlay preset (if any) the current config matches — for highlighting.
@@ -560,6 +677,19 @@ export function ScanView({
                   onChange={(v) => set('quorum', v)}
                   suffix=" frames"
                 />
+                <Slider
+                  label="Min confidence"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={Math.round((params.minConfidence ?? 0) * 100)}
+                  onChange={(v) => set('minConfidence', v / 100)}
+                  suffix="%"
+                />
+                <p style={S.dim}>
+                  Reads below this OCR confidence are ignored (treated as no reading), so
+                  garbage can't move the lock. 0% = accept everything.
+                </p>
               </Section>
 
               <Section title="OCR backend">
@@ -599,6 +729,7 @@ export function ScanView({
                     candidates={overlayCandidates}
                     settling={settling}
                     ocr={overlayConfig.showOcrStats ? readout.ocr : null}
+                    status={overlayStatus}
                     config={overlayConfig}
                   />
                 </div>
@@ -658,6 +789,25 @@ export function ScanView({
                   <option value={0}>Never</option>
                 </select>
               </label>
+              <label style={S.selectRow}>
+                <span style={S.sliderLabel}>Hold reading</span>
+                <select
+                  style={S.select}
+                  value={overlayConfig.holdMs}
+                  onChange={(e) =>
+                    onOverlayConfigChange({ ...overlayConfig, holdMs: Number(e.target.value) })
+                  }
+                >
+                  <option value={2000}>2s</option>
+                  <option value={4000}>4s</option>
+                  <option value={10000}>10s</option>
+                  <option value={0}>Never drop</option>
+                </select>
+              </label>
+              <p style={S.dim}>
+                Keep showing the last ore this long after the RS reading disappears, then
+                clear it. (Fade only changes opacity; hold clears the value.)
+              </p>
               <label style={S.selectRow}>
                 <span style={S.sliderLabel}>Size</span>
                 <select

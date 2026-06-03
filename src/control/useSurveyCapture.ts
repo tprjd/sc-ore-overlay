@@ -136,7 +136,8 @@ export function useSurveyCapture(
   const regionsRef = useRef(regions);
   regionsRef.current = regions;
 
-  const { scale, intervalMs } = params;
+  const { scale, intervalMs, minConfidence } = params;
+  const minConf = minConfidence ?? 0;
   // Restart the loop when the set/role/rect of regions changes.
   const regionsKey = regions
     .map((r) => `${r.id}:${r.role}:${r.scale ?? ''}:${r.rect.x},${r.rect.y},${r.rect.w},${r.rect.h}`)
@@ -194,7 +195,10 @@ export function useSurveyCapture(
           let system: string | null = null;
           let scan: ScanResult | null = null;
           if (reg.role === 'rs') {
-            rs = pickReading(lines, table);
+            // Confidence gate: a low-confidence frame is treated as no-reading
+            // (null) so clear garbage never reaches the voter. The score is the
+            // best detected line's confidence.
+            rs = score >= minConf ? pickReading(lines, table) : null;
           } else if (reg.role === 'shipPos') {
             // parsePos anchors on the SolarSystem frame across however many zone
             // rows the box caught, and flattens the lines itself.
@@ -281,7 +285,7 @@ export function useSurveyCapture(
       window.clearInterval(id);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mediaRef, scale, intervalMs, enabled, table, regionsKey]);
+  }, [mediaRef, scale, intervalMs, minConf, enabled, table, regionsKey]);
 
   return state;
 }

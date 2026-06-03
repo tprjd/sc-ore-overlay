@@ -146,12 +146,35 @@ export function snapMaterial(raw: string, vocab: readonly string[]): string {
   return titleCase(cleaned);
 }
 
+/** Options for {@link parseScanResult}. */
+export interface ScanParseOptions {
+  /**
+   * Require structural evidence that the SCAN RESULTS panel is actually on
+   * screen before returning a result. Default true. When the panel is absent the
+   * scan region OCRs whatever HUD junk sits there, and a bare line with a letter
+   * would otherwise be taken as the ore name (garbage). Strict mode rejects that
+   * unless at least one real signal is present: the "SCAN RESULTS" header, a
+   * MASS label, an SCU total, or a composition row. Pass false for the looser
+   * "first letter-line is the ore" behavior.
+   */
+  strict?: boolean;
+}
+
+/** Header detection, OCR-tolerant of glued/garbled spacing (e.g. "SCANRESULT"). */
+const SCAN_HEADER = /scan\s*results?/i;
+
 /**
- * Parse the SCAN RESULTS panel text. Returns null when no ore line is present
- * (e.g. the region didn't capture the panel). Numeric fields are best-effort and
- * may be undefined if the OCR missed them; the ore + composition are the point.
+ * Parse the SCAN RESULTS panel text. Returns null when the panel isn't present
+ * — by default (strict) that means no real signal was detected, not merely "no
+ * ore line", so junk HUD text can't masquerade as a scanned rock. Numeric fields
+ * are best-effort and may be undefined if the OCR missed them; the ore +
+ * composition are the point.
  */
-export function parseScanResult(text: string): ScanResult | null {
+export function parseScanResult(
+  text: string,
+  opts: ScanParseOptions = {},
+): ScanResult | null {
+  const strict = opts.strict ?? true;
   const lines = text
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -191,6 +214,16 @@ export function parseScanResult(text: string): ScanResult | null {
       quality,
       scu: scuTotal != null ? (percent / 100) * scuTotal : undefined,
     });
+  }
+
+  // Strict presence gate: require at least one real panel signal so HUD junk
+  // (a stray letter-line with no header/mass/scu/composition) is rejected.
+  if (strict) {
+    const hasHeader = SCAN_HEADER.test(text);
+    const hasMass = /mass\s*:?\s*[\d]/i.test(text);
+    const hasScu = scuTotal != null;
+    const hasComposition = composition.length > 0;
+    if (!hasHeader && !hasMass && !hasScu && !hasComposition) return null;
   }
 
   return {

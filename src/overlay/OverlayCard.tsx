@@ -9,7 +9,7 @@
 // single line. The shown ore/count flashes briefly when it changes.
 
 import type { CSSProperties } from 'react';
-import type { OverlayCandidate, OverlayConfig, OverlayOcr, OverlayScale } from '../shared/bridge';
+import type { OverlayCandidate, OverlayConfig, OverlayOcr, OverlayScale, OverlayStatus } from '../shared/bridge';
 
 /** Font sizes per preset (padding + gap come from config). */
 const SCALE: Record<OverlayScale, { font: number; muted: number }> = {
@@ -55,12 +55,29 @@ export interface OverlayCardProps {
   candidates: OverlayCandidate[];
   settling?: boolean;
   ocr?: OverlayOcr | null;
+  /** Why the overlay shows what it does — drives the placeholder reason text. */
+  status?: OverlayStatus;
   config: OverlayConfig;
   /** Real window only: dashed border + drag region. Always false in preview. */
   editing?: boolean;
 }
 
-export function OverlayCard({ reading, candidates, settling = false, ocr = null, config, editing = false }: OverlayCardProps) {
+/** Short reason text for the placeholder, so a blank overlay explains itself. */
+function placeholderText(status: OverlayStatus | undefined, settling: boolean): string {
+  if (settling) return 'locking…';
+  switch (status) {
+    case 'low-conf':
+      return 'low signal';
+    case 'expired':
+      return 'no RS';
+    case 'no-scan':
+      return 'no scan panel';
+    default:
+      return 'scanning…';
+  }
+}
+
+export function OverlayCard({ reading, candidates, settling = false, ocr = null, status, config, editing = false }: OverlayCardProps) {
   const sz = SCALE[config.scale];
   const compact = config.scale === 'compact';
   const secFont = Math.max(11, Math.round(sz.font * 0.7));
@@ -160,7 +177,7 @@ export function OverlayCard({ reading, candidates, settling = false, ocr = null,
         // no candidate is shown. Surface that with a pulsing dot + "locking…".
         <div style={{ ...S.muted, fontSize: sz.muted, display: 'flex', alignItems: 'center' }}>
           {settling && dot}
-          {settling ? 'locking…' : 'scanning…'}
+          {placeholderText(status, settling)}
         </div>
       ) : null}
       {config.showOcrStats && ocr && top && (

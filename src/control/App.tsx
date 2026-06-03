@@ -28,7 +28,7 @@ type Tab = 'mining' | 'survey';
 
 // PP-OCR reads raw color text and localizes it, so there is nothing to tune but
 // the crop upscale and the loop cadence.
-const DEFAULT_PARAMS: LoopParams = { scale: 4, intervalMs: 700, quorum: 3 };
+const DEFAULT_PARAMS: LoopParams = { scale: 4, intervalMs: 700, quorum: 3, minConfidence: 0.5 };
 
 /**
  * Default non-ore signatures to try subtracting from the RS before matching.
@@ -122,6 +122,7 @@ export function App() {
           scale: s.scale ?? prev.scale,
           intervalMs: s.intervalMs ?? prev.intervalMs,
           quorum: s.quorum ?? prev.quorum,
+          minConfidence: s.minConfidence ?? prev.minConfidence,
         }));
         if (s.activePatch && tables[s.activePatch]) setActivePatch(s.activePatch);
         if (s.hotkeys) setHotkeys({ ...DEFAULT_HOTKEYS, ...s.hotkeys });
@@ -158,6 +159,7 @@ export function App() {
         scale: params.scale,
         intervalMs: params.intervalMs,
         quorum: params.quorum,
+        minConfidence: params.minConfidence,
       });
     }
   }, [params, loaded]);

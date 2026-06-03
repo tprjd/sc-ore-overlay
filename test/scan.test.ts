@@ -71,6 +71,26 @@ describe('parseScanResult', () => {
     expect(r.composition[2].scu).toBeCloseTo(7.21, 2); // 19.23% of 37.51
   });
 
+  it('rejects HUD junk when no panel signal is present (strict, default)', () => {
+    // A stray letter-line with no header / mass / scu / composition row — the
+    // scan region pointed at the HUD with no SCAN RESULTS panel up.
+    expect(parseScanResult('QUANTANIUM')).toBeNull();
+    expect(parseScanResult('SOME RANDOM HUD TEXT\nMORE JUNK')).toBeNull();
+  });
+
+  it('parses a partial panel when at least one signal is present', () => {
+    // Header missing but MASS present — still a real (if degraded) panel.
+    const r = parseScanResult('IRON (ORE) [CF]\nMASS: 35111')!;
+    expect(r).not.toBeNull();
+    expect(r.ore).toBe('Iron');
+  });
+
+  it('loose mode keeps the legacy first-letter-line behavior', () => {
+    const r = parseScanResult('QUANTANIUM', { strict: false })!;
+    expect(r).not.toBeNull();
+    expect(r.oreRaw).toBe('QUANTANIUM');
+  });
+
   it('reads rows with the quality glued to the material, and a no-number row', () => {
     const text = [
       'SCAN RESULTS',
