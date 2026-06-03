@@ -220,6 +220,9 @@ export function ScanView({
   // Push matches + top-candidate quality + the frozen scanned rock to the
   // overlay boxes. Effect deps only fire on meaningful changes so the overlay
   // doesn't re-arm its idle timer on every OCR tick.
+  // Only push OCR stats to the overlay when its toggle is on — otherwise this
+  // is null and stable, so the send effect doesn't re-fire every tick.
+  const ocrPush = overlayConfig.showOcrStats ? readout.ocr : null;
   useEffect(() => {
     const top = matches[0];
     const detail = top ? getQualityDetail(table, top.name, top.signature, location) : null;
@@ -229,8 +232,9 @@ export function ScanView({
       detail,
       scan: frozenScan,
       settling,
+      ocr: ocrPush ? { score: ocrPush.score, ms: ocrPush.ms, lineCount: ocrPush.lineCount } : null,
     });
-  }, [stableRs, matches, overlayCandidates, table, location, frozenScan, settling]);
+  }, [stableRs, matches, overlayCandidates, table, location, frozenScan, settling, ocrPush]);
 
   // Global-hotkey commands relayed from the main process. Recalibrate clears
   // both the regions *and* the frozen scan so the next rock takes over.
@@ -486,6 +490,7 @@ export function ScanView({
                   reading={stableRs}
                   candidates={overlayCandidates}
                   settling={settling}
+                  ocr={overlayConfig.showOcrStats ? readout.ocr : null}
                   config={overlayConfig}
                 />
               </div>
@@ -605,6 +610,16 @@ export function ScanView({
                   }
                 />
                 Show scanned-rock box (SCU per quality)
+              </label>
+              <label style={S.checkRow}>
+                <input
+                  type="checkbox"
+                  checked={overlayConfig.showOcrStats}
+                  onChange={(e) =>
+                    onOverlayConfigChange({ ...overlayConfig, showOcrStats: e.target.checked })
+                  }
+                />
+                Show OCR stats (confidence · latency · lines)
               </label>
               <p style={S.dim}>In edit mode (Alt+Shift+E): drag to move, drag the corner grip to resize.</p>
             </Section>

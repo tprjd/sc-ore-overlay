@@ -29,6 +29,16 @@ export interface OverlayCandidate {
   loose?: boolean;
 }
 
+/** Compact OCR stats for the RS region, shown on the overlay when enabled. */
+export interface OverlayOcr {
+  /** Best detected-line confidence (0..1). */
+  score: number;
+  /** recognize() wall time in ms. */
+  ms: number;
+  /** Detected text-line count. */
+  lineCount: number;
+}
+
 /** What the control window pushes to the overlay (relayed to both boxes). */
 export interface OverlayPayload {
   /** The accepted RS reading, or null when none is stable. */
@@ -45,6 +55,8 @@ export interface OverlayPayload {
    * change. The overlay renders this as a pulsing (vs solid) confidence dot.
    */
   settling?: boolean;
+  /** OCR stats for the RS region (for the overlay's optional stats line). */
+  ocr?: OverlayOcr | null;
 }
 
 /** Commands raised by global hotkeys in the main process. */
@@ -76,6 +88,8 @@ export interface OverlayConfig {
   showDetail: boolean;
   /** Show the "scanned rock" overlay box (SCU-per-quality from the scan). */
   showScan: boolean;
+  /** Show an OCR stats line (confidence · latency · lines) on the overlay card. */
+  showOcrStats: boolean;
 }
 
 /** Default overlay appearance. */
@@ -91,6 +105,7 @@ export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
   showPlaceholder: true,
   showDetail: false,
   showScan: false,
+  showOcrStats: false,
 };
 
 /** A rebindable global-hotkey action. */

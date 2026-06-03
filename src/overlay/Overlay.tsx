@@ -80,7 +80,7 @@ export function Overlay() {
     resizeStart.current = null;
   };
 
-  const { reading, candidates, settling } = payload;
+  const { reading, candidates, settling, ocr } = payload;
   // Show whenever we have *anything* useful: candidates, or a reading (so the
   // "no match" message is visible), or — when enabled — the "scanning…"
   // placeholder. Idle fade handles eventual disappearance.
@@ -89,7 +89,7 @@ export function Overlay() {
 
   return (
     <div style={{ ...S.root, opacity: visible ? 1 : 0 }}>
-      <OverlayCard reading={reading} candidates={candidates} settling={settling} config={config} editing={editing} />
+      <OverlayCard reading={reading} candidates={candidates} settling={settling} ocr={ocr} config={config} editing={editing} />
       {editing && (
         <div style={GRIP} onPointerDown={onGripDown} onPointerMove={onGripMove} onPointerUp={onGripUp} />
       )}

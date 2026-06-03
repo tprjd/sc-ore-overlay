@@ -9,7 +9,7 @@
 // a single line.
 
 import type { CSSProperties } from 'react';
-import type { OverlayCandidate, OverlayConfig, OverlayScale } from '../shared/bridge';
+import type { OverlayCandidate, OverlayConfig, OverlayOcr, OverlayScale } from '../shared/bridge';
 
 /** Font sizes per preset (padding + gap come from config). */
 const SCALE: Record<OverlayScale, { font: number; muted: number }> = {
@@ -39,6 +39,13 @@ function scoreColor(pct: number): string {
   return '#f87171';
 }
 
+/** OCR confidence (0..1) → color. PP-OCR runs high, so the bands are tighter. */
+function ocrColor(score: number): string {
+  if (score >= 0.9) return '#34d399';
+  if (score >= 0.7) return '#fbbf24';
+  return '#f87171';
+}
+
 // In edit mode the whole card is a drag region (the window's grip is `no-drag`,
 // so it resizes instead). `-webkit-app-region` isn't typed on CSSProperties.
 const DRAG_REGION = { WebkitAppRegion: 'drag' } as unknown as CSSProperties;
@@ -47,12 +54,13 @@ export interface OverlayCardProps {
   reading: number | null;
   candidates: OverlayCandidate[];
   settling?: boolean;
+  ocr?: OverlayOcr | null;
   config: OverlayConfig;
   /** Real window only: dashed border + drag region. Always false in preview. */
   editing?: boolean;
 }
 
-export function OverlayCard({ reading, candidates, settling = false, config, editing = false }: OverlayCardProps) {
+export function OverlayCard({ reading, candidates, settling = false, ocr = null, config, editing = false }: OverlayCardProps) {
   const sz = SCALE[config.scale];
   const compact = config.scale === 'compact';
   const secFont = Math.max(11, Math.round(sz.font * 0.7));
@@ -159,6 +167,12 @@ export function OverlayCard({ reading, candidates, settling = false, config, edi
           {settling ? 'locking…' : 'scanning…'}
         </div>
       ) : null}
+      {config.showOcrStats && ocr && top && (
+        <div style={S.ocr}>
+          <span style={{ color: ocrColor(ocr.score), fontWeight: 600 }}>{Math.round(ocr.score * 100)}%</span>
+          <span style={S.ocrDim}> · {ocr.ms}ms · {ocr.lineCount}L</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -229,6 +243,14 @@ const S: Record<string, CSSProperties> = {
     paddingLeft: 8,
   },
   muted: { color: '#9fb3c8', textShadow: '0 1px 3px rgba(0,0,0,0.9)' },
+  ocr: {
+    fontSize: 11,
+    fontVariantNumeric: 'tabular-nums',
+    paddingLeft: 14,
+    lineHeight: 1.1,
+    textShadow: '0 1px 2px rgba(0,0,0,0.9)',
+  },
+  ocrDim: { color: '#9fb3c8' },
   noiseBadge: {
     marginLeft: 6,
     padding: '1px 5px',
