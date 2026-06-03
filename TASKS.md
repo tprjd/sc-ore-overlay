@@ -97,7 +97,10 @@ Bigger feature work beyond shipped v1. Not blocking.
 
 ---
 
-## R4 — Native DirectML OCR sidecar (vendor-agnostic GPU OCR) — **priority: high**
+## R4 — Native DirectML OCR sidecar (vendor-agnostic GPU OCR) — ✅ DONE
+
+**Shipped on `main` (merge `65284fe`). In-app verified on real Windows hardware** — DirectML reads
+correctly, latency flat ~28–33 ms, the overlay-up stall is gone. R4.0–R4.6 all complete.
 
 **Resolves the OCR-ISSUES.md stall by running OCR on the GPU again — without the contention.**
 
@@ -217,7 +220,11 @@ stall is gone with stable latency. Do not claim it works without those confirmed
 
 ---
 
-## R5 — Make DirectML the default + add a UI backend toggle
+## R5 — Make DirectML the default + add a UI backend toggle — ✅ DONE
+
+**Shipped on `main` (merge `65284fe`), in-app verified.** DirectML is the launch default; the Capture
+tab has the backend selector; the status footer shows the active engine (`eng`); WASM auto-fallback
+intact. All three tasks complete.
 
 R4's `directml` backend is confirmed working in-app on real Windows hardware
 (read correct, flat ~28–33 ms, overlay-up stall gone). Promote it from an opt-in
