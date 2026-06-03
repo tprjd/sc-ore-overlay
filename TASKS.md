@@ -149,6 +149,23 @@ The Overlay tab is ~11 controls — sprawl.
 - A preset reconfigures the overlay in one click; reset restores defaults; both reflect live in the
   preview.
 
+### C4 — Sortable scanned-rock card
+**Tasks**
+- Let the user sort the scanned-rock composition by SCU / quality / percent instead of the current
+  fixed (SCU desc, inert last) order.
+- The live overlay window is click-through (`setIgnoreMouseEvents`), so header clicks can't fire
+  there during play. Drive the sort from a **persisted** `scanSort` field on `OverlayConfig`
+  (default `'scu'`) that both the preview and the overlay obey.
+- Make `ScanCard` take an optional `onSortChange?`: the overlay window passes nothing (static
+  headers); the control-window preview passes a handler so clicking a column header in the preview
+  updates `overlayConfig.scanSort` (persists + re-sorts both). Active column shows a direction arrow;
+  inert rows stay pinned last.
+- Optional: apply the same pattern to `DetailCard` (quality / % columns).
+
+**Acceptance**
+- Clicking a scanned-rock column header in the preview re-sorts it and the live overlay box to match,
+  and the choice survives a restart.
+
 ## D — Robustness & help
 
 ### D1 — Capture-source-lost banner
