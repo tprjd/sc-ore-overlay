@@ -5,11 +5,12 @@
 //
 // Built as CommonJS by vite-plugin-electron, so `__dirname` is available.
 
-import { app, BrowserWindow, desktopCapturer, globalShortcut, ipcMain, utilityProcess } from 'electron';
+import { app, BrowserWindow, desktopCapturer, globalShortcut, ipcMain, shell, utilityProcess } from 'electron';
 import type { IpcMainEvent, IpcMainInvokeEvent, UtilityProcess } from 'electron';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { installCrashHandlers, log } from './log';
+import { checkForUpdate } from './update';
 import { DEFAULT_HOTKEYS } from '../src/shared/bridge';
 import type {
   AppSettings,
@@ -27,6 +28,12 @@ const dirname = __dirname;
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 const RENDERER_DIST = path.join(dirname, '..', 'dist');
 const PRELOAD = path.join(dirname, 'preload.js');
+// Window/taskbar icon. build.win.icon only sets the packaged .exe icon, so the
+// running window (esp. in `vite dev`, and on Linux) still needs this explicitly.
+// Dev: read from the repo build/ dir; prod: shipped via extraResources.
+const APP_ICON = DEV_SERVER_URL
+  ? path.join(dirname, '..', 'build', 'icon.png')
+  : path.join(process.resourcesPath, 'icon.png');
 
 // Capture crashes/throws to <userData>/logs/main.log before anything else can
 // fail silently (see electron/log.ts).
@@ -125,6 +132,15 @@ ipcMain.on('sco:save-survey-log', (_e: IpcMainEvent, entries: SurveyEntry[]) => 
   } catch {
     // ignore write errors
   }
+});
+
+// --- Update check ------------------------------------------------------------
+// Renderer-pulled at startup (one shot). See electron/update.ts.
+ipcMain.handle('sco:check-updates', () => checkForUpdate());
+ipcMain.on('sco:open-external', (_e: IpcMainEvent, url: string) => {
+  // Only ever open external https links (release pages) — never arbitrary
+  // schemes (file:, javascript:, custom protocols) from the renderer.
+  if (/^https:\/\//i.test(url)) void shell.openExternal(url);
 });
 
 // --- Native OCR host (utility process) ---------------------------------------
@@ -247,6 +263,7 @@ function createControlWindow(): BrowserWindow {
     width: 1100,
     height: 760,
     title: 'SC Ore Overlay — Control',
+    icon: APP_ICON,
     backgroundColor: '#16181d',
     webPreferences: {
       preload: PRELOAD,

@@ -13,6 +13,7 @@ import type {
   OverlayConfig,
   OverlayPayload,
   ScoBridge,
+  UpdateInfo,
 } from '../src/shared/bridge';
 import type { SurveyEntry } from '../src/core/survey';
 
@@ -66,6 +67,9 @@ const api: ScoBridge = {
   ocrAvailable: () => ipcRenderer.invoke('sco:ocr-available') as Promise<boolean>,
   ocrRecognize: (dataUrl: string) =>
     ipcRenderer.invoke('sco:ocr-recognize', dataUrl) as Promise<OcrLine[]>,
+
+  checkForUpdates: () => ipcRenderer.invoke('sco:check-updates') as Promise<UpdateInfo>,
+  openExternal: (url: string) => ipcRenderer.send('sco:open-external', url),
 };
 
 contextBridge.exposeInMainWorld('sco', api);

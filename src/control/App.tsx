@@ -22,6 +22,7 @@ import type {
   HotkeyMap,
   OverlayConfig,
   SurveyRegionSetting,
+  UpdateInfo,
 } from '../shared/bridge';
 
 type Tab = 'mining' | 'survey';
@@ -79,6 +80,10 @@ export function App() {
   // First-run wizard: shown (after the source pick) until setup is completed or
   // skipped. Decided once on restore; re-openable from the Mining panel.
   const [showWizard, setShowWizard] = useState(false);
+  // Update banner: the result of the startup GitHub-Releases check, and the tag
+  // the user already dismissed (so the same version doesn't nag every launch).
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  const [dismissedUpdate, setDismissedUpdate] = useState<string | undefined>(undefined);
   const lastSource = useRef<{ id?: string; name?: string }>({});
 
   // Restore persisted settings once (Electron userData).
@@ -130,6 +135,7 @@ export function App() {
         if (s.survey?.regions) setSurveyRegions(s.survey.regions);
         if (s.survey?.scout) setSurveyScout(s.survey.scout);
         if (typeof s.features?.survey === 'boolean') setSurveyEnabled(s.features.survey);
+        if (s.dismissedUpdate) setDismissedUpdate(s.dismissedUpdate);
         // Show the wizard only for a genuinely fresh profile: not yet completed
         // and no existing regions (so current users skip straight to the panel).
         const hasRegions = !!(s.mining?.regions?.length || s.region);
@@ -203,6 +209,25 @@ export function App() {
     return window.sco?.onOverlayConfig?.((cfg) => setOverlayConfig(cfg));
   }, []);
 
+  // One-shot update check once settings are restored (so dismissedUpdate is
+  // known). Failures resolve to a non-available result; the banner just hides.
+  useEffect(() => {
+    if (!loaded) return;
+    let alive = true;
+    void window.sco?.checkForUpdates?.().then((info) => {
+      if (alive) setUpdate(info ?? null);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [loaded]);
+
+  const dismissUpdate = (): void => {
+    const tag = update?.latest ?? undefined;
+    setDismissedUpdate(tag);
+    if (tag) window.sco?.setSettings?.({ dismissedUpdate: tag });
+  };
+
   const handleBack = (): void => {
     setAutoReconnect(false); // explicit "← Sources" — don't auto-reconnect again
     source?.stream?.getTracks().forEach((t) => t.stop());
@@ -258,8 +283,23 @@ export function App() {
   // With Survey gated off, Mining is the only view — force it and drop the
   // tab bar entirely (no orphan single tab).
   const activeTab: Tab = surveyEnabled ? tab : 'mining';
+  const showUpdate = !!update?.available && update.latest !== dismissedUpdate;
   return (
     <div style={shell.root}>
+      {showUpdate && update && (
+        <div style={shell.banner}>
+          <span style={{ flex: 1 }}>
+            Update available: <strong>{update.latest}</strong>
+            <span style={{ color: '#7d8a99' }}> (you have v{update.current})</span>
+          </span>
+          <button style={shell.bannerLink} onClick={() => window.sco?.openExternal?.(update.url)}>
+            Download
+          </button>
+          <button style={shell.bannerDismiss} onClick={dismissUpdate} aria-label="Dismiss update notice">
+            ×
+          </button>
+        </div>
+      )}
       {surveyEnabled && (
         <nav style={shell.tabs}>
           <button
@@ -324,6 +364,35 @@ export function App() {
 
 const shell: Record<string, CSSProperties> = {
   root: { display: 'flex', flexDirection: 'column', height: '100vh' },
+  banner: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '8px 12px',
+    background: '#13282b',
+    borderBottom: '1px solid #1FD0D8',
+    color: '#d7e3e6',
+    fontSize: 13,
+  },
+  bannerLink: {
+    background: '#1FD0D8',
+    color: '#06222a',
+    border: 'none',
+    borderRadius: 6,
+    padding: '5px 12px',
+    cursor: 'pointer',
+    fontSize: 13,
+    fontWeight: 600,
+  },
+  bannerDismiss: {
+    background: 'none',
+    color: '#9fb3c8',
+    border: 'none',
+    fontSize: 18,
+    lineHeight: 1,
+    cursor: 'pointer',
+    padding: '0 4px',
+  },
   tabs: { display: 'flex', gap: 2, padding: '6px 10px 0', background: '#16181d', borderBottom: '1px solid #2c323d' },
   tab: {
     background: 'none',

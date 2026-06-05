@@ -56,6 +56,10 @@
       {
         "from": "public/models",
         "to": "models"
+      },
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
       }
     ],
     "win": {
