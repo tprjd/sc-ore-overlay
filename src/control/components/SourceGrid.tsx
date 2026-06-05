@@ -181,7 +181,9 @@ export function SourceGrid({
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      {/* pt/px give the cards' hover-lift + selected ring room so the top edge
+          isn't clipped by this scroll container. */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-0.5 pb-1 pt-1.5">
         {loading && sources.length === 0 ? (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
             {[0, 1, 2, 3, 4, 5].map((i) => (

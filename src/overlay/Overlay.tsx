@@ -14,7 +14,9 @@ const EMPTY: OverlayPayload = { reading: null, candidates: [], status: 'no-rs' }
 export function Overlay() {
   const [payload, setPayload] = useState<OverlayPayload>(EMPTY);
   const [editing, setEditing] = useState(false);
-  const [idle, setIdle] = useState(true);
+  // Start NOT idle so the placeholder is visible on launch (confirms the overlay
+  // is alive and where it sits); it fades after idleMs if nothing arrives.
+  const [idle, setIdle] = useState(false);
   const [config, setConfig] = useState<OverlayConfig>(DEFAULT_OVERLAY_CONFIG);
   const [hidden, setHidden] = useState(false);
 
@@ -51,6 +53,9 @@ export function Overlay() {
       const cfg: OverlayConfig = { ...DEFAULT_OVERLAY_CONFIG, ...(s.overlay ?? {}) };
       idleMsRef.current = cfg.idleMs;
       setConfig(cfg);
+      // Arm the fade with the real idleMs now that it's loaded, so the launch
+      // placeholder eventually fades instead of hanging on the default timer.
+      armIdle();
     });
 
     const offMatches = sco.onMatches((next) => {
@@ -67,7 +72,16 @@ export function Overlay() {
       setConfig(cfg);
       armIdle();
     });
-    const offToggle = sco.onToggleVisible(() => setHidden((h) => !h));
+    // Toggle-overlay hotkey: flip the hard hidden flag, and when *revealing*,
+    // re-arm idle so the overlay actually reappears (and shows the placeholder)
+    // instead of staying gated behind a long-elapsed idle timer.
+    const offToggle = sco.onToggleVisible(() =>
+      setHidden((h) => {
+        const next = !h;
+        if (!next) armIdle();
+        return next;
+      }),
+    );
 
     return () => {
       offMatches();
