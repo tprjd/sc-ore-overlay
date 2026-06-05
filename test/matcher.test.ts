@@ -1,12 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { matchOre, matchWithNoise, clusterProb } from '../src/core/matcher';
+import { clusterProb, matchOre, matchWithNoise } from '../src/core/matcher';
 import type { Clustering } from '../src/core/types';
-import {
-  fixtureTable,
-  sharedSignatureTable,
-  sameNameTable,
-} from './fixtures/table.fixture';
+import { fixtureTable, sameNameTable, sharedSignatureTable } from './fixtures/table.fixture';
 
 const ship = { method: 'Ship' } as const;
 

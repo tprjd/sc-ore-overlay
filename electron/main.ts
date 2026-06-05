@@ -5,13 +5,19 @@
 //
 // Built as CommonJS by vite-plugin-electron, so `__dirname` is available.
 
-import { app, BrowserWindow, desktopCapturer, globalShortcut, ipcMain, shell, utilityProcess } from 'electron';
-import type { IpcMainEvent, IpcMainInvokeEvent, UtilityProcess } from 'electron';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { installCrashHandlers, log } from './log';
-import { checkForUpdate } from './update';
-import { DEFAULT_HOTKEYS } from '../src/shared/bridge';
+import type { IpcMainEvent, IpcMainInvokeEvent, UtilityProcess } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  desktopCapturer,
+  globalShortcut,
+  ipcMain,
+  shell,
+  utilityProcess,
+} from 'electron';
+import type { SurveyEntry } from '../src/core/survey';
 import type {
   AppSettings,
   CaptureSource,
@@ -22,7 +28,9 @@ import type {
   OverlayConfig,
   OverlayPayload,
 } from '../src/shared/bridge';
-import type { SurveyEntry } from '../src/core/survey';
+import { DEFAULT_HOTKEYS } from '../src/shared/bridge';
+import { installCrashHandlers, log } from './log';
+import { checkForUpdate } from './update';
 
 const dirname = __dirname;
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
@@ -102,7 +110,8 @@ ipcMain.on('sco:overlay-config', (_e: IpcMainEvent, config: OverlayConfig) => {
   // the canonical config in React state, and a change can originate from the
   // overlay itself (e.g. sorting the scanned-rock card in edit mode), so it
   // must hear back to stay in sync.
-  for (const w of [controlWin, ...overlayWindows()]) w?.webContents.send('sco:overlay-config', config);
+  for (const w of [controlWin, ...overlayWindows()])
+    w?.webContents.send('sco:overlay-config', config);
 });
 ipcMain.on('sco:overlay-resize', (_e: IpcMainEvent, size: { width: number; height: number }) => {
   overlayWin?.setSize(Math.max(140, Math.round(size.width)), Math.max(70, Math.round(size.height)));
@@ -157,7 +166,10 @@ ipcMain.on('sco:open-logs', () => {
 let ocrHost: UtilityProcess | null = null;
 let ocrReady: Promise<boolean> | null = null;
 let ocrSeq = 0;
-const ocrPending = new Map<number, { resolve: (lines: OcrLine[]) => void; reject: (err: Error) => void }>();
+const ocrPending = new Map<
+  number,
+  { resolve: (lines: OcrLine[]) => void; reject: (err: Error) => void }
+>();
 
 /** Absolute dir holding the PP-OCR models (dev: public/models; prod: resources). */
 function ocrModelDir(): string {
@@ -225,15 +237,19 @@ function startOcrHost(): Promise<boolean> {
 }
 
 ipcMain.handle('sco:ocr-available', (): Promise<boolean> => startOcrHost());
-ipcMain.handle('sco:ocr-recognize', async (_e: IpcMainInvokeEvent, dataUrl: string): Promise<OcrLine[]> => {
-  const ok = await startOcrHost();
-  if (!ok || !ocrHost) throw new Error('OCR host unavailable');
-  const id = ++ocrSeq;
-  return new Promise<OcrLine[]>((resolve, reject) => {
-    ocrPending.set(id, { resolve, reject });
-    ocrHost!.postMessage({ type: 'recognize', id, dataUrl });
-  });
-});
+ipcMain.handle(
+  'sco:ocr-recognize',
+  async (_e: IpcMainInvokeEvent, dataUrl: string): Promise<OcrLine[]> => {
+    const ok = await startOcrHost();
+    if (!ok || !ocrHost) throw new Error('OCR host unavailable');
+    const host = ocrHost;
+    const id = ++ocrSeq;
+    return new Promise<OcrLine[]>((resolve, reject) => {
+      ocrPending.set(id, { resolve, reject });
+      host.postMessage({ type: 'recognize', id, dataUrl });
+    });
+  },
+);
 
 // --- Windows -----------------------------------------------------------------
 function loadPage(win: BrowserWindow, page: 'index' | 'overlay' | 'detail' | 'scan'): void {

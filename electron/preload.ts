@@ -1,8 +1,9 @@
 // Preload — exposes a typed, sandboxed bridge to the renderer as `window.sco`.
 // Shared by both the control and overlay windows; each uses the relevant subset.
 
-import { contextBridge, ipcRenderer } from 'electron';
 import type { IpcRendererEvent } from 'electron';
+import { contextBridge, ipcRenderer } from 'electron';
+import type { SurveyEntry } from '../src/core/survey';
 import type {
   AppSettings,
   CaptureSource,
@@ -15,7 +16,6 @@ import type {
   ScoBridge,
   UpdateInfo,
 } from '../src/shared/bridge';
-import type { SurveyEntry } from '../src/core/survey';
 
 const api: ScoBridge = {
   getCaptureSources: () =>

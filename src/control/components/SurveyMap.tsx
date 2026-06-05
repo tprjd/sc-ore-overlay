@@ -4,11 +4,10 @@
 // the ship as the origin when there are no entries yet. Faint grid + concentric
 // range rings (km), pan by drag, cursor-anchored wheel zoom, hover tooltip.
 
-import { useEffect, useMemo, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
-
-import { distance, project } from '../../core';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { AxisPlane, SurveyEntry, Vec3 } from '../../core';
+import { distance, project } from '../../core';
 
 export interface SurveyMapProps {
   /** Live ship position (drawn as a marker); may be null when not flying. */
@@ -29,7 +28,8 @@ interface Hover {
   entry: SurveyEntry;
 }
 
-const km = (m: number): string => (m / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 });
+const km = (m: number): string =>
+  (m / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 });
 
 /** Per-axis median — a center robust to a stray garbage coordinate. */
 function medianVec(entries: SurveyEntry[]): Vec3 {
@@ -55,7 +55,7 @@ function oreHue(name: string): number {
 }
 
 function niceStep(rough: number): number {
-  const pow = Math.pow(10, Math.floor(Math.log10(rough)));
+  const pow = 10 ** Math.floor(Math.log10(rough));
   const f = rough / pow;
   const n = f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10;
   return n * pow;
@@ -95,6 +95,7 @@ export function SurveyMap({ ship, entries, plane = 'xy' }: SurveyMapProps) {
   // position, so flying (ship moving every tick) doesn't reset the zoom — the
   // ship stays centered via the projection, the zoom only re-fits when the data,
   // plane, size, or the Fit button change.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: origin/project excluded on purpose — re-fit only on data/plane/size/fitNonce (see comment above).
   useLayoutEffect(() => {
     if (!origin || size.w < 2 || size.h < 2) return;
     // Fit to the cluster, not the farthest point: use the 90th-percentile radius
@@ -112,7 +113,6 @@ export function SurveyMap({ ship, entries, plane = 'xy' }: SurveyMapProps) {
     }
     const ppm = (Math.min(size.w, size.h) * 0.42) / span;
     setView({ ppm, panX: 0, panY: 0 });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entries, plane, size.w, size.h, fitNonce]);
 
   // Draw. Resize the backing store only when the size actually changes — setting
@@ -212,7 +212,12 @@ export function SurveyMap({ ship, entries, plane = 'xy' }: SurveyMapProps) {
         // "99,999,993 km away").
         const shipOk = ship != null && origin != null && distance(ship, origin) < FAR;
         const ref = shipOk ? ship! : origin!;
-        return { e, fromShip: shipOk, depth: project(e.pos, ref, plane).depth, dist: distance(e.pos, ref) };
+        return {
+          e,
+          fromShip: shipOk,
+          depth: project(e.pos, ref, plane).depth,
+          dist: distance(e.pos, ref),
+        };
       })()
     : null;
 
@@ -221,14 +226,21 @@ export function SurveyMap({ ship, entries, plane = 'xy' }: SurveyMapProps) {
       {origin ? (
         <canvas
           ref={setCanvasEl}
-          style={{ width: '100%', height: '100%', display: 'block', cursor: drag.current ? 'grabbing' : 'crosshair' }}
+          style={{
+            width: '100%',
+            height: '100%',
+            display: 'block',
+            cursor: drag.current ? 'grabbing' : 'crosshair',
+          }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerLeave={() => setHover(null)}
         />
       ) : (
-        <div style={S.empty}>No data yet. Log a scan, box a “Ship Pos” region, or turn on Debug values.</div>
+        <div style={S.empty}>
+          No data yet. Log a scan, box a “Ship Pos” region, or turn on Debug values.
+        </div>
       )}
       <button style={S.fitBtn} onClick={fit}>
         Fit
@@ -356,10 +368,49 @@ function draw(
 }
 
 const S: Record<string, CSSProperties> = {
-  wrap: { position: 'relative', width: '100%', height: '100%', background: '#0a0c10', borderRadius: 8, overflow: 'hidden' },
-  empty: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 24, color: '#9fb3c8', fontSize: 13 },
-  fitBtn: { position: 'absolute', right: 8, bottom: 8, background: '#1d2128cc', color: '#e6e6e6', border: '1px solid #3a4150', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12 },
-  tip: { position: 'absolute', pointerEvents: 'none', background: 'rgba(13,15,18,0.95)', border: '1px solid #3a4150', borderRadius: 6, padding: '6px 8px', fontSize: 12, color: '#e6e6e6', maxWidth: 220, zIndex: 2 },
+  wrap: {
+    position: 'relative',
+    width: '100%',
+    height: '100%',
+    background: '#0a0c10',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  empty: {
+    position: 'absolute',
+    inset: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    textAlign: 'center',
+    padding: 24,
+    color: '#9fb3c8',
+    fontSize: 13,
+  },
+  fitBtn: {
+    position: 'absolute',
+    right: 8,
+    bottom: 8,
+    background: '#1d2128cc',
+    color: '#e6e6e6',
+    border: '1px solid #3a4150',
+    borderRadius: 6,
+    padding: '4px 10px',
+    cursor: 'pointer',
+    fontSize: 12,
+  },
+  tip: {
+    position: 'absolute',
+    pointerEvents: 'none',
+    background: 'rgba(13,15,18,0.95)',
+    border: '1px solid #3a4150',
+    borderRadius: 6,
+    padding: '6px 8px',
+    fontSize: 12,
+    color: '#e6e6e6',
+    maxWidth: 220,
+    zIndex: 2,
+  },
   tipTitle: { fontWeight: 700 },
   tipNodes: { color: '#4fd1ff' },
   tipRow: { fontSize: 11, opacity: 0.85, fontVariantNumeric: 'tabular-nums' },

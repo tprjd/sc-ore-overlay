@@ -3,15 +3,14 @@
 // (bestReading) → validate (plausibility + temporal voting). Returns observable
 // state for the debug view.
 
-import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
-
-import { createVoter, hashPixels, isPlausibleReading, matchWithNoise } from '../core';
+import { useEffect, useRef, useState } from 'react';
 import type { SignatureTable } from '../core';
-import { preprocess } from './preprocess';
-import type { DrawableSource, NormRegion, PreprocessParams } from './preprocess';
-import { recognize } from './ocr';
+import { createVoter, hashPixels, isPlausibleReading, matchWithNoise } from '../core';
 import type { OcrLine } from './ocr';
+import { recognize } from './ocr';
+import type { DrawableSource, NormRegion, PreprocessParams } from './preprocess';
+import { preprocess } from './preprocess';
 
 export interface LoopParams extends PreprocessParams {
   /** Frame sampling period in ms (~500–1000). */

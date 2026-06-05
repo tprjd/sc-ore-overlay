@@ -129,9 +129,7 @@ export function matchOre(
     if (!prev || candidate.score > prev.score) byName.set(deposit.name, candidate);
   }
 
-  return [...byName.values()].sort(
-    (a, b) => b.score - a.score || a.name.localeCompare(b.name),
-  );
+  return [...byName.values()].sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
 }
 
 /**
@@ -255,9 +253,7 @@ export function matchWithNoise(
   // Return when we have hits, or when the user already disabled enforcement
   // (no separate loose pass to fall back to).
   if (byKey.size > 0 || !userEnforce) {
-    return [...byKey.values()].sort(
-      (a, b) => b.score - a.score || a.name.localeCompare(b.name),
-    );
+    return [...byKey.values()].sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
   }
 
   // Loose fallback: same passes with the cluster check dropped. Useful when
@@ -274,7 +270,5 @@ export function matchWithNoise(
     }
   }
 
-  return [...byKey.values()].sort(
-    (a, b) => b.score - a.score || a.name.localeCompare(b.name),
-  );
+  return [...byKey.values()].sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
 }

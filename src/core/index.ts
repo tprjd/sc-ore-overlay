@@ -1,67 +1,58 @@
 // Public surface of the pure core.
 
+export type { PosReading, Vec3 } from './coords';
+export { parseDistanceToken, parsePos, parsePosLine, parseSystemName } from './coords';
+export type { BinarizeParams, PixelBuffer } from './image';
+export { binarize, hashPixels, luminance } from './image';
+export { clusterProb, DEFAULT_REL_TOL, matchOre, matchWithNoise } from './matcher';
+export type { OcrCandidate } from './parse';
+export { bestReading, parseReading } from './parse';
+export type { QualityDetail } from './quality';
+export { getQualityDetail } from './quality';
+export type { ScanComposition, ScanResult } from './scan';
+export { cleanMaterial, parseScanResult, snapMaterial } from './scan';
 export type {
-  ClusterParam,
+  AxisPlane,
+  EntrySource,
+  NewEntryInput,
+  PlanarPoint,
+  ScoutPresence,
+  ScoutRole,
+  SurveyEntry,
+} from './survey';
+export {
+  dedupeEntries,
+  distance,
+  filterBySystem,
+  isStablePos,
+  makeEntry,
+  mergeEntries,
+  project,
+} from './survey';
+export type { SystemGroup } from './table';
+export { groupLocations, loadSignatureTable } from './table';
+export type {
   Clustering,
-  DepositLocation,
+  ClusterParam,
   Deposit,
+  DepositLocation,
+  MatchContext,
+  MatchOptions,
+  OreCandidate,
   QualityMaterial,
   SignatureTable,
-  MatchOptions,
-  MatchContext,
-  OreCandidate,
 } from './types';
-
-export { getQualityDetail } from './quality';
-export type { QualityDetail } from './quality';
-
-export { matchOre, matchWithNoise, clusterProb, DEFAULT_REL_TOL } from './matcher';
-
-export {
-  isPlausibleReading,
-  isExpired,
-  voteStep,
-  createVoter,
-  initialVoteState,
-} from './validator';
 export type {
   PlausibilityOptions,
   VoteOptions,
-  VoteState,
   VoteResult,
   Voter,
+  VoteState,
 } from './validator';
-
-export { loadSignatureTable, groupLocations } from './table';
-export type { SystemGroup } from './table';
-
-export { binarize, hashPixels, luminance } from './image';
-export type { PixelBuffer, BinarizeParams } from './image';
-
-export { parseReading, bestReading } from './parse';
-export type { OcrCandidate } from './parse';
-
-export { parseDistanceToken, parsePosLine, parsePos, parseSystemName } from './coords';
-export type { Vec3, PosReading } from './coords';
-
-export { parseScanResult, cleanMaterial, snapMaterial } from './scan';
-export type { ScanResult, ScanComposition } from './scan';
-
 export {
-  makeEntry,
-  distance,
-  project,
-  dedupeEntries,
-  mergeEntries,
-  filterBySystem,
-  isStablePos,
-} from './survey';
-export type {
-  SurveyEntry,
-  ScoutPresence,
-  PlanarPoint,
-  NewEntryInput,
-  EntrySource,
-  ScoutRole,
-  AxisPlane,
-} from './survey';
+  createVoter,
+  initialVoteState,
+  isExpired,
+  isPlausibleReading,
+  voteStep,
+} from './validator';

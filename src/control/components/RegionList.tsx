@@ -5,10 +5,9 @@
 // the active region's rect).
 
 import type { CSSProperties, ReactNode } from 'react';
-
-import { DEFAULT_RECT, ROLE_META, newRegionId } from './roles';
-import type { RegionDebug } from '../useSurveyCapture';
 import type { SurveyRegionSetting, SurveyRole } from '../../shared/bridge';
+import type { RegionDebug } from '../useSurveyCapture';
+import { DEFAULT_RECT, newRegionId, ROLE_META } from './roles';
 
 // Calibration verdict for a region: grey = not ready, red = read text but
 // didn't parse/match (or low confidence), amber = parsed but borderline, green
@@ -63,7 +62,7 @@ export function RegionList({
       <div style={S.addRow}>
         <span style={S.dim}>Add:</span>
         {roles.map((role) => (
-          <button key={role} style={S.addBtn} onClick={() => addRegion(role)}>
+          <button key={role} type="button" style={S.addBtn} onClick={() => addRegion(role)}>
             + {ROLE_META[role].label}
           </button>
         ))}
@@ -123,6 +122,7 @@ export function RegionList({
                     on
                   </label>
                   <button
+                    type="button"
                     style={S.delBtn}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -167,23 +167,84 @@ export function RegionList({
 const S: Record<string, CSSProperties> = {
   dim: { opacity: 0.45, fontSize: 12 },
   addRow: { display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, flexWrap: 'wrap' },
-  addBtn: { background: '#2a2f3a', color: '#e6e6e6', border: '1px solid #3a4150', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12 },
+  addBtn: {
+    background: '#2a2f3a',
+    color: '#e6e6e6',
+    border: '1px solid #3a4150',
+    borderRadius: 6,
+    padding: '4px 8px',
+    cursor: 'pointer',
+    fontSize: 12,
+  },
   regionList: { display: 'flex', flexDirection: 'column', gap: 8 },
-  regionCard: { background: '#0d0f12', border: '1px solid #2c323d', borderRadius: 6, padding: 8, cursor: 'pointer' },
+  regionCard: {
+    background: '#0d0f12',
+    border: '1px solid #2c323d',
+    borderRadius: 6,
+    padding: 8,
+    cursor: 'pointer',
+  },
   regionCardActive: { borderColor: '#4fd1ff' },
   regionTop: { display: 'flex', alignItems: 'center', gap: 8 },
   dot: { width: 10, height: 10, borderRadius: 5, flex: '0 0 auto' },
-  select: { flex: 1, background: '#0d0f12', color: '#e6e6e6', border: '1px solid #3a4150', borderRadius: 6, padding: '4px 6px', fontSize: 13 },
+  select: {
+    flex: 1,
+    background: '#0d0f12',
+    color: '#e6e6e6',
+    border: '1px solid #3a4150',
+    borderRadius: 6,
+    padding: '4px 6px',
+    fontSize: 13,
+  },
   scaleLabel: { display: 'flex', alignItems: 'center', gap: 2, fontSize: 11, opacity: 0.7 },
-  scaleInput: { width: 36, background: '#0d0f12', color: '#e6e6e6', border: '1px solid #3a4150', borderRadius: 4, padding: '2px 4px', fontSize: 12 },
+  scaleInput: {
+    width: 36,
+    background: '#0d0f12',
+    color: '#e6e6e6',
+    border: '1px solid #3a4150',
+    borderRadius: 4,
+    padding: '2px 4px',
+    fontSize: 12,
+  },
   enableLabel: { display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, opacity: 0.8 },
-  delBtn: { background: 'none', color: '#9fb3c8', border: '1px solid #3a4150', borderRadius: 6, padding: '2px 7px', cursor: 'pointer', fontSize: 12 },
+  delBtn: {
+    background: 'none',
+    color: '#9fb3c8',
+    border: '1px solid #3a4150',
+    borderRadius: 6,
+    padding: '2px 7px',
+    cursor: 'pointer',
+    fontSize: 12,
+  },
   regionBody: { display: 'flex', gap: 8, marginTop: 8, alignItems: 'flex-start' },
-  cropWrap: { minWidth: 96, minHeight: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000', border: '1px solid #2c323d', borderRadius: 4, padding: 2 },
+  cropWrap: {
+    minWidth: 96,
+    minHeight: 36,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: '#000',
+    border: '1px solid #2c323d',
+    borderRadius: 4,
+    padding: 2,
+  },
   crop: { maxWidth: 140, maxHeight: 60, imageRendering: 'pixelated' },
   regionMeta: { flex: 1, minWidth: 0 },
   parsedRow: { display: 'flex', alignItems: 'baseline', gap: 6, justifyContent: 'space-between' },
-  parsed: { fontFamily: 'ui-monospace, monospace', fontSize: 13, wordBreak: 'break-all', minWidth: 0 },
-  conf: { fontSize: 11, fontWeight: 600, fontVariantNumeric: 'tabular-nums', border: '1px solid', borderRadius: 4, padding: '0 5px', flex: '0 0 auto' },
+  parsed: {
+    fontFamily: 'ui-monospace, monospace',
+    fontSize: 13,
+    wordBreak: 'break-all',
+    minWidth: 0,
+  },
+  conf: {
+    fontSize: 11,
+    fontWeight: 600,
+    fontVariantNumeric: 'tabular-nums',
+    border: '1px solid',
+    borderRadius: 4,
+    padding: '0 5px',
+    flex: '0 0 auto',
+  },
   raw: { fontSize: 11, opacity: 0.5, marginTop: 2, wordBreak: 'break-all' },
 };

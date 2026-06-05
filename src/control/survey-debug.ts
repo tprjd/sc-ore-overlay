@@ -3,8 +3,8 @@
 // plus a deterministic scatter of fake scanned rocks around it. Gated behind the
 // "Debug values" toggle in the Survey tab — never used in real logging.
 
-import { makeEntry } from '../core';
 import type { SurveyEntry, Vec3 } from '../core';
+import { makeEntry } from '../core';
 
 /** A plausible absolute ship position (meters), matching the sample HUD. */
 export const DEBUG_SHIP: Vec3 = { x: -14_215_974_612, y: -4_787_767_810, z: 735 };
@@ -43,7 +43,7 @@ export function debugEntries(count = 28, seed = 7): SurveyEntry[] {
     const ore = ORES[Math.floor(rng() * ORES.length)];
     const nodes = 1 + Math.floor(rng() * 8);
     const angle = rng() * Math.PI * 2;
-    const radius = Math.pow(rng(), 0.6) * 14_000; // denser toward the ship
+    const radius = rng() ** 0.6 * 14_000; // denser toward the ship
     const pos: Vec3 = {
       x: DEBUG_SHIP.x + Math.cos(angle) * radius,
       y: DEBUG_SHIP.y + Math.sin(angle) * radius,

@@ -4,11 +4,11 @@
 // DetailCard, so the control window's live preview always matches what ships.
 // Shown only when the overlay config's `showDetail` is on.
 
-import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
-import { DEFAULT_OVERLAY_CONFIG } from '../shared/bridge';
-import type { OverlayConfig } from '../shared/bridge';
+import { useEffect, useRef, useState } from 'react';
 import type { QualityDetail } from '../core';
+import type { OverlayConfig } from '../shared/bridge';
+import { DEFAULT_OVERLAY_CONFIG } from '../shared/bridge';
 import { DetailCard } from './DetailCard';
 
 export function Detail() {
@@ -79,7 +79,12 @@ export function Detail() {
 
   const onGripDown = (e: ReactPointerEvent<HTMLDivElement>): void => {
     e.currentTarget.setPointerCapture(e.pointerId);
-    resizeStart.current = { x: e.screenX, y: e.screenY, w: window.innerWidth, h: window.innerHeight };
+    resizeStart.current = {
+      x: e.screenX,
+      y: e.screenY,
+      w: window.innerWidth,
+      h: window.innerHeight,
+    };
   };
   const onGripMove = (e: ReactPointerEvent<HTMLDivElement>): void => {
     const start = resizeStart.current;
@@ -97,10 +102,18 @@ export function Detail() {
     editing || (!hidden && config.showDetail && detail != null && (config.idleMs <= 0 || !idle));
 
   return (
-    <div ref={contentRef} style={{ ...S.root, height: autoResize ? 'auto' : '100%', opacity: visible ? 1 : 0 }}>
+    <div
+      ref={contentRef}
+      style={{ ...S.root, height: autoResize ? 'auto' : '100%', opacity: visible ? 1 : 0 }}
+    >
       <DetailCard detail={detail} config={config} editing={editing} />
       {editing && (
-        <div style={GRIP} onPointerDown={onGripDown} onPointerMove={onGripMove} onPointerUp={onGripUp} />
+        <div
+          style={GRIP}
+          onPointerDown={onGripDown}
+          onPointerMove={onGripMove}
+          onPointerUp={onGripUp}
+        />
       )}
     </div>
   );

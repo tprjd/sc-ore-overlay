@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { parseScanResult, snapMaterial } from '../src/core/scan';
 
@@ -57,7 +57,9 @@ describe('parseScanResult', () => {
 
   it('reads the composition rows (percent, material, quality)', () => {
     const r = parseScanResult(SAMPLE)!;
-    expect(r.composition.map((c) => ({ percent: c.percent, material: c.material, quality: c.quality }))).toEqual([
+    expect(
+      r.composition.map((c) => ({ percent: c.percent, material: c.material, quality: c.quality })),
+    ).toEqual([
       { percent: 12.55, material: 'IRON (ORE) [CF]', quality: 664 },
       { percent: 68.2, material: 'IRON (ORE) [CF]', quality: 325 },
       { percent: 19.23, material: 'INERT MATERIALS', quality: 0 },
@@ -104,10 +106,26 @@ describe('parseScanResult', () => {
     const r = parseScanResult(text)!;
     expect(r.ore).toBe('Aslarite');
     expect(r.composition).toHaveLength(4);
-    expect(r.composition[0]).toMatchObject({ percent: 61.66, material: 'ASLARITE(RAW)[CF]', quality: 287 });
-    expect(r.composition[1]).toMatchObject({ percent: 3.18, material: 'AGRICIUM(ORE)[CF]', quality: 667 });
-    expect(r.composition[2]).toMatchObject({ percent: 4.53, material: 'TITANIUM(ORE)[CF]', quality: 516 });
-    expect(r.composition[3]).toMatchObject({ percent: 25.85, material: 'INERTMATERIALS', quality: 0 });
+    expect(r.composition[0]).toMatchObject({
+      percent: 61.66,
+      material: 'ASLARITE(RAW)[CF]',
+      quality: 287,
+    });
+    expect(r.composition[1]).toMatchObject({
+      percent: 3.18,
+      material: 'AGRICIUM(ORE)[CF]',
+      quality: 667,
+    });
+    expect(r.composition[2]).toMatchObject({
+      percent: 4.53,
+      material: 'TITANIUM(ORE)[CF]',
+      quality: 516,
+    });
+    expect(r.composition[3]).toMatchObject({
+      percent: 25.85,
+      material: 'INERTMATERIALS',
+      quality: 0,
+    });
     expect(r.composition[0].scu).toBeCloseTo(21.15, 1); // 61.66% of 34.31
   });
 

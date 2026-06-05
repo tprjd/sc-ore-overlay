@@ -4,13 +4,12 @@
 // cheat-sheet, and links (GitHub, manual update check, open the log folder for
 // bug reports). Self-contained — talks to window.sco directly.
 
-import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
-
-import { Section, HOTKEY_ROWS } from './controls';
-import { C, F, R } from './tokens';
+import { useEffect, useState } from 'react';
 import type { SignatureTable } from '../../core';
 import type { HotkeyMap, UpdateInfo } from '../../shared/bridge';
+import { HOTKEY_ROWS, Section } from './controls';
+import { C, F, R } from './tokens';
 
 const REPO_URL = 'https://github.com/tprjd/sc-ore-overlay';
 
@@ -46,7 +45,13 @@ export function AboutPanel({ table, hotkeys }: { table: SignatureTable; hotkeys:
     void window.sco
       ?.checkForUpdates?.()
       .then((info) => {
-        setUpdate(info?.available ? { status: 'available', info } : info ? { status: 'latest', info } : { status: 'error' });
+        setUpdate(
+          info?.available
+            ? { status: 'available', info }
+            : info
+              ? { status: 'latest', info }
+              : { status: 'error' },
+        );
       })
       .catch(() => setUpdate({ status: 'error' }));
   };
@@ -59,17 +64,27 @@ export function AboutPanel({ table, hotkeys }: { table: SignatureTable; hotkeys:
           <span style={s.version}>{version ? `v${version}` : '—'}</span>
         </div>
         <p style={s.dim}>
-          Unofficial, fan-made tool for Star Citizen ship mining. Not affiliated with Cloud
-          Imperium Games. Licensed MIT.
+          Unofficial, fan-made tool for Star Citizen ship mining. Not affiliated with Cloud Imperium
+          Games. Licensed MIT.
         </p>
         <div style={s.btnRow}>
-          <button type="button" style={s.btn} onClick={checkUpdates} disabled={update.status === 'checking'}>
+          <button
+            type="button"
+            style={s.btn}
+            onClick={checkUpdates}
+            disabled={update.status === 'checking'}
+          >
             {update.status === 'checking' ? 'Checking…' : 'Check for updates'}
           </button>
           <button type="button" style={s.btn} onClick={() => window.sco?.openExternal?.(REPO_URL)}>
             GitHub
           </button>
-          <button type="button" style={s.btn} onClick={() => window.sco?.openLogs?.()} title="Open the folder with main.log for bug reports">
+          <button
+            type="button"
+            style={s.btn}
+            onClick={() => window.sco?.openLogs?.()}
+            title="Open the folder with main.log for bug reports"
+          >
             Open logs
           </button>
         </div>
@@ -77,12 +92,18 @@ export function AboutPanel({ table, hotkeys }: { table: SignatureTable; hotkeys:
         {update.status === 'available' && (
           <p style={s.update}>
             Update available: <strong>{update.info.latest}</strong>{' '}
-            <button type="button" style={s.link} onClick={() => window.sco?.openExternal?.(update.info.url)}>
+            <button
+              type="button"
+              style={s.link}
+              onClick={() => window.sco?.openExternal?.(update.info.url)}
+            >
               Download
             </button>
           </p>
         )}
-        {update.status === 'error' && <p style={s.dim}>Update check failed (offline or no releases yet).</p>}
+        {update.status === 'error' && (
+          <p style={s.dim}>Update check failed (offline or no releases yet).</p>
+        )}
       </Section>
 
       <Section title="Signature table">
@@ -97,8 +118,8 @@ export function AboutPanel({ table, hotkeys }: { table: SignatureTable; hotkeys:
           <dd style={s.dd}>{table.methodsIncluded.join(', ')}</dd>
         </dl>
         <p style={s.dim}>
-          Signatures and clustering change between game patches. Re-crawl per patch
-          (<code style={s.code}>npm run crawl</code>) and switch the table from the Match tab.
+          Signatures and clustering change between game patches. Re-crawl per patch (
+          <code style={s.code}>npm run crawl</code>) and switch the table from the Match tab.
         </p>
       </Section>
 
@@ -119,7 +140,9 @@ export function AboutPanel({ table, hotkeys }: { table: SignatureTable; hotkeys:
             </div>
           ))}
         </dl>
-        <p style={s.dim}>Rebind these in the Hotkeys tab. Bindings work while the game is focused.</p>
+        <p style={s.dim}>
+          Rebind these in the Hotkeys tab. Bindings work while the game is focused.
+        </p>
       </Section>
     </>
   );
@@ -134,12 +157,44 @@ const s: Record<string, CSSProperties> = {
   ok: { color: C.green, fontSize: 12, marginTop: 8, marginBottom: 0 },
   update: { color: C.amber, fontSize: 12, marginTop: 8, marginBottom: 0 },
   btnRow: { display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' },
-  btn: { background: C.btn, color: C.text, border: `1px solid ${C.borderStrong}`, borderRadius: R.md, padding: '6px 10px', cursor: 'pointer', fontSize: 12 },
-  link: { background: 'none', border: 'none', color: C.accent, cursor: 'pointer', fontSize: 12, fontWeight: 600, padding: 0, textDecoration: 'underline' },
+  btn: {
+    background: C.btn,
+    color: C.text,
+    border: `1px solid ${C.borderStrong}`,
+    borderRadius: R.md,
+    padding: '6px 10px',
+    cursor: 'pointer',
+    fontSize: 12,
+  },
+  link: {
+    background: 'none',
+    border: 'none',
+    color: C.accent,
+    cursor: 'pointer',
+    fontSize: 12,
+    fontWeight: 600,
+    padding: 0,
+    textDecoration: 'underline',
+  },
   dl: { margin: 0, display: 'flex', flexDirection: 'column', gap: 6 },
   hotkeyRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   dt: { fontSize: 12, opacity: 0.7 },
   dd: { margin: 0, fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums' },
-  kbd: { margin: 0, fontSize: 12, fontFamily: F.mono, color: C.accent, background: C.bg, border: `1px solid ${C.borderStrong}`, borderRadius: R.sm, padding: '2px 6px' },
-  code: { fontFamily: F.mono, fontSize: 11, background: C.bg, borderRadius: R.sm, padding: '1px 4px' },
+  kbd: {
+    margin: 0,
+    fontSize: 12,
+    fontFamily: F.mono,
+    color: C.accent,
+    background: C.bg,
+    border: `1px solid ${C.borderStrong}`,
+    borderRadius: R.sm,
+    padding: '2px 6px',
+  },
+  code: {
+    fontFamily: F.mono,
+    fontSize: 11,
+    background: C.bg,
+    borderRadius: R.sm,
+    padding: '1px 4px',
+  },
 };

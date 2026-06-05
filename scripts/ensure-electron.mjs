@@ -18,10 +18,10 @@
 // is cached by @electron/get, so flipping between WSL and Windows re-extracts
 // but doesn't re-download. No-op on the platform that already matches.
 
-import { existsSync, readFileSync, rmSync } from 'node:fs';
-import { dirname, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 
 const require = createRequire(import.meta.url);
 
@@ -48,7 +48,9 @@ function installed() {
 
 if (installed()) process.exit(0);
 
-console.log(`[ensure-electron] Electron binary missing or built for another OS — reinstalling for ${process.platform}…`);
+console.log(
+  `[ensure-electron] Electron binary missing or built for another OS — reinstalling for ${process.platform}…`,
+);
 
 // Clear stale platform state so install.js extracts into a clean dist and
 // rewrites path.txt instead of short-circuiting or merging over the other OS.
@@ -76,5 +78,7 @@ if (installed()) {
 }
 
 console.error('[ensure-electron] still not installed after reinstall. The download may be blocked');
-console.error('[ensure-electron] (proxy/firewall) — check the output above, or set ELECTRON_MIRROR.');
+console.error(
+  '[ensure-electron] (proxy/firewall) — check the output above, or set ELECTRON_MIRROR.',
+);
 process.exit(1);

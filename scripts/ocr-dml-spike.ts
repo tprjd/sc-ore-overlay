@@ -20,8 +20,8 @@
 // If no crop path is given it looks for scripts/sample-crop.png. Use any tight
 // screenshot of just the RS number (PNG). Paste the printed text + timings back.
 
-import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -133,7 +133,9 @@ async function checkEndToEnd(): Promise<void> {
   const last = times[times.length - 1];
   const min = Math.min(...times);
   const max = Math.max(...times);
-  console.log(`  latency: first=${first.toFixed(0)}  last=${last.toFixed(0)}  min=${min.toFixed(0)}  max=${max.toFixed(0)} ms`);
+  console.log(
+    `  latency: first=${first.toFixed(0)}  last=${last.toFixed(0)}  min=${min.toFixed(0)}  max=${max.toFixed(0)} ms`,
+  );
   // A healthy GPU path is flat. A ramp (last >> first) is the leak we're escaping.
   const ramping = last > first * 1.6 && last - first > 200;
   console.log(
@@ -156,7 +158,9 @@ async function main(): Promise<void> {
   await checkEndToEnd();
 
   line();
-  console.log(dml ? 'GATE: PASS — DirectML available. Proceed to R4.1.' : 'GATE: FAIL — see CHECK 1.');
+  console.log(
+    dml ? 'GATE: PASS — DirectML available. Proceed to R4.1.' : 'GATE: FAIL — see CHECK 1.',
+  );
   process.exit(dml ? 0 : 1);
 }
 

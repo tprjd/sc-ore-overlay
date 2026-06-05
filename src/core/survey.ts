@@ -4,9 +4,9 @@
 // so these stay pure). See SURVEY-MODE.md for the plan.
 
 import type { Vec3 } from './coords';
-import type { OreCandidate } from './types';
 import type { QualityDetail } from './quality';
 import type { ScanResult } from './scan';
+import type { OreCandidate } from './types';
 
 /** Whether a logged entry was created here or arrived from a peer (sync, later). */
 export type EntrySource = 'local' | 'peer';
@@ -125,7 +125,6 @@ export function project(pos: Vec3, center: Vec3, plane: AxisPlane = 'xy'): Plana
       return { x: dx, y: dz, depth: dy };
     case 'yz':
       return { x: dy, y: dz, depth: dx };
-    case 'xy':
     default:
       return { x: dx, y: dy, depth: dz };
   }

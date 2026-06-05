@@ -1,15 +1,14 @@
-import { describe, it, expect } from 'vitest';
-
+import { describe, expect, it } from 'vitest';
+import type { NewEntryInput, SurveyEntry } from '../src/core/survey';
 import {
-  makeEntry,
-  distance,
-  project,
   dedupeEntries,
-  mergeEntries,
+  distance,
   filterBySystem,
   isStablePos,
+  makeEntry,
+  mergeEntries,
+  project,
 } from '../src/core/survey';
-import type { SurveyEntry, NewEntryInput } from '../src/core/survey';
 import type { OreCandidate } from '../src/core/types';
 
 const iron: OreCandidate = { name: 'Iron', nodes: 4, score: 0.9, signature: 4270 };
@@ -86,7 +85,11 @@ describe('project', () => {
 
 describe('dedupeEntries', () => {
   it('keeps the first occurrence per id', () => {
-    const out = dedupeEntries([entry('a', { rs: 1 }), entry('a', { rs: 99 }), entry('b', { rs: 2 })]);
+    const out = dedupeEntries([
+      entry('a', { rs: 1 }),
+      entry('a', { rs: 99 }),
+      entry('b', { rs: 2 }),
+    ]);
     expect(out).toHaveLength(2);
     expect(out.find((e) => e.id === 'a')!.rs).toBe(1);
   });

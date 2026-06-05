@@ -8,9 +8,9 @@
 // bands, dimmed inert rows.
 
 import type { CSSProperties } from 'react';
-import type { OverlayConfig, ScanSort, SortDir } from '../shared/bridge';
+import type { ScanComposition, ScanResult } from '../core';
 import { cleanMaterial } from '../core';
-import type { ScanResult, ScanComposition } from '../core';
+import type { OverlayConfig, ScanSort, SortDir } from '../shared/bridge';
 
 const COLORS = {
   accent: '#f0abfc',
@@ -55,7 +55,10 @@ function qualityColor(q: number): string {
 
 function fmtNum(n: number | undefined, digits = 0): string {
   if (n == null || !Number.isFinite(n)) return '—';
-  return n.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  return n.toLocaleString(undefined, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
 }
 
 // In edit mode the whole card is a drag region. Not typed on CSSProperties.
@@ -77,7 +80,7 @@ export function ScanCard({ scan, config, editing = false, onSortChange }: ScanCa
   const sort = config.scanSort ?? 'scu';
   const dir = config.scanSortDir ?? 'desc';
   const metric = (r: ScanComposition): number =>
-    sort === 'quality' ? r.quality : sort === 'percent' ? r.percent : r.scu ?? r.percent;
+    sort === 'quality' ? r.quality : sort === 'percent' ? r.percent : (r.scu ?? r.percent);
 
   // Sort rows: inert always pinned last (regardless of direction); otherwise by
   // the chosen column in the chosen direction.
@@ -117,9 +120,7 @@ export function ScanCard({ scan, config, editing = false, onSortChange }: ScanCa
     );
   };
 
-  const useful = rows
-    .filter((r) => !isInert(r.material))
-    .reduce((acc, r) => acc + (r.scu ?? 0), 0);
+  const useful = rows.filter((r) => !isInert(r.material)).reduce((acc, r) => acc + (r.scu ?? 0), 0);
 
   return (
     <div

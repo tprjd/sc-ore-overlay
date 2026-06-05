@@ -30,7 +30,10 @@ interface WorkerResult {
 // --- Web Worker transport (wasm / webgpu) ------------------------------------
 let worker: Worker | null = null;
 let seq = 0;
-const pending = new Map<number, { resolve: (lines: OcrLine[]) => void; reject: (err: Error) => void }>();
+const pending = new Map<
+  number,
+  { resolve: (lines: OcrLine[]) => void; reject: (err: Error) => void }
+>();
 
 function getWorker(): Worker {
   if (worker) return worker;

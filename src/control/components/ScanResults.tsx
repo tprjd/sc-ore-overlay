@@ -3,8 +3,8 @@
 // ore. Sits between the preview and the settings panel. Read-only except for a
 // per-row delete.
 
-import { useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
+import { useMemo, useState } from 'react';
 
 import type { ScanResult, SurveyEntry } from '../../core';
 
@@ -88,7 +88,10 @@ export function ScanResults({
       const av = a[sortKey];
       const bv = b[sortKey];
       if (typeof av === 'number' || typeof bv === 'number') {
-        return ((typeof av === 'number' ? av : -Infinity) - (typeof bv === 'number' ? bv : -Infinity)) * dir;
+        return (
+          ((typeof av === 'number' ? av : -Infinity) - (typeof bv === 'number' ? bv : -Infinity)) *
+          dir
+        );
       }
       return String(av).localeCompare(String(bv)) * dir;
     });
@@ -104,7 +107,7 @@ export function ScanResults({
 
   if (!open) {
     return (
-      <button style={S.closed} onClick={() => setOpen(true)} title="Scan results">
+      <button type="button" style={S.closed} onClick={() => setOpen(true)} title="Scan results">
         <span style={S.closedLabel}>SCAN RESULTS ({entries.length}) ▸</span>
       </button>
     );
@@ -119,7 +122,12 @@ export function ScanResults({
           ◂
         </button>
       </div>
-      <input style={S.search} placeholder="search ore / scout / system…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <input
+        style={S.search}
+        placeholder="search ore / scout / system…"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+      />
       <div style={S.headerRow}>
         {COLS.map((c) => (
           <button
@@ -161,23 +169,104 @@ export function ScanResults({
 }
 
 const S: Record<string, CSSProperties> = {
-  closed: { width: 30, flex: '0 0 auto', borderLeft: '1px solid #2c323d', background: '#16181d', color: '#9fb3c8', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  closedLabel: { writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' },
-  col: { width: 320, flex: '0 0 auto', display: 'flex', flexDirection: 'column', borderLeft: '1px solid #2c323d', background: '#16181d', minHeight: 0 },
+  closed: {
+    width: 30,
+    flex: '0 0 auto',
+    borderLeft: '1px solid #2c323d',
+    background: '#16181d',
+    color: '#9fb3c8',
+    cursor: 'pointer',
+    padding: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closedLabel: {
+    writingMode: 'vertical-rl',
+    transform: 'rotate(180deg)',
+    fontSize: 11,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  col: {
+    width: 320,
+    flex: '0 0 auto',
+    display: 'flex',
+    flexDirection: 'column',
+    borderLeft: '1px solid #2c323d',
+    background: '#16181d',
+    minHeight: 0,
+  },
   head: { display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px 6px' },
   title: { fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.7 },
   count: { fontSize: 11, opacity: 0.45, fontVariantNumeric: 'tabular-nums' },
-  collapse: { marginLeft: 'auto', background: 'none', border: '1px solid #3a4150', borderRadius: 6, color: '#9fb3c8', cursor: 'pointer', padding: '2px 8px', fontSize: 12 },
-  search: { margin: '0 12px 8px', background: '#0d0f12', color: '#e6e6e6', border: '1px solid #3a4150', borderRadius: 6, padding: '6px 8px', fontSize: 13 },
+  collapse: {
+    marginLeft: 'auto',
+    background: 'none',
+    border: '1px solid #3a4150',
+    borderRadius: 6,
+    color: '#9fb3c8',
+    cursor: 'pointer',
+    padding: '2px 8px',
+    fontSize: 12,
+  },
+  search: {
+    margin: '0 12px 8px',
+    background: '#0d0f12',
+    color: '#e6e6e6',
+    border: '1px solid #3a4150',
+    borderRadius: 6,
+    padding: '6px 8px',
+    fontSize: 13,
+  },
   headerRow: { display: 'flex', gap: 6, padding: '0 12px 4px', borderBottom: '1px solid #2c323d' },
-  th: { background: 'none', border: 'none', padding: '2px 0', cursor: 'pointer', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.4, fontVariantNumeric: 'tabular-nums' },
+  th: {
+    background: 'none',
+    border: 'none',
+    padding: '2px 0',
+    cursor: 'pointer',
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    fontVariantNumeric: 'tabular-nums',
+  },
   delHead: { width: 16, flex: '0 0 auto' },
   list: { flex: 1, overflowY: 'auto', padding: '4px 12px 12px' },
-  row: { display: 'flex', gap: 6, alignItems: 'baseline', padding: '4px 0', borderBottom: '1px solid #1d2128', fontSize: 12 },
-  ore: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 },
+  row: {
+    display: 'flex',
+    gap: 6,
+    alignItems: 'baseline',
+    padding: '4px 0',
+    borderBottom: '1px solid #1d2128',
+    fontSize: 12,
+  },
+  ore: {
+    flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    fontWeight: 600,
+  },
   nodes: { color: '#4fd1ff', fontWeight: 400 },
   cell: { flex: '0 0 auto', textAlign: 'right', fontVariantNumeric: 'tabular-nums', opacity: 0.85 },
-  cellL: { flex: '0 0 auto', textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: 0.7 },
-  del: { width: 16, flex: '0 0 auto', background: 'none', border: 'none', color: '#5b6571', cursor: 'pointer', fontSize: 11, padding: 0 },
+  cellL: {
+    flex: '0 0 auto',
+    textAlign: 'left',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    opacity: 0.7,
+  },
+  del: {
+    width: 16,
+    flex: '0 0 auto',
+    background: 'none',
+    border: 'none',
+    color: '#5b6571',
+    cursor: 'pointer',
+    fontSize: 11,
+    padding: 0,
+  },
   empty: { padding: 16, textAlign: 'center', opacity: 0.4, fontSize: 12 },
 };

@@ -2,21 +2,10 @@
 // active patch) persist to Electron userData and are restored on launch. The
 // signature tables for every crawled patch are bundled and switchable.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-
-import { SourcePicker } from './components/SourcePicker';
-import type { PickedSource } from './components/SourcePicker';
-import { ScanView } from './components/ScanView';
-import { SurveyView } from './components/SurveyView';
-import { SetupWizard } from './components/SetupWizard';
-import { newRegionId } from './components/roles';
-import type { LoopParams } from './useCaptureLoop';
-import { loadSignatureTable } from '../core';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SignatureTable } from '../core';
-import { setOcrBackend, getEffectiveBackend } from './ocr';
-import type { OcrBackend } from './ocr';
-import { DEFAULT_HOTKEYS, DEFAULT_OVERLAY_CONFIG } from '../shared/bridge';
+import { loadSignatureTable } from '../core';
 import type {
   HotkeyAction,
   HotkeyMap,
@@ -24,6 +13,16 @@ import type {
   SurveyRegionSetting,
   UpdateInfo,
 } from '../shared/bridge';
+import { DEFAULT_HOTKEYS, DEFAULT_OVERLAY_CONFIG } from '../shared/bridge';
+import { newRegionId } from './components/roles';
+import { ScanView } from './components/ScanView';
+import { SetupWizard } from './components/SetupWizard';
+import type { PickedSource } from './components/SourcePicker';
+import { SourcePicker } from './components/SourcePicker';
+import { SurveyView } from './components/SurveyView';
+import type { OcrBackend } from './ocr';
+import { getEffectiveBackend, setOcrBackend } from './ocr';
+import type { LoopParams } from './useCaptureLoop';
 
 type Tab = 'mining' | 'survey';
 
@@ -121,7 +120,8 @@ export function App() {
           setMiningRegions([{ id: newRegionId(), role: 'rs', rect: s.region, enabled: true }]);
         }
         if (s.mining?.noiseSignatures) setNoiseSignatures(s.mining.noiseSignatures);
-        if (typeof s.mining?.enforceCluster === 'boolean') setEnforceCluster(s.mining.enforceCluster);
+        if (typeof s.mining?.enforceCluster === 'boolean')
+          setEnforceCluster(s.mining.enforceCluster);
         if (s.location != null) setLocation(s.location);
         setParams((prev) => ({
           scale: s.scale ?? prev.scale,
@@ -173,7 +173,8 @@ export function App() {
     if (loaded) window.sco?.setSettings?.({ activePatch });
   }, [activePatch, loaded]);
   useEffect(() => {
-    if (loaded) window.sco?.setSettings?.({ survey: { regions: surveyRegions, scout: surveyScout } });
+    if (loaded)
+      window.sco?.setSettings?.({ survey: { regions: surveyRegions, scout: surveyScout } });
   }, [surveyRegions, surveyScout, loaded]);
 
   const handlePick = (picked: PickedSource): void => {
@@ -230,7 +231,9 @@ export function App() {
 
   const handleBack = (): void => {
     setAutoReconnect(false); // explicit "← Sources" — don't auto-reconnect again
-    source?.stream?.getTracks().forEach((t) => t.stop());
+    source?.stream?.getTracks().forEach((t) => {
+      t.stop();
+    });
     if (source?.imageUrl) URL.revokeObjectURL(source.imageUrl);
     if (source?.videoUrl) URL.revokeObjectURL(source.videoUrl);
     setSource(null);
@@ -257,7 +260,9 @@ export function App() {
     return (
       <main style={{ padding: 24, color: '#e6e6e6' }}>
         <h1>No signature table</h1>
-        <p>Run <code>npm run crawl</code> to generate one under <code>src/data/tables/</code>.</p>
+        <p>
+          Run <code>npm run crawl</code> to generate one under <code>src/data/tables/</code>.
+        </p>
       </main>
     );
   }
@@ -292,10 +297,19 @@ export function App() {
             Update available: <strong>{update.latest}</strong>
             <span style={{ color: '#7d8a99' }}> (you have v{update.current})</span>
           </span>
-          <button style={shell.bannerLink} onClick={() => window.sco?.openExternal?.(update.url)}>
+          <button
+            type="button"
+            style={shell.bannerLink}
+            onClick={() => window.sco?.openExternal?.(update.url)}
+          >
             Download
           </button>
-          <button style={shell.bannerDismiss} onClick={dismissUpdate} aria-label="Dismiss update notice">
+          <button
+            type="button"
+            style={shell.bannerDismiss}
+            onClick={dismissUpdate}
+            aria-label="Dismiss update notice"
+          >
             ×
           </button>
         </div>
@@ -303,12 +317,14 @@ export function App() {
       {surveyEnabled && (
         <nav style={shell.tabs}>
           <button
+            type="button"
             style={{ ...shell.tab, ...(activeTab === 'mining' ? shell.tabActive : null) }}
             onClick={() => setTab('mining')}
           >
             Mining
           </button>
           <button
+            type="button"
             style={{ ...shell.tab, ...(activeTab === 'survey' ? shell.tabActive : null) }}
             onClick={() => setTab('survey')}
           >
@@ -393,7 +409,13 @@ const shell: Record<string, CSSProperties> = {
     cursor: 'pointer',
     padding: '0 4px',
   },
-  tabs: { display: 'flex', gap: 2, padding: '6px 10px 0', background: '#16181d', borderBottom: '1px solid #2c323d' },
+  tabs: {
+    display: 'flex',
+    gap: 2,
+    padding: '6px 10px 0',
+    background: '#16181d',
+    borderBottom: '1px solid #2c323d',
+  },
   tab: {
     background: 'none',
     color: '#9fb3c8',
@@ -405,6 +427,11 @@ const shell: Record<string, CSSProperties> = {
     cursor: 'pointer',
     fontSize: 13,
   },
-  tabActive: { background: '#1d2128', color: '#e6e6e6', border: '1px solid #2c323d', borderBottom: '1px solid #1d2128' },
+  tabActive: {
+    background: '#1d2128',
+    color: '#e6e6e6',
+    border: '1px solid #2c323d',
+    borderBottom: '1px solid #1d2128',
+  },
   view: { flex: 1, minHeight: 0 },
 };

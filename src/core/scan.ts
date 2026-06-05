@@ -69,17 +69,19 @@ function titleCase(s: string): string {
  * stripped so OCR garbage like "Titanium【Cf)" doesn't leak into the output.
  */
 function stripTags(raw: string): string {
-  return raw
-    // Matched bracket pairs (ASCII or unicode) → drop content.
-    .replace(/[([【（［].*?[)\]】）］]/g, '')
-    // Unmatched opener — drop the opener and everything after it on the line.
-    .replace(/[([【（］［].*$/g, '')
-    // Lone closing brackets that leaked in — drop the char only; rely on the
-    // snap-to-vocab Levenshtein step to absorb any junk letters left over
-    // (e.g. "Titaniumicf)" → "Titaniumicf" → snap → "Titanium").
-    .replace(/[)\]】）］]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return (
+    raw
+      // Matched bracket pairs (ASCII or unicode) → drop content.
+      .replace(/[([【（［].*?[)\]】）］]/g, '')
+      // Unmatched opener — drop the opener and everything after it on the line.
+      .replace(/[([【（］［].*$/g, '')
+      // Lone closing brackets that leaked in — drop the char only; rely on the
+      // snap-to-vocab Levenshtein step to absorb any junk letters left over
+      // (e.g. "Titaniumicf)" → "Titaniumicf" → snap → "Titanium").
+      .replace(/[)\]】）］]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
 }
 
 /** Strip tags and title-case, e.g. "IRON (ORE) [CF]" → "Iron". */
@@ -170,10 +172,7 @@ const SCAN_HEADER = /scan\s*results?/i;
  * are best-effort and may be undefined if the OCR missed them; the ore +
  * composition are the point.
  */
-export function parseScanResult(
-  text: string,
-  opts: ScanParseOptions = {},
-): ScanResult | null {
+export function parseScanResult(text: string, opts: ScanParseOptions = {}): ScanResult | null {
   const strict = opts.strict ?? true;
   const lines = text
     .split(/\r?\n/)

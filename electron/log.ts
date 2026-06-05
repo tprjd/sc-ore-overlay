@@ -6,9 +6,9 @@
 // the user can open and share. No network / crashReporter upload — this is local
 // diagnostics only (the app is read-only by design; nothing leaves the machine).
 
-import { app } from 'electron';
 import { appendFileSync, mkdirSync, renameSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { app } from 'electron';
 
 const MAX_BYTES = 1_000_000; // rotate at ~1 MB so the log can't grow unbounded
 
@@ -88,10 +88,18 @@ export function installCrashHandlers(): void {
 
   void app.whenReady().then(() => {
     app.on('render-process-gone', (_event, contents, details) => {
-      log.error(`render-process-gone [${contents.getTitle()}]:`, details.reason, `exit=${details.exitCode}`);
+      log.error(
+        `render-process-gone [${contents.getTitle()}]:`,
+        details.reason,
+        `exit=${details.exitCode}`,
+      );
     });
     app.on('child-process-gone', (_event, details) => {
-      log.error(`child-process-gone [${details.type}/${details.name ?? '?'}]:`, details.reason, `exit=${details.exitCode}`);
+      log.error(
+        `child-process-gone [${details.type}/${details.name ?? '?'}]:`,
+        details.reason,
+        `exit=${details.exitCode}`,
+      );
     });
   });
 }

@@ -1,13 +1,12 @@
-import { describe, it, expect } from 'vitest';
-
+import { describe, expect, it } from 'vitest';
+import type { VoteState } from '../src/core/validator';
 import {
-  isPlausibleReading,
-  isExpired,
-  voteStep,
   createVoter,
   initialVoteState,
+  isExpired,
+  isPlausibleReading,
+  voteStep,
 } from '../src/core/validator';
-import type { VoteState } from '../src/core/validator';
 
 describe('isExpired', () => {
   it('is fresh within the hold window', () => {
