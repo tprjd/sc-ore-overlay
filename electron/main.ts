@@ -14,6 +14,7 @@ import {
   desktopCapturer,
   globalShortcut,
   ipcMain,
+  session,
   shell,
   utilityProcess,
 } from 'electron';
@@ -51,6 +52,60 @@ installCrashHandlers();
 // real target (Windows) keep hardware acceleration ON so the OCR worker can use
 // the WebGPU execution provider.
 if (process.platform === 'linux') app.disableHardwareAcceleration();
+
+// --- Navigation hardening ----------------------------------------------------
+// Standard Electron hardening: a renderer (sandboxed, contextIsolation on) must
+// never navigate itself to a remote page or spawn arbitrary child windows. Deny
+// both; route external https (release/GitHub links) through the OS browser.
+app.on('web-contents-created', (_e, contents) => {
+  contents.setWindowOpenHandler(({ url }) => {
+    if (/^https:\/\//i.test(url)) void shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  contents.on('will-navigate', (e, url) => {
+    // Allow only the app's own pages: the Vite dev server in dev, file:// in prod.
+    const ok = DEV_SERVER_URL ? url.startsWith(DEV_SERVER_URL) : url.startsWith('file://');
+    if (!ok) {
+      e.preventDefault();
+      if (/^https:\/\//i.test(url)) void shell.openExternal(url);
+    }
+  });
+});
+
+/**
+ * Content-Security-Policy for the packaged (file://) build. Applied as a response
+ * header (not a <meta> tag) so it covers workers and never touches the Vite dev
+ * server, which needs inline/eval/ws for HMR. The primary OCR path (native
+ * DirectML host) runs outside the renderer and is unaffected; the in-renderer
+ * WASM *fallback* pulls ONNX Runtime's wasm from the pinned jsDelivr CDN, so that
+ * origin is allowed. Everything else is locked to the app's own files.
+ */
+const PROD_CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "media-src 'self' blob:",
+  "connect-src 'self' data: blob: https://cdn.jsdelivr.net",
+  "worker-src 'self' blob:",
+  "font-src 'self'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-src 'none'",
+].join('; ');
+
+function installContentSecurityPolicy(): void {
+  if (DEV_SERVER_URL) return; // dev: Vite HMR needs a looser policy — skip.
+  session.defaultSession.webRequest.onHeadersReceived((details, cb) => {
+    cb({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [PROD_CSP],
+      },
+    });
+  });
+}
 
 let controlWin: BrowserWindow | null = null;
 let overlayWin: BrowserWindow | null = null;
@@ -517,6 +572,7 @@ ipcMain.handle(
 
 void app.whenReady().then(() => {
   log.info(`SC Ore Overlay v${app.getVersion()} starting (electron ${process.versions.electron})`);
+  installContentSecurityPolicy();
   controlWin = createControlWindow();
   ownerWin = createOwnerWindow();
   overlayWin = createOverlayWindow();

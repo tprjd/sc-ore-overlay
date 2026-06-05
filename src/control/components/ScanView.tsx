@@ -141,6 +141,8 @@ export interface ScanViewProps {
   overlayConfig: OverlayConfig;
   onOverlayConfigChange: (config: OverlayConfig) => void;
   onBack: () => void;
+  /** Re-select the lost source (back to the picker with auto-reconnect armed). */
+  onReconnect: () => void;
   /** Re-open the first-run setup wizard. */
   onSetup: () => void;
 }
@@ -170,6 +172,7 @@ export function ScanView({
   overlayConfig,
   onOverlayConfigChange,
   onBack,
+  onReconnect,
   onSetup,
 }: ScanViewProps) {
   const mediaRef = useRef<DrawableSource | null>(null);
@@ -519,6 +522,20 @@ export function ScanView({
           {paused ? 'Resume' : 'Pause'}
         </button>
       </header>
+
+      {sourceLost && (
+        <div style={S.lostBanner}>
+          <span style={S.lostDot} />
+          <span style={S.lostText}>
+            <b>Capture source lost.</b> The shared screen/window is gone — the overlay is hidden
+            until it's back.
+          </span>
+          <span style={S.spacer} />
+          <button type="button" style={S.lostBtn} onClick={onReconnect}>
+            Reconnect
+          </button>
+        </div>
+      )}
 
       <div style={S.body}>
         <CapturePreview
@@ -1128,6 +1145,27 @@ const S: Record<string, CSSProperties> = {
   },
   srcLabel: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, opacity: 0.9 },
   spacer: { flex: 1 },
+  lostBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '8px 14px',
+    background: '#3a1d1d',
+    borderBottom: '1px solid #6b2f2f',
+    fontSize: 13,
+  },
+  lostDot: { width: 8, height: 8, borderRadius: '50%', background: '#f87171', flex: '0 0 auto' },
+  lostText: { color: '#fca5a5' },
+  lostBtn: {
+    background: '#f87171',
+    color: '#1a0d0d',
+    border: 'none',
+    borderRadius: R.md,
+    padding: '6px 14px',
+    cursor: 'pointer',
+    fontSize: 13,
+    fontWeight: 700,
+  },
   health: {
     display: 'flex',
     alignItems: 'center',

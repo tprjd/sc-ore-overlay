@@ -181,8 +181,20 @@ export function App() {
     setAutoReconnect(false);
     setSource(picked);
     if (picked.kind === 'desktop') {
+      // Remember it so a one-click reconnect (after source loss) can re-select it.
+      lastSource.current = { id: picked.sourceId, name: picked.label };
       window.sco?.setSettings?.({ sourceId: picked.sourceId, sourceName: picked.label });
     }
+  };
+
+  // Source-lost reconnect: drop back to the picker but keep auto-reconnect armed
+  // so it re-selects the same source as soon as it reappears (D1).
+  const handleReconnect = (): void => {
+    setAutoReconnect(true);
+    source?.stream?.getTracks().forEach((t) => {
+      t.stop();
+    });
+    setSource(null);
   };
 
   const handleHotkeys = async (map: HotkeyMap): Promise<void> => {
@@ -359,6 +371,7 @@ export function App() {
             overlayConfig={overlayConfig}
             onOverlayConfigChange={handleOverlayConfig}
             onBack={handleBack}
+            onReconnect={handleReconnect}
             onSetup={() => setShowWizard(true)}
           />
         ) : (

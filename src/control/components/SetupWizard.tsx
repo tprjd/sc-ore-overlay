@@ -12,7 +12,10 @@ import { useMemo, useRef, useState } from 'react';
 import type { SignatureTable } from '../../core';
 import { groupLocations } from '../../core';
 import type { SurveyRegionSetting } from '../../shared/bridge';
+import { recognize } from '../ocr';
 import type { DrawableSource, NormRegion } from '../preprocess';
+import { preprocess } from '../preprocess';
+import { pickReading } from '../useCaptureLoop';
 import type { PreviewRegion } from './CapturePreview';
 import { CapturePreview } from './CapturePreview';
 import { newRegionId, ROLE_META } from './roles';
@@ -35,6 +38,59 @@ export function SetupWizard({ source, table, onComplete, onSkip, onBack }: Setup
   const [step, setStep] = useState<Step>('region');
   const [rect, setRect] = useState<NormRegion | null>(null);
   const [location, setLocation] = useState<string | null>(null);
+
+  // A2 — confirm-read gate: OCR the drawn box once so a bad crop is caught at
+  // setup time. The user can't advance past the region step until a plausible
+  // reading shows (pickReading cross-checks the table) or they explicitly skip it.
+  const [testing, setTesting] = useState(false);
+  const [tested, setTested] = useState(false);
+  const [reading, setReading] = useState<number | null>(null);
+  const [rawText, setRawText] = useState('');
+  const [overridden, setOverridden] = useState(false);
+
+  const resetTest = (): void => {
+    setTested(false);
+    setReading(null);
+    setRawText('');
+    setOverridden(false);
+  };
+
+  // Redrawing the box invalidates any prior read.
+  const onDraw = (r: NormRegion): void => {
+    setRect(r);
+    resetTest();
+  };
+
+  const testRead = async (): Promise<void> => {
+    const media = mediaRef.current;
+    if (!media || !rect) return;
+    setTesting(true);
+    try {
+      const pre = preprocess(media, rect, { scale: 4 });
+      if (!pre) {
+        setReading(null);
+        setRawText('(no crop)');
+      } else {
+        const lines = await recognize(pre.dataUrl);
+        setReading(pickReading(lines, table));
+        setRawText(
+          lines
+            .map((l) => l.text)
+            .join(' ')
+            .trim() || '(no text)',
+        );
+      }
+      setTested(true);
+    } catch {
+      setReading(null);
+      setRawText('(read failed)');
+      setTested(true);
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const canAdvance = !!rect && (reading != null || overridden);
 
   const systemGroups = useMemo(() => groupLocations(table), [table]);
 
@@ -89,7 +145,7 @@ export function SetupWizard({ source, table, onComplete, onSkip, onBack }: Setup
             source={source}
             mediaRef={mediaRef}
             regions={previewRegions}
-            onDraw={setRect}
+            onDraw={onDraw}
             hint="Drag a box over the RADAR SIGNATURE number on the mining scanner HUD. A rough box is fine — detection finds the digits inside it."
           />
           <div style={S.side}>
@@ -99,12 +155,44 @@ export function SetupWizard({ source, table, onComplete, onSkip, onBack }: Setup
               <b>Radar Signature</b> number. You can redraw it; the last box wins.
             </p>
             <p style={S.status}>{rect ? '✓ Region set' : 'No region drawn yet'}</p>
+
+            <button
+              type="button"
+              style={{ ...S.btn, ...(rect && !testing ? null : S.disabled) }}
+              disabled={!rect || testing}
+              onClick={testRead}
+            >
+              {testing ? 'Reading…' : 'Test read'}
+            </button>
+            {tested &&
+              (reading != null ? (
+                <p style={S.readOk}>✓ Reads {reading.toLocaleString()} — looks good.</p>
+              ) : (
+                <div style={S.readBad}>
+                  <p style={S.readBadLine}>
+                    No usable reading. OCR saw: <span style={S.raw}>{rawText}</span>
+                  </p>
+                  <p style={S.readHint}>
+                    Redraw the box tighter over the number, or skip the check.
+                  </p>
+                  <button type="button" style={S.linkBtn} onClick={() => setOverridden(true)}>
+                    Use anyway
+                  </button>
+                </div>
+              ))}
+            {overridden && reading == null && (
+              <p style={S.readWarn}>Check skipped — advancing without a confirmed read.</p>
+            )}
+
             <span style={S.spacer} />
             <div style={S.footer}>
               <button
-                style={{ ...S.primary, ...(rect ? null : S.disabled) }}
-                disabled={!rect}
+                style={{ ...S.primary, ...(canAdvance ? null : S.disabled) }}
+                disabled={!canAdvance}
                 onClick={() => setStep('location')}
+                title={
+                  canAdvance ? undefined : 'Run "Test read" and confirm a reading (or use anyway)'
+                }
               >
                 Next →
               </button>
@@ -232,6 +320,12 @@ const S: Record<string, CSSProperties> = {
   h2: { fontSize: 16, margin: '0 0 8px' },
   p: { fontSize: 13, lineHeight: 1.5, opacity: 0.8, margin: '0 0 12px' },
   status: { fontSize: 13, fontWeight: 600, color: C.accent },
+  readOk: { fontSize: 13, fontWeight: 600, color: C.green, margin: '10px 0 0' },
+  readBad: { marginTop: 10 },
+  readBadLine: { fontSize: 12, margin: 0, color: C.amber },
+  raw: { fontFamily: 'ui-monospace, monospace', opacity: 0.85, color: C.text },
+  readHint: { fontSize: 12, opacity: 0.7, margin: '4px 0 6px' },
+  readWarn: { fontSize: 12, color: C.amber, margin: '8px 0 0' },
   selectRow: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 },
   selLabel: { width: 70, fontSize: 13, opacity: 0.8 },
   select: {

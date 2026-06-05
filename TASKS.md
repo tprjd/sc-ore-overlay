@@ -15,8 +15,10 @@ overlay card (commits `F1`–`F3`).
 What's left below: the **remaining UX items** (Part I) and the **deferred/optional** feature work
 (Part II). Read `CLAUDE.md` first — locked stack, guardrails, and matcher spec live there.
 
-Current version: **0.3.0**. Most of the UX chapter has shipped on `main` since v0.3.0 (unreleased) —
-see the summary under Part I. Part II (other mining methods) is the next minor/major.
+Current version: **1.0.0-rc.1** (first release candidate; all v1 human-verification gates and the
+R4/R6 in-game checkpoints confirmed 2026-06-05). The UX chapter (Part I) is complete — A2 and D1
+landed for the RC; D2 shipped earlier as the About panel. Part II (other mining methods) is the
+next minor/major.
 
 ---
 
@@ -31,7 +33,7 @@ scanned-rock card (C4 — SCU/quality/percent, direction + reset). What's left:
 
 ## A — Calibration & confidence
 
-### A2 — Setup-wizard confirm-read gate
+### A2 — Setup-wizard confirm-read gate — ✅ DONE (1.0.0-rc.1)
 **Tasks**
 - In the wizard's region step, show the live read of the box being drawn and a "looks good?" gate
   before advancing, so a bad crop is caught at setup time.
@@ -40,15 +42,24 @@ scanned-rock card (C4 — SCU/quality/percent, direction + reset). What's left:
 - The wizard won't advance past the region step until a plausible reading is shown (or the user
   explicitly overrides).
 
+**Shipped:** `SetupWizard.tsx` adds a "Test read" button that OCRs the drawn box once
+(`preprocess` → `recognize` → `pickReading`); **Next** is disabled until `pickReading` returns a
+plausible value or the user clicks "Use anyway". Redrawing the box resets the gate.
+
 ## D — Robustness & help
 
-### D1 — Capture-source-lost banner
+### D1 — Capture-source-lost banner — ✅ DONE (1.0.0-rc.1)
 **Tasks**
 - When the capture stream ends (window closed, source lost), show a banner + a reconnect button
   instead of silently freezing.
 
 **Acceptance**
 - Closing the captured window surfaces a visible "source lost" state with a one-click reconnect.
+
+**Shipped:** building on R6.4's source-loss detection (`ScanView.tsx` track `ended`/`readyState`
+poll), a prominent red banner now appears under the header with a one-click **Reconnect** that
+returns to the picker with auto-reconnect armed (`App.handleReconnect`, re-selects the same
+source when it reappears). The header health pill + overlay-vanish from R6.4 remain.
 
 ### D2 — In-app help / about
 **Tasks**
@@ -254,12 +265,13 @@ DevTools knob to the default, with a visible control.
 
 ---
 
-## R6 — Overlay presence & staleness: only show real reads, hold then drop, vanish on source loss — ⏳ BUILT, pending in-game verification
+## R6 — Overlay presence & staleness: only show real reads, hold then drop, vanish on source loss — ✅ DONE
 
-**Status (2026-06-03):** all sub-tasks implemented on `main`; `npm run typecheck`, `npm run
-build`, and the 115-test suite pass (new: `isExpired` + strict `parseScanResult` negatives).
-Mechanisms only — the over-game behavior (hold-then-clear, empty scan box, vanish-on-loss)
-still needs the human checkpoint below on real Windows + live HUD before R6 is marked done.
+**Status (2026-06-05):** all sub-tasks implemented on `main` and **confirmed in-game** on real
+Windows + live HUD — ore holds then clears when the RS chip leaves, the scan box stays empty with
+no SCAN RESULTS panel, and the overlay vanishes when the captured window closes and returns on
+reconnect. `npm run typecheck`, `npm run build`, and the test suite pass (`isExpired` + strict
+`parseScanResult` negatives).
 
 **Problem.** Three failure modes leak garbage onto the overlay:
 
@@ -409,11 +421,10 @@ tell *why* there's nothing: bad read vs. waiting vs. source gone.
 **Acceptance**
 - All existing tests pass; new tests cover expiry + scan-gate negatives.
 
-**Human verification:** this dev box can't run the over-game overlay. After build, the user
-confirms on real Windows + live HUD: (a) ore holds then clears when the RS chip leaves; (b)
-the scan box stays empty with no SCAN RESULTS panel up; (c) the overlay vanishes when the
-captured window is closed and returns on reconnect. Do not claim these work without confirmed
-in-game runs.
+**Human verification — ✅ CONFIRMED (2026-06-05):** the author confirmed on real Windows + live
+HUD: (a) ore holds then clears when the RS chip leaves; (b) the scan box stays empty with no SCAN
+RESULTS panel up; (c) the overlay vanishes when the captured window is closed and returns on
+reconnect.
 
 ---
 
