@@ -143,6 +143,12 @@ ipcMain.on('sco:open-external', (_e: IpcMainEvent, url: string) => {
   if (/^https:\/\//i.test(url)) void shell.openExternal(url);
 });
 
+// About panel: app version + open the log folder for bug reports.
+ipcMain.handle('sco:app-version', (): string => app.getVersion());
+ipcMain.on('sco:open-logs', () => {
+  void shell.openPath(path.dirname(log.path()));
+});
+
 // --- Native OCR host (utility process) ---------------------------------------
 // A Node child with its own D3D12 device runs onnxruntime-node + DirectML, so
 // GPU OCR doesn't contend with the overlay the way in-renderer WebGPU does (see

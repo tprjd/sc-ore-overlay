@@ -333,4 +333,8 @@ export interface ScoBridge {
   checkForUpdates(): Promise<UpdateInfo>;
   /** Open an external https URL in the user's browser (e.g. a release page). */
   openExternal(url: string): void;
+  /** The running app version (package.json) — for the About panel. */
+  appVersion(): Promise<string>;
+  /** Open the folder holding main.log in the OS file manager (bug reports). */
+  openLogs(): void;
 }
