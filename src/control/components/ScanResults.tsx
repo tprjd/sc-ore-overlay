@@ -3,10 +3,11 @@
 // ore. Sits between the preview and the settings panel. Read-only except for a
 // per-row delete.
 
-import type { CSSProperties } from 'react';
+import { ChevronLeft, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import type { ScanResult, SurveyEntry } from '../../core';
+import { cn } from '../ui/cn';
 
 type SortKey = 'ore' | 'quality' | 'scu' | 'system' | 'scout' | 'ts';
 
@@ -107,166 +108,91 @@ export function ScanResults({
 
   if (!open) {
     return (
-      <button type="button" style={S.closed} onClick={() => setOpen(true)} title="Scan results">
-        <span style={S.closedLabel}>SCAN RESULTS ({entries.length}) ▸</span>
+      <button
+        type="button"
+        className="flex w-[30px] shrink-0 cursor-pointer items-center justify-center border-l border-border bg-surface-alt p-0 text-muted"
+        onClick={() => setOpen(true)}
+        title="Scan results"
+      >
+        <span className="rotate-180 text-[11px] uppercase tracking-widest [writing-mode:vertical-rl]">
+          SCAN RESULTS ({entries.length}) ▸
+        </span>
       </button>
     );
   }
 
   return (
-    <div style={S.col}>
-      <div style={S.head}>
-        <span style={S.title}>Scan results</span>
-        <span style={S.count}>{view.length}</span>
-        <button style={S.collapse} onClick={() => setOpen(false)} title="Collapse">
-          ◂
+    <div className="flex w-80 shrink-0 flex-col border-l border-border bg-surface-alt min-h-0">
+      <div className="flex items-center gap-2 px-3 pb-1.5 pt-2.5">
+        <span className="text-xs uppercase tracking-wide text-fg/70">Scan results</span>
+        <span className="tnum text-[11px] text-fg/45">{view.length}</span>
+        <button
+          className="ml-auto rounded-md border border-border-strong px-2 py-0.5 text-muted transition-colors hover:text-fg"
+          onClick={() => setOpen(false)}
+          title="Collapse"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
         </button>
       </div>
       <input
-        style={S.search}
+        className="mx-3 mb-2 rounded-md border border-border-strong bg-bg px-2 py-1.5 text-[13px] text-fg outline-none focus:border-accent/60"
         placeholder="search ore / scout / system…"
         value={q}
         onChange={(e) => setQ(e.target.value)}
       />
-      <div style={S.headerRow}>
+      <div className="flex gap-1.5 border-b border-border px-3 pb-1">
         {COLS.map((c) => (
           <button
             key={c.key}
-            style={{
-              ...S.th,
-              ...(c.w ? { width: c.w, flex: '0 0 auto' } : { flex: 1, minWidth: 0 }),
-              textAlign: c.align ?? 'left',
-              color: c.key === sortKey ? '#e6e6e6' : '#9fb3c8',
-            }}
+            className={cn(
+              'tnum cursor-pointer border-none bg-none py-0.5 text-[10px] uppercase tracking-wide',
+              c.align === 'right' ? 'text-right' : 'text-left',
+              c.key === sortKey ? 'text-fg' : 'text-muted',
+            )}
+            style={c.w ? { width: c.w, flex: '0 0 auto' } : { flex: 1, minWidth: 0 }}
             onClick={() => toggleSort(c.key)}
           >
             {c.label}
             {c.key === sortKey ? (desc ? ' ▼' : ' ▲') : ''}
           </button>
         ))}
-        <span style={S.delHead} />
+        <span className="w-4 shrink-0" />
       </div>
-      <div style={S.list}>
+      <div className="flex-1 overflow-y-auto px-3 pb-3 pt-1">
         {view.map((r) => (
-          <div key={r.id} style={S.row}>
-            <span style={S.ore} title={`${ago(r.ts)} ago`}>
+          <div
+            key={r.id}
+            className="flex items-baseline gap-1.5 border-b border-surface py-1 text-xs"
+          >
+            <span className="min-w-0 flex-1 truncate font-semibold" title={`${ago(r.ts)} ago`}>
               {r.ore}
-              {r.nodes ? <span style={S.nodes}> ×{r.nodes}</span> : null}
+              {r.nodes ? <span className="font-normal text-accent"> ×{r.nodes}</span> : null}
             </span>
-            <span style={{ ...S.cell, width: 44 }}>{r.quality ?? '—'}</span>
-            <span style={{ ...S.cell, width: 50 }}>{r.scu != null ? r.scu.toFixed(1) : '—'}</span>
-            <span style={{ ...S.cellL, width: 60 }}>{r.system}</span>
-            <span style={{ ...S.cellL, width: 56 }}>{r.scout}</span>
-            <button style={S.del} onClick={() => onRemove(r.id)} title="Remove">
-              ✕
+            <span className="tnum shrink-0 text-right text-fg/85" style={{ width: 44 }}>
+              {r.quality ?? '—'}
+            </span>
+            <span className="tnum shrink-0 text-right text-fg/85" style={{ width: 50 }}>
+              {r.scu != null ? r.scu.toFixed(1) : '—'}
+            </span>
+            <span className="shrink-0 truncate text-left text-fg/70" style={{ width: 60 }}>
+              {r.system}
+            </span>
+            <span className="shrink-0 truncate text-left text-fg/70" style={{ width: 56 }}>
+              {r.scout}
+            </span>
+            <button
+              className="grid w-4 shrink-0 place-items-center text-[#5b6571] transition-colors hover:text-fg"
+              onClick={() => onRemove(r.id)}
+              title="Remove"
+            >
+              <X className="h-3 w-3" />
             </button>
           </div>
         ))}
-        {view.length === 0 && <div style={S.empty}>no scans yet</div>}
+        {view.length === 0 && (
+          <div className="p-4 text-center text-xs text-fg/40">no scans yet</div>
+        )}
       </div>
     </div>
   );
 }
-
-const S: Record<string, CSSProperties> = {
-  closed: {
-    width: 30,
-    flex: '0 0 auto',
-    borderLeft: '1px solid #2c323d',
-    background: '#16181d',
-    color: '#9fb3c8',
-    cursor: 'pointer',
-    padding: 0,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closedLabel: {
-    writingMode: 'vertical-rl',
-    transform: 'rotate(180deg)',
-    fontSize: 11,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  col: {
-    width: 320,
-    flex: '0 0 auto',
-    display: 'flex',
-    flexDirection: 'column',
-    borderLeft: '1px solid #2c323d',
-    background: '#16181d',
-    minHeight: 0,
-  },
-  head: { display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px 6px' },
-  title: { fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.7 },
-  count: { fontSize: 11, opacity: 0.45, fontVariantNumeric: 'tabular-nums' },
-  collapse: {
-    marginLeft: 'auto',
-    background: 'none',
-    border: '1px solid #3a4150',
-    borderRadius: 6,
-    color: '#9fb3c8',
-    cursor: 'pointer',
-    padding: '2px 8px',
-    fontSize: 12,
-  },
-  search: {
-    margin: '0 12px 8px',
-    background: '#0d0f12',
-    color: '#e6e6e6',
-    border: '1px solid #3a4150',
-    borderRadius: 6,
-    padding: '6px 8px',
-    fontSize: 13,
-  },
-  headerRow: { display: 'flex', gap: 6, padding: '0 12px 4px', borderBottom: '1px solid #2c323d' },
-  th: {
-    background: 'none',
-    border: 'none',
-    padding: '2px 0',
-    cursor: 'pointer',
-    fontSize: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    fontVariantNumeric: 'tabular-nums',
-  },
-  delHead: { width: 16, flex: '0 0 auto' },
-  list: { flex: 1, overflowY: 'auto', padding: '4px 12px 12px' },
-  row: {
-    display: 'flex',
-    gap: 6,
-    alignItems: 'baseline',
-    padding: '4px 0',
-    borderBottom: '1px solid #1d2128',
-    fontSize: 12,
-  },
-  ore: {
-    flex: 1,
-    minWidth: 0,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-    fontWeight: 600,
-  },
-  nodes: { color: '#4fd1ff', fontWeight: 400 },
-  cell: { flex: '0 0 auto', textAlign: 'right', fontVariantNumeric: 'tabular-nums', opacity: 0.85 },
-  cellL: {
-    flex: '0 0 auto',
-    textAlign: 'left',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-    opacity: 0.7,
-  },
-  del: {
-    width: 16,
-    flex: '0 0 auto',
-    background: 'none',
-    border: 'none',
-    color: '#5b6571',
-    cursor: 'pointer',
-    fontSize: 11,
-    padding: 0,
-  },
-  empty: { padding: 16, textAlign: 'center', opacity: 0.4, fontSize: 12 },
-};

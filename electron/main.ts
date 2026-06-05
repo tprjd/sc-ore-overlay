@@ -5,7 +5,7 @@
 //
 // Built as CommonJS by vite-plugin-electron, so `__dirname` is available.
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { IpcMainEvent, IpcMainInvokeEvent, UtilityProcess } from 'electron';
 import {
@@ -158,6 +158,18 @@ function writeSettings(next: AppSettings): void {
 ipcMain.handle('sco:get-settings', (): AppSettings => readSettings());
 ipcMain.on('sco:set-settings', (_e: IpcMainEvent, patch: Partial<AppSettings>) => {
   writeSettings({ ...readSettings(), ...patch });
+});
+// Factory reset: delete settings.json and relaunch to a clean first-run state.
+// The survey log (separate file) is intentionally left intact.
+ipcMain.on('sco:reset-settings', () => {
+  try {
+    rmSync(settingsFile(), { force: true });
+    log.info('settings reset by user');
+  } catch (e) {
+    log.error('settings reset failed', e);
+  }
+  app.relaunch();
+  app.exit(0);
 });
 ipcMain.on('sco:overlay-config', (_e: IpcMainEvent, config: OverlayConfig) => {
   writeSettings({ ...readSettings(), overlay: config });

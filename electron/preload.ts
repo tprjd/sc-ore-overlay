@@ -23,6 +23,7 @@ const api: ScoBridge = {
   ping: () => 'pong',
   getSettings: () => ipcRenderer.invoke('sco:get-settings') as Promise<AppSettings>,
   setSettings: (patch) => ipcRenderer.send('sco:set-settings', patch),
+  resetSettings: () => ipcRenderer.send('sco:reset-settings'),
   setHotkeys: (map: HotkeyMap) =>
     ipcRenderer.invoke('sco:set-hotkeys', map) as Promise<Record<HotkeyAction, boolean>>,
 

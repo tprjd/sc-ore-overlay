@@ -2,7 +2,7 @@
 // active patch) persist to Electron userData and are restored on launch. The
 // signature tables for every crawled patch are bundled and switchable.
 
-import type { CSSProperties } from 'react';
+import { X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SignatureTable } from '../core';
 import { loadSignatureTable } from '../core';
@@ -16,12 +16,15 @@ import type {
 import { DEFAULT_HOTKEYS, DEFAULT_OVERLAY_CONFIG } from '../shared/bridge';
 import { newRegionId } from './components/roles';
 import { ScanView } from './components/ScanView';
+import type { SetupResult } from './components/SetupWizard';
 import { SetupWizard } from './components/SetupWizard';
 import type { PickedSource } from './components/SourcePicker';
 import { SourcePicker } from './components/SourcePicker';
 import { SurveyView } from './components/SurveyView';
 import type { OcrBackend } from './ocr';
 import { getEffectiveBackend, setOcrBackend } from './ocr';
+import { Button } from './ui';
+import { cn } from './ui/cn';
 import type { LoopParams } from './useCaptureLoop';
 
 type Tab = 'mining' | 'survey';
@@ -251,11 +254,19 @@ export function App() {
     setSource(null);
   };
 
-  const completeSetup = (region: SurveyRegionSetting, loc: string | null): void => {
-    // Replace just the RS region; keep any other regions (e.g. scanResult) the
-    // user added, so re-running setup isn't destructive.
-    setMiningRegions((prev) => [region, ...prev.filter((r) => r.role !== 'rs')]);
-    setLocation(loc);
+  const completeSetup = (result: SetupResult): void => {
+    // Replace just the RS / scanResult regions the wizard set; keep any others
+    // the user already had, so re-running setup isn't destructive. A skipped
+    // step leaves its region null → that role is left untouched.
+    setMiningRegions((prev) => {
+      let regions = prev;
+      if (result.rsRegion) regions = [result.rsRegion, ...regions.filter((r) => r.role !== 'rs')];
+      if (result.scanRegion)
+        regions = [...regions.filter((r) => r.role !== 'scanResult'), result.scanRegion];
+      return regions;
+    });
+    setLocation(result.location);
+    if (result.overlayPreset) handleOverlayConfig({ ...overlayConfig, ...result.overlayPreset });
     setShowWizard(false);
     window.sco?.setSettings?.({ setupComplete: true });
   };
@@ -270,12 +281,29 @@ export function App() {
   if (!loaded) return null;
   if (!table) {
     return (
-      <main style={{ padding: 24, color: '#e6e6e6' }}>
-        <h1>No signature table</h1>
-        <p>
-          Run <code>npm run crawl</code> to generate one under <code>src/data/tables/</code>.
+      <main className="p-6">
+        <h1 className="text-xl font-bold">No signature table</h1>
+        <p className="mt-2 text-sm text-muted">
+          Run <code className="rounded-sm bg-bg px-1 py-0.5 font-mono">npm run crawl</code> to
+          generate one under{' '}
+          <code className="rounded-sm bg-bg px-1 py-0.5 font-mono">src/data/tables/</code>.
         </p>
       </main>
+    );
+  }
+  // The wizard owns the Source step, so it renders before the standalone picker:
+  // a fresh profile lands on Welcome and picks its source inside the flow.
+  if (showWizard) {
+    return (
+      <SetupWizard
+        source={source}
+        onPickSource={handlePick}
+        lastSourceId={autoReconnect ? lastSource.current.id : undefined}
+        table={table}
+        onComplete={completeSetup}
+        onSkip={skipSetup}
+        onExit={skipSetup}
+      />
     );
   }
   if (!source) {
@@ -286,65 +314,56 @@ export function App() {
       />
     );
   }
-  if (showWizard) {
-    return (
-      <SetupWizard
-        source={source}
-        table={table}
-        onComplete={completeSetup}
-        onSkip={skipSetup}
-        onBack={handleBack}
-      />
-    );
-  }
   // With Survey gated off, Mining is the only view — force it and drop the
   // tab bar entirely (no orphan single tab).
   const activeTab: Tab = surveyEnabled ? tab : 'mining';
   const showUpdate = !!update?.available && update.latest !== dismissedUpdate;
   return (
-    <div style={shell.root}>
+    <div className="flex h-screen flex-col">
       {showUpdate && update && (
-        <div style={shell.banner}>
-          <span style={{ flex: 1 }}>
+        <div className="flex items-center gap-2.5 border-b border-accent bg-[#13282b] px-3 py-2 text-[13px] text-[#d7e3e6]">
+          <span className="flex-1">
             Update available: <strong>{update.latest}</strong>
-            <span style={{ color: '#7d8a99' }}> (you have v{update.current})</span>
+            <span className="text-muted"> (you have v{update.current})</span>
           </span>
-          <button
-            type="button"
-            style={shell.bannerLink}
+          <Button
+            variant="primary"
+            size="sm"
             onClick={() => window.sco?.openExternal?.(update.url)}
           >
             Download
-          </button>
-          <button
-            type="button"
-            style={shell.bannerDismiss}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted"
             onClick={dismissUpdate}
             aria-label="Dismiss update notice"
           >
-            ×
-          </button>
+            <X className="h-4 w-4" />
+          </Button>
         </div>
       )}
       {surveyEnabled && (
-        <nav style={shell.tabs}>
-          <button
-            type="button"
-            style={{ ...shell.tab, ...(activeTab === 'mining' ? shell.tabActive : null) }}
-            onClick={() => setTab('mining')}
-          >
-            Mining
-          </button>
-          <button
-            type="button"
-            style={{ ...shell.tab, ...(activeTab === 'survey' ? shell.tabActive : null) }}
-            onClick={() => setTab('survey')}
-          >
-            Survey
-          </button>
+        <nav className="flex gap-0.5 border-b border-border bg-surface-alt px-2.5 pt-1.5">
+          {(['mining', 'survey'] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              className={cn(
+                'rounded-t-md border border-transparent px-4 py-1.5 text-[13px] capitalize transition-colors',
+                activeTab === t
+                  ? 'border-border border-b-surface bg-surface text-fg'
+                  : 'text-muted hover:text-fg',
+              )}
+              onClick={() => setTab(t)}
+            >
+              {t}
+            </button>
+          ))}
         </nav>
       )}
-      <div style={shell.view}>
+      <div className="min-h-0 flex-1">
         {activeTab === 'mining' ? (
           <ScanView
             source={source}
@@ -390,61 +409,3 @@ export function App() {
     </div>
   );
 }
-
-const shell: Record<string, CSSProperties> = {
-  root: { display: 'flex', flexDirection: 'column', height: '100vh' },
-  banner: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    padding: '8px 12px',
-    background: '#13282b',
-    borderBottom: '1px solid #1FD0D8',
-    color: '#d7e3e6',
-    fontSize: 13,
-  },
-  bannerLink: {
-    background: '#1FD0D8',
-    color: '#06222a',
-    border: 'none',
-    borderRadius: 6,
-    padding: '5px 12px',
-    cursor: 'pointer',
-    fontSize: 13,
-    fontWeight: 600,
-  },
-  bannerDismiss: {
-    background: 'none',
-    color: '#9fb3c8',
-    border: 'none',
-    fontSize: 18,
-    lineHeight: 1,
-    cursor: 'pointer',
-    padding: '0 4px',
-  },
-  tabs: {
-    display: 'flex',
-    gap: 2,
-    padding: '6px 10px 0',
-    background: '#16181d',
-    borderBottom: '1px solid #2c323d',
-  },
-  tab: {
-    background: 'none',
-    color: '#9fb3c8',
-    border: '1px solid transparent',
-    borderBottom: 'none',
-    borderTopLeftRadius: 7,
-    borderTopRightRadius: 7,
-    padding: '7px 16px',
-    cursor: 'pointer',
-    fontSize: 13,
-  },
-  tabActive: {
-    background: '#1d2128',
-    color: '#e6e6e6',
-    border: '1px solid #2c323d',
-    borderBottom: '1px solid #1d2128',
-  },
-  view: { flex: 1, minHeight: 0 },
-};

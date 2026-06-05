@@ -25,7 +25,11 @@ always-on-top, click-through overlay while the user plays.
 - **Language:** TypeScript (strict mode).
 - **Shell:** Electron. This is non-negotiable — it's the only practical way to get a click-through,
   always-on-top overlay over a game plus Chromium screen capture in one app.
-- **UI:** React.
+- **UI:** React. **Styling:** Tailwind CSS v4 (`@tailwindcss/vite`) + a small set of hand-rolled
+  shadcn-style primitives in `src/control/ui/` (Button/Card/Badge/Select/Dialog/Tooltip/Stepper/
+  Field, built on Radix + `class-variance-authority`/`clsx`/`tailwind-merge`, icons from
+  `lucide-react`). See the sanctioned-deviation note below — this replaced the old inline-style
+  `tokens.ts` system across the **control window** so there is one styling system, not two.
 - **OCR:** **PP-OCR** (PaddleOCR detection + recognition models) via **@gutenye/ocr-browser** on
   ONNX Runtime Web (WASM, runs in the renderer). The user draws a *rough* region; PP-OCR's text
   **detection** localizes the digits inside it (ignoring the pin icon / padding) and **recognition**
@@ -56,6 +60,19 @@ you believe a locked choice genuinely cannot work, stop and flag it rather than 
 > **R5 update:** `directml` is now the **launch default** (selectable in the Capture tab; the active
 > engine shows in the status footer). It auto-falls back to the WASM worker when the native host
 > can't start, so non-DX12 machines stay safe.
+
+> **Sanctioned deviation (2026-06-06, onboarding redesign):** the control-window UI was migrated
+> from inline-style design tokens to **Tailwind CSS v4 + a small Radix/shadcn-style primitive set**
+> (`src/control/ui/`), **with the human's explicit approval**, so the app has one styling system.
+> This adds a CSS tool + component primitives on top of React — it does **not** change the UI
+> framework (still React) or any locked OCR/overlay choice. Constraints that must hold: (1) the
+> Tailwind stylesheet (`src/control/ui/theme.css`) is imported **only** by `src/control/main.tsx`, so
+> the transparent overlay/detail/scan windows never load it and keep their **runtime-inline,
+> `OverlayConfig`-driven** appearance — those cards are a deliberate exception, not a second design
+> system; (2) `theme.css` mirrors the old palette and is excluded from Biome (its `@theme`/`@import
+> "tailwindcss"` isn't standard CSS); (3) `@tailwindcss/vite` is ESM-only and `vite.config.ts` is
+> CJS, so the plugin is loaded via a dynamic `import()` in an async config. Do **not** reintroduce a
+> parallel inline-token system for the control UI.
 
 ---
 

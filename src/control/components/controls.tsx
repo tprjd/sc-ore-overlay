@@ -1,12 +1,13 @@
-// Reusable control-window primitives, extracted from ScanView so the panel and
-// any future settings UI share one set of field/section widgets. Pure
-// presentation + small local state; no app logic. Styled via design tokens.
+// Reusable control-window widgets, extracted from ScanView so the panel and any
+// future settings UI share one set of field/section widgets. Pure presentation +
+// small local state; no app logic. Styled with Tailwind (control design system).
 
-import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 
 import type { HotkeyAction } from '../../shared/bridge';
-import { C, F, R } from './tokens';
+import { cn } from '../ui/cn';
 
 /** A titled, collapsible block. */
 export function Section({
@@ -20,16 +21,24 @@ export function Section({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <section style={s.section}>
+    <section className="mb-3 overflow-hidden rounded-lg border border-border bg-surface-alt">
       <button
         type="button"
-        style={{ ...s.sectionHeader, ...(open ? s.sectionHeaderOpen : null) }}
+        className={cn(
+          'flex w-full items-center gap-2 border-b border-transparent bg-surface px-3 py-2.5 text-left',
+          'text-[11px] font-semibold uppercase tracking-wide text-fg/90 transition-colors hover:text-fg',
+          open && 'border-border',
+        )}
         onClick={() => setOpen((o) => !o)}
       >
-        <span style={s.caret}>{open ? '▾' : '▸'}</span>
+        {open ? (
+          <ChevronDown className="h-3 w-3 text-accent" />
+        ) : (
+          <ChevronRight className="h-3 w-3 text-accent" />
+        )}
         {title}
       </button>
-      {open && <div style={s.sectionBody}>{children}</div>}
+      {open && <div className="p-3">{children}</div>}
     </section>
   );
 }
@@ -53,8 +62,8 @@ export function Slider({
   suffix?: string;
 }) {
   return (
-    <label style={s.sliderRow}>
-      <span style={s.label}>{label}</span>
+    <label className="mb-2 flex items-center gap-2">
+      <span className="w-[82px] text-xs text-fg/80">{label}</span>
       <input
         type="range"
         min={min}
@@ -62,9 +71,9 @@ export function Slider({
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        style={s.range}
+        className="flex-1 accent-accent"
       />
-      <span style={s.sliderValue}>
+      <span className="tnum w-14 text-right text-xs">
         {value}
         {suffix}
       </span>
@@ -96,12 +105,12 @@ export function NoiseEditor({
     onChange([...new Set(next)].sort((a, b) => a - b));
   };
   return (
-    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6 }}>
+    <div className="mt-1.5 flex items-center gap-1.5">
       <input
         type="text"
         value={text}
         placeholder="10000, 5000, …"
-        style={{ ...s.input, fontVariantNumeric: 'tabular-nums' }}
+        className="tnum w-full rounded-md border border-border-strong bg-bg px-2 py-1.5 text-[13px] text-fg outline-none transition-colors focus:border-accent/60"
         onChange={(e) => setText(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => {
@@ -171,7 +180,10 @@ export function KeyCapture({
   return (
     <button
       type="button"
-      style={{ ...s.keyBtn, ...(capturing ? s.keyBtnActive : null) }}
+      className={cn(
+        'w-full rounded-md border border-border-strong bg-bg px-2 py-1.5 text-left font-mono text-xs text-fg transition-colors',
+        capturing && 'border-accent text-accent',
+      )}
       onClick={() => setCapturing(true)}
       onKeyDown={capturing ? onKeyDown : undefined}
       onBlur={() => setCapturing(false)}
@@ -180,62 +192,3 @@ export function KeyCapture({
     </button>
   );
 }
-
-const s: Record<string, CSSProperties> = {
-  section: {
-    marginBottom: 12,
-    border: `1px solid ${C.border}`,
-    borderRadius: R.lg,
-    background: C.surfaceAlt,
-    overflow: 'hidden',
-  },
-  sectionHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    width: '100%',
-    background: C.surface,
-    border: 'none',
-    borderBottom: '1px solid transparent',
-    padding: '9px 12px',
-    margin: 0,
-    cursor: 'pointer',
-    fontSize: 11,
-    fontWeight: 600,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    color: C.text,
-    opacity: 0.9,
-    textAlign: 'left',
-  },
-  // When open, divide the header from the body with a hairline.
-  sectionHeaderOpen: { borderBottom: `1px solid ${C.border}` },
-  sectionBody: { padding: 12 },
-  caret: { fontSize: 10, width: 10, display: 'inline-block', color: C.accent },
-  label: { width: 82, fontSize: 12, opacity: 0.8 },
-  sliderRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 },
-  range: { flex: 1 },
-  sliderValue: { width: 56, textAlign: 'right', fontSize: 12, fontVariantNumeric: 'tabular-nums' },
-  input: {
-    flex: 1,
-    background: C.bg,
-    color: C.text,
-    border: `1px solid ${C.borderStrong}`,
-    borderRadius: R.md,
-    padding: '6px 8px',
-    fontSize: 13,
-  },
-  keyBtn: {
-    flex: 1,
-    background: C.bg,
-    color: C.text,
-    border: `1px solid ${C.borderStrong}`,
-    borderRadius: R.md,
-    padding: '5px 8px',
-    fontSize: 12,
-    fontFamily: F.mono,
-    cursor: 'pointer',
-    textAlign: 'left',
-  },
-  keyBtnActive: { borderColor: C.accent, color: C.accent },
-};

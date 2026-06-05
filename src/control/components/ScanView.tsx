@@ -4,11 +4,10 @@
 // (with per-material SCU) feeds the detail/scan overlay. Reuses the shared
 // CapturePreview + RegionList + capture loop.
 //
-// The settings panel is grouped into sub-tabs (Match · Tuning · Overlay ·
-// Hotkeys · Regions) so only one group shows at a time — no single scroll wall.
-// Reusable field/section widgets live in ./controls; colors/radii in ./tokens.
+// The settings panel is grouped into sub-tabs (Capture · Match · Overlay ·
+// Hotkeys · About) so only one group shows at a time — no single scroll wall.
+// Reusable field/section widgets live in ./controls; design system in ../ui.
 
-import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ScanResult, SignatureTable, Voter } from '../../core';
 import {
@@ -33,6 +32,18 @@ import type {
 import { DEFAULT_OVERLAY_CONFIG } from '../../shared/bridge';
 import type { OcrBackend } from '../ocr';
 import type { DrawableSource, NormRegion } from '../preprocess';
+import {
+  Button,
+  CheckRow,
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '../ui';
+import { cn } from '../ui/cn';
 import type { LoopParams } from '../useCaptureLoop';
 import type { ActiveSurveyRegion } from '../useSurveyCapture';
 import { useSurveyCapture } from '../useSurveyCapture';
@@ -40,10 +51,10 @@ import { AboutPanel } from './AboutPanel';
 import type { PreviewRegion } from './CapturePreview';
 import { CapturePreview } from './CapturePreview';
 import { HOTKEY_ROWS, KeyCapture, NoiseEditor, Section, Slider } from './controls';
+import { matchPreset, OVERLAY_PRESETS } from './presets';
 import { RegionList } from './RegionList';
 import { ROLE_META } from './roles';
 import type { PickedSource } from './SourcePicker';
-import { C, R } from './tokens';
 
 /**
  * Two scans are "the same rock" when the OCR'd ore matches and the rock's
@@ -67,51 +78,6 @@ const PANEL_TABS: Array<[PanelTab, string]> = [
   ['overlay', 'Overlay'],
   ['hotkeys', 'Hotkeys'],
   ['about', 'About'],
-];
-
-/**
- * One-click overlay presets. Each patches only scale + what shows (boxes/stats/
- * border), leaving the user's appearance fine-tuning (color, opacity, padding,
- * gap, fade, font) untouched. Reset (a separate button) restores everything.
- */
-type OverlayPreset = 'minimal' | 'standard' | 'detailed';
-const OVERLAY_PRESETS: Array<[OverlayPreset, string, Partial<OverlayConfig>]> = [
-  [
-    'minimal',
-    'Minimal',
-    {
-      scale: 'compact',
-      border: false,
-      showPlaceholder: false,
-      showDetail: false,
-      showScan: false,
-      showOcrStats: false,
-    },
-  ],
-  [
-    'standard',
-    'Standard',
-    {
-      scale: 'normal',
-      border: true,
-      showPlaceholder: true,
-      showDetail: false,
-      showScan: false,
-      showOcrStats: false,
-    },
-  ],
-  [
-    'detailed',
-    'Detailed',
-    {
-      scale: 'normal',
-      border: true,
-      showPlaceholder: true,
-      showDetail: true,
-      showScan: true,
-      showOcrStats: true,
-    },
-  ],
 ];
 
 export interface ScanViewProps {
@@ -156,10 +122,10 @@ export function ScanView({
   enforceCluster,
   onEnforceClusterChange,
   params,
+  onParamsChange,
   ocrBackend,
   effectiveBackend,
   onOcrBackendChange,
-  onParamsChange,
   table,
   location,
   onLocationChange,
@@ -329,19 +295,12 @@ export function ScanView({
   // OCR jitter would otherwise rewrite the percentages/qualities continuously.
   // Replace the frozen scan only when the OCR clearly reports a *different*
   // rock (ore name changed, row count changed, or mass differs by > 200).
-  // Materials are snap-corrected against the table vocabulary at freeze time
-  // so the overlay/IPC consumers see clean names without doing their own fuzzy
-  // matching.
-  // performance.now() of the last valid SCAN RESULTS parse — drives the same
-  // hold-then-drop as the RS reading so the scan box clears when the panel goes.
   const [frozenScan, setFrozenScan] = useState<ScanResult | null>(null);
   const lastScanAt = useRef<number | null>(null);
   useEffect(() => {
     const next = readout.scan;
     const now = performance.now();
     if (!next) {
-      // No panel detected (parseScanResult is strict): clear once the hold
-      // window elapses, so stale composition doesn't linger after the rock's gone.
       if (frozenScan && isExpired(lastScanAt.current, now, holdMs)) {
         setFrozenScan(null);
         lastScanAt.current = null;
@@ -361,9 +320,6 @@ export function ScanView({
     setFrozenScan(snapped);
   }, [readout, frozenScan, oreVocab, holdMs]);
 
-  // Push matches + top-candidate quality + the frozen scanned rock to the
-  // overlay boxes. Effect deps only fire on meaningful changes so the overlay
-  // doesn't re-arm its idle timer on every OCR tick.
   // Only push OCR stats to the overlay when its toggle is on — otherwise this
   // is null and stable, so the send effect doesn't re-fire every tick.
   const ocrPush = overlayConfig.showOcrStats ? readout.ocr : null;
@@ -372,9 +328,7 @@ export function ScanView({
   // reporting (no-scan) rather than silence.
   const hasScanRegion = regions.some((r) => r.role === 'scanResult' && r.enabled);
 
-  // Single source of truth for *why* the overlay shows (or doesn't) what it
-  // does — threaded to both the control footer and the overlay so the reason
-  // isn't re-derived twice and can't drift.
+  // Single source of truth for *why* the overlay shows (or doesn't) what it does.
   const overlayStatus: OverlayStatus = sourceLost
     ? 'source-lost'
     : paused
@@ -444,19 +398,19 @@ export function ScanView({
   // Status-bar derived state. Maps the overlay status (plus the settling
   // sub-state) to a human label + color so the footer says *why* nothing shows.
   const STATUS_META: Record<OverlayStatus, { label: string; color: string }> = {
-    ok: { label: 'locked', color: C.green },
-    'no-match': { label: 'no match', color: C.amber },
-    held: { label: 'held', color: C.amber },
+    ok: { label: 'locked', color: '#6ee7b7' },
+    'no-match': { label: 'no match', color: '#fbbf24' },
+    held: { label: 'held', color: '#fbbf24' },
     expired: { label: 'expired', color: '#f87171' },
     'low-conf': { label: 'low conf', color: '#f87171' },
-    'no-scan': { label: 'no scan panel', color: C.amber },
+    'no-scan': { label: 'no scan panel', color: '#fbbf24' },
     'no-rs': { label: 'no RS', color: '#9fb3c8' },
     'source-lost': { label: 'source lost', color: '#f87171' },
     paused: { label: 'paused', color: '#9fb3c8' },
   };
   const voterMeta =
     !paused && !sourceLost && settling && overlayStatus === 'ok'
-      ? { label: 'settling', color: C.amber }
+      ? { label: 'settling', color: '#fbbf24' }
       : STATUS_META[overlayStatus];
   const voterState = voterMeta.label;
   const stateColor = voterMeta.color;
@@ -464,10 +418,9 @@ export function ScanView({
   const confPct = ocr ? Math.round(ocr.score * 100) : null;
   // PP-OCR scores run high; treat <90% as worth noticing, <70% as bad.
   const confColor =
-    confPct == null ? '#9fb3c8' : confPct >= 90 ? C.green : confPct >= 70 ? C.amber : '#f87171';
+    confPct == null ? '#9fb3c8' : confPct >= 90 ? '#6ee7b7' : confPct >= 70 ? '#fbbf24' : '#f87171';
 
-  // Header health pill — one-glance pipeline rollup, colored by the worst
-  // stage: source connected → RS region drawn → frames flowing → OCR confidence.
+  // Header health pill — one-glance pipeline rollup, colored by the worst stage.
   const hasRsRegion = regions.some((r) => r.role === 'rs' && r.enabled);
   const capturing = !paused && !sourceLost && tickRate > 0;
   const health = sourceLost
@@ -477,67 +430,69 @@ export function ScanView({
       : !hasRsRegion
         ? { color: '#f87171', label: 'add RS region' }
         : !capturing
-          ? { color: C.amber, label: 'starting…' }
+          ? { color: '#fbbf24', label: 'starting…' }
           : confPct == null
-            ? { color: C.amber, label: 'no reading' }
+            ? { color: '#fbbf24', label: 'no reading' }
             : confPct >= 90
-              ? { color: C.green, label: 'ready' }
+              ? { color: '#6ee7b7', label: 'ready' }
               : confPct >= 70
-                ? { color: C.amber, label: 'low conf' }
+                ? { color: '#fbbf24', label: 'low conf' }
                 : { color: '#f87171', label: 'poor conf' };
   const healthTip =
     `source ${sourceLost ? '✗ lost' : '✓'} · RS region ${hasRsRegion ? '✓' : '✗'} · ` +
     `reads ${capturing ? '✓' : '✗'} · conf ${confPct != null ? `${confPct}%` : '—'}`;
 
-  // Which overlay preset (if any) the current config matches — for highlighting.
-  const activePreset =
-    OVERLAY_PRESETS.find(([, , patch]) =>
-      Object.entries(patch).every(([k, v]) => overlayConfig[k as keyof OverlayConfig] === v),
-    )?.[0] ?? null;
+  const activePreset = matchPreset(overlayConfig);
 
   return (
-    <div style={S.page}>
-      <header style={S.header}>
-        <button style={S.btn} onClick={onBack}>
+    <div className="flex h-full flex-col">
+      <header className="flex items-center gap-2.5 border-b border-border px-3.5 py-2.5">
+        <Button variant="secondary" size="sm" onClick={onBack}>
           ← Sources
-        </button>
-        <span style={S.srcLabel}>
-          <span style={S.badge}>{source.kind}</span>
+        </Button>
+        <span className="flex items-center gap-1.5 text-[13px] text-fg/90">
+          <span className="inline-flex items-center rounded-sm bg-border px-1.5 py-0.5 text-[10px] uppercase tracking-wide opacity-80">
+            {source.kind}
+          </span>
           {source.label}
         </span>
-        <span style={S.spacer} />
-        <span style={S.health} title={healthTip}>
-          <span style={{ ...S.healthDot, background: health.color }} />
+        <span className="flex-1" />
+        <span
+          className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-xs font-semibold"
+          title={healthTip}
+        >
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: health.color }} />
           <span style={{ color: health.color }}>{health.label}</span>
-          {confPct != null && <span style={S.healthConf}>{confPct}%</span>}
+          {confPct != null && <span className="tnum text-muted">{confPct}%</span>}
         </span>
-        <button
-          style={S.btn}
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={onSetup}
           title="Re-run the guided setup (source, region, location)"
         >
           Setup
-        </button>
-        <button style={S.btn} onClick={() => setPaused((p) => !p)}>
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => setPaused((p) => !p)}>
           {paused ? 'Resume' : 'Pause'}
-        </button>
+        </Button>
       </header>
 
       {sourceLost && (
-        <div style={S.lostBanner}>
-          <span style={S.lostDot} />
-          <span style={S.lostText}>
+        <div className="flex items-center gap-2.5 border-b border-[#6b2f2f] bg-[#3a1d1d] px-3.5 py-2 text-[13px]">
+          <span className="h-2 w-2 shrink-0 rounded-full bg-[#f87171]" />
+          <span className="text-[#fca5a5]">
             <b>Capture source lost.</b> The shared screen/window is gone — the overlay is hidden
             until it's back.
           </span>
-          <span style={S.spacer} />
-          <button type="button" style={S.lostBtn} onClick={onReconnect}>
+          <span className="flex-1" />
+          <Button variant="danger" size="sm" onClick={onReconnect}>
             Reconnect
-          </button>
+          </Button>
         </div>
       )}
 
-      <div style={S.body}>
+      <div className="flex min-h-0 flex-1">
         <CapturePreview
           source={source}
           mediaRef={mediaRef}
@@ -550,89 +505,66 @@ export function ScanView({
           }
         />
 
-        <div style={S.panel}>
-          {/* Always-visible Results pane — the matched ore(s) never hide behind
-              a sub-tab. Reading + top ore + overlap candidates (scores, noise/
-              loose badges). The scanned-rock composition lives on the overlay's
-              scan box + its Overlay-tab preview, not here. */}
-          <div style={S.results}>
-            <div style={S.hero}>
-              <div style={S.heroLabel}>Accepted reading</div>
-              <div style={S.heroReading}>{stableRs != null ? stableRs.toLocaleString() : '—'}</div>
+        <div className="flex w-[380px] min-h-0 flex-col border-l border-border">
+          {/* Always-visible Results pane — the matched ore(s) never hide behind a sub-tab. */}
+          <div className="flex max-h-[48%] shrink-0 flex-col gap-2 overflow-y-auto border-b border-border p-3.5">
+            <div className="rounded-lg border border-border bg-surface p-3 text-center">
+              <div className="text-[11px] uppercase tracking-wide text-muted">Accepted reading</div>
+              <div className="tnum text-4xl font-bold leading-tight text-accent">
+                {stableRs != null ? stableRs.toLocaleString() : '—'}
+              </div>
               {top ? (
-                <div style={S.heroOre}>
-                  <span style={S.heroOreName}>
+                <div className="mt-0.5 flex items-baseline justify-center gap-2">
+                  <span className="inline-flex items-baseline gap-1.5 text-lg font-bold">
                     {top.name}
                     {top.noise != null && (
-                      <span
-                        style={S.noiseBadge}
-                        title={`RS = ${top.signature * top.nodes} + ${top.noise} noise`}
-                      >
-                        +{top.noise.toLocaleString()}
-                      </span>
+                      <NoiseBadge value={top.noise} sig={top.signature} nodes={top.nodes} />
                     )}
-                    {top.loose && (
-                      <span
-                        style={S.looseBadge}
-                        title="Outside the table's cluster range — table may be stale."
-                      >
-                        loose
-                      </span>
-                    )}
+                    {top.loose && <LooseBadge />}
                   </span>
-                  <span style={S.heroNodes}>×{top.nodes}</span>
-                  <span style={S.heroScore}>{Math.round(top.score * 100)}%</span>
+                  <span className="tnum text-lg font-bold text-accent">×{top.nodes}</span>
+                  <span className="text-xs text-fg/50">{Math.round(top.score * 100)}%</span>
                 </div>
               ) : stableRs != null ? (
-                <div style={S.heroNoMatch}>no match</div>
+                <div className="mt-0.5 text-sm text-danger">no match</div>
               ) : (
-                <div style={S.heroWait}>waiting for a stable reading…</div>
+                <div className="mt-0.5 text-[13px] text-fg/50">waiting for a stable reading…</div>
               )}
-              <div style={S.heroMeta}>
+              <div className="mt-1 text-[11px] text-fg/55">
                 {paused ? 'paused' : `every ${params.intervalMs} ms · quorum ${params.quorum}`}
               </div>
             </div>
 
-            {/* Overlap candidates — top is in the hero, so list the rest. */}
             {matches.length > 1 && (
               <div>
-                <div style={S.resultsSub}>also matches</div>
-                <ul style={S.candList}>
+                <div className="mb-1 text-[10px] uppercase tracking-wide text-fg/50">
+                  also matches
+                </div>
+                <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
                   {matches.slice(1).map((c, i) => (
                     <li
                       key={`${c.name}-${c.noise ?? 'n'}-${c.loose ? 'L' : 'S'}-${i}`}
-                      style={S.candRow}
+                      className="flex items-baseline gap-2 rounded-md border border-border bg-surface px-2.5 py-2"
                     >
-                      <span style={S.candName}>
+                      <span className="flex flex-1 items-baseline gap-1.5 text-base font-semibold">
                         {c.name}
                         {c.noise != null && (
-                          <span
-                            style={S.noiseBadge}
-                            title={`RS = ${c.signature * c.nodes} + ${c.noise} noise`}
-                          >
-                            +{c.noise.toLocaleString()}
-                          </span>
+                          <NoiseBadge value={c.noise} sig={c.signature} nodes={c.nodes} />
                         )}
-                        {c.loose && (
-                          <span
-                            style={S.looseBadge}
-                            title="Outside the table's cluster range — table may be stale."
-                          >
-                            loose
-                          </span>
-                        )}
+                        {c.loose && <LooseBadge />}
                       </span>
-                      <span style={S.candNodes}>×{c.nodes}</span>
-                      <span style={S.candScore}>{Math.round(c.score * 100)}%</span>
+                      <span className="tnum text-base text-accent">×{c.nodes}</span>
+                      <span className="w-10 text-right text-[11px] text-fg/50">
+                        {Math.round(c.score * 100)}%
+                      </span>
                     </li>
                   ))}
                 </ul>
               </div>
             )}
 
-            {/* Why nothing matched — the actionable hint. */}
             {stableRs != null && matches.length === 0 && (
-              <p style={S.dim}>
+              <p className="text-xs text-muted">
                 No ore matches {stableRs}
                 {location ? ` at ${location} (try "Anywhere")` : ''}
                 {enforceCluster ? '. Cluster check is on — try disabling it.' : '.'}
@@ -640,12 +572,15 @@ export function ScanView({
             )}
           </div>
 
-          <nav style={S.subtabs}>
+          <nav className="flex gap-0.5 border-b border-border px-3.5">
             {PANEL_TABS.map(([id, label]) => (
               <button
                 key={id}
                 type="button"
-                style={{ ...S.subtab, ...(panelTab === id ? S.subtabActive : null) }}
+                className={cn(
+                  'flex-1 border-b-2 border-transparent px-1 py-1.5 text-[11px] uppercase tracking-wide transition-colors',
+                  panelTab === id ? 'border-accent text-accent' : 'text-fg/50 hover:text-fg',
+                )}
                 onClick={() => setPanelTab(id)}
               >
                 {label}
@@ -653,60 +588,31 @@ export function ScanView({
             ))}
           </nav>
 
-          <div style={S.tabScroll}>
+          <div className="min-h-0 flex-1 overflow-y-auto p-3.5">
             {panelTab === 'match' && (
               <>
                 <Section title="Match">
-                  <label style={S.selectRow}>
-                    <span style={S.sliderLabel}>Patch</span>
-                    <select
-                      style={S.select}
-                      value={activePatch}
-                      onChange={(e) => onPatchChange(e.target.value)}
-                    >
-                      {patches.map((p) => (
-                        <option key={p} value={p}>
-                          {p}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label style={S.selectRow}>
-                    <span style={S.sliderLabel}>Location</span>
-                    <select
-                      style={S.select}
-                      value={location ?? ''}
-                      onChange={(e) => onLocationChange(e.target.value || null)}
-                    >
-                      <option value="">Anywhere</option>
-                      {systemGroups.map((g) => (
-                        <optgroup key={g.system} label={g.system}>
-                          {g.locations.map((loc) => (
-                            <option key={`${g.system}:${loc}`} value={loc}>
-                              {loc}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                  </label>
-                  <label style={S.checkRow}>
-                    <input
-                      type="checkbox"
-                      checked={enforceCluster}
-                      onChange={(e) => onEnforceClusterChange(e.target.checked)}
-                    />
-                    <span style={S.checkLabel}>
-                      Enforce cluster-size range
-                      <span style={S.checkHint}>
-                        Disable when the table is stale and an out-of-range node count is real.
-                      </span>
-                    </span>
-                  </label>
+                  <LabeledSelect
+                    label="Patch"
+                    value={activePatch}
+                    onChange={onPatchChange}
+                    options={patches.map((p) => ({ value: p, label: p }))}
+                  />
+                  <LocationSelect
+                    location={location}
+                    onChange={onLocationChange}
+                    systemGroups={systemGroups}
+                  />
+                  <CheckRow
+                    checked={enforceCluster}
+                    onChange={onEnforceClusterChange}
+                    label="Enforce cluster-size range"
+                    hint="Disable when the table is stale and an out-of-range node count is real."
+                  />
                 </Section>
 
                 <Section title="Noise signatures" defaultOpen={false}>
-                  <p style={S.dim}>
+                  <p className="text-xs text-muted">
                     Non-ore signals (wrecks, satellites, debris) that can sit on top of an RS
                     reading. Each value is tried as a subtraction before matching.
                   </p>
@@ -718,16 +624,18 @@ export function ScanView({
             {panelTab === 'capture' && (
               <>
                 <Section title="Source">
-                  <div style={S.sourceRow}>
-                    <span style={S.badge}>{source.kind}</span>
-                    <span style={S.sourceName} title={source.label}>
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="inline-flex items-center rounded-sm bg-border px-1.5 py-0.5 text-[10px] uppercase tracking-wide opacity-80">
+                      {source.kind}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[13px]" title={source.label}>
                       {source.label}
                     </span>
-                    <button type="button" style={S.btn} onClick={onBack}>
+                    <Button variant="secondary" size="sm" onClick={onBack}>
                       Change
-                    </button>
+                    </Button>
                   </div>
-                  <p style={S.dim}>
+                  <p className="text-xs text-muted">
                     Switch the captured screen/window, or reconnect if the source was lost.
                   </p>
                 </Section>
@@ -754,7 +662,9 @@ export function ScanView({
                     onChange={(v) => set('scale', v)}
                     suffix="×"
                   />
-                  <p style={S.dim}>Global crop upscale before OCR; override per region above.</p>
+                  <p className="text-xs text-muted">
+                    Global crop upscale before OCR; override per region above.
+                  </p>
                 </Section>
 
                 <Section title="Timing">
@@ -784,26 +694,24 @@ export function ScanView({
                     onChange={(v) => set('minConfidence', v / 100)}
                     suffix="%"
                   />
-                  <p style={S.dim}>
+                  <p className="text-xs text-muted">
                     Reads below this OCR confidence are ignored (treated as no reading), so garbage
                     can't move the lock. 0% = accept everything.
                   </p>
                 </Section>
 
                 <Section title="OCR backend">
-                  <label style={S.selectRow}>
-                    <span style={S.sliderLabel}>Engine</span>
-                    <select
-                      style={S.select}
-                      value={ocrBackend}
-                      onChange={(e) => onOcrBackendChange(e.target.value as OcrBackend)}
-                    >
-                      <option value="directml">DirectML (GPU)</option>
-                      <option value="wasm">WASM (CPU)</option>
-                      <option value="webgpu">WebGPU (experimental)</option>
-                    </select>
-                  </label>
-                  <p style={S.dim}>
+                  <LabeledSelect
+                    label="Engine"
+                    value={ocrBackend}
+                    onChange={(v) => onOcrBackendChange(v as OcrBackend)}
+                    options={[
+                      { value: 'directml', label: 'DirectML (GPU)' },
+                      { value: 'wasm', label: 'WASM (CPU)' },
+                      { value: 'webgpu', label: 'WebGPU (experimental)' },
+                    ]}
+                  />
+                  <p className="text-xs text-muted">
                     {effectiveBackend && effectiveBackend !== ocrBackend
                       ? `Selected ${ocrBackend} — running on ${effectiveBackend} (fell back). `
                       : effectiveBackend
@@ -818,10 +726,18 @@ export function ScanView({
 
             {panelTab === 'overlay' && (
               <>
-                <div style={S.previewWrap}>
-                  <div style={S.previewLabel}>Live preview</div>
-                  <div style={S.previewStage}>
-                    <div style={S.previewBox}>
+                <div className="mb-3.5">
+                  <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg/65">
+                    Live preview
+                  </div>
+                  <div
+                    className="flex flex-col gap-2 rounded-lg border border-border p-2"
+                    style={{
+                      background:
+                        'repeating-conic-gradient(#3a3f4b 0% 25%, #2b2f38 0% 50%) 0 / 18px 18px',
+                    }}
+                  >
+                    <div className="relative h-24 overflow-hidden rounded-lg">
                       <OverlayCard
                         reading={stableRs}
                         candidates={overlayCandidates}
@@ -832,12 +748,12 @@ export function ScanView({
                       />
                     </div>
                     {overlayConfig.showDetail && (
-                      <div style={S.previewBoxTall}>
+                      <div className="relative h-36 overflow-hidden rounded-lg">
                         <DetailCard detail={detail} config={overlayConfig} />
                       </div>
                     )}
                     {overlayConfig.showScan && (
-                      <div style={S.previewBoxTall}>
+                      <div className="relative h-36 overflow-hidden rounded-lg">
                         <ScanCard
                           scan={frozenScan}
                           config={overlayConfig}
@@ -850,103 +766,85 @@ export function ScanView({
                   </div>
                 </div>
                 <Section title="Overlay">
-                  <div style={S.presetRow}>
-                    <span style={S.presetLabel}>Preset</span>
-                    {OVERLAY_PRESETS.map(([id, label, patch]) => (
-                      <button
+                  <div className="mb-3 flex flex-wrap items-center gap-1.5">
+                    <span className="mr-0.5 text-xs text-fg/80">Preset</span>
+                    {OVERLAY_PRESETS.map(({ id, label, patch }) => (
+                      <Button
                         key={id}
-                        type="button"
-                        style={{
-                          ...S.presetBtn,
-                          ...(activePreset === id ? S.presetBtnActive : null),
-                        }}
+                        variant="secondary"
+                        size="sm"
+                        className={cn(activePreset === id && 'border-accent text-accent')}
                         onClick={() => onOverlayConfigChange({ ...overlayConfig, ...patch })}
                       >
                         {label}
-                      </button>
+                      </Button>
                     ))}
-                    <button
-                      type="button"
-                      style={{ ...S.presetBtn, marginLeft: 'auto' }}
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="ml-auto"
                       onClick={() => onOverlayConfigChange(DEFAULT_OVERLAY_CONFIG)}
                       title="Restore all overlay settings to defaults"
                     >
                       Reset
-                    </button>
+                    </Button>
                   </div>
-                  <label style={S.selectRow}>
-                    <span style={S.sliderLabel}>Fade after</span>
-                    <select
-                      style={S.select}
-                      value={overlayConfig.idleMs}
-                      onChange={(e) =>
-                        onOverlayConfigChange({ ...overlayConfig, idleMs: Number(e.target.value) })
-                      }
-                    >
-                      <option value={5000}>5s</option>
-                      <option value={10000}>10s</option>
-                      <option value={30000}>30s</option>
-                      <option value={60000}>60s</option>
-                      <option value={0}>Never</option>
-                    </select>
-                  </label>
-                  <label style={S.selectRow}>
-                    <span style={S.sliderLabel}>Hold reading</span>
-                    <select
-                      style={S.select}
-                      value={overlayConfig.holdMs}
-                      onChange={(e) =>
-                        onOverlayConfigChange({ ...overlayConfig, holdMs: Number(e.target.value) })
-                      }
-                    >
-                      <option value={2000}>2s</option>
-                      <option value={4000}>4s</option>
-                      <option value={10000}>10s</option>
-                      <option value={0}>Never drop</option>
-                    </select>
-                  </label>
-                  <p style={S.dim}>
+                  <LabeledSelect
+                    label="Fade after"
+                    value={String(overlayConfig.idleMs)}
+                    onChange={(v) => onOverlayConfigChange({ ...overlayConfig, idleMs: Number(v) })}
+                    options={[
+                      { value: '5000', label: '5s' },
+                      { value: '10000', label: '10s' },
+                      { value: '30000', label: '30s' },
+                      { value: '60000', label: '60s' },
+                      { value: '0', label: 'Never' },
+                    ]}
+                  />
+                  <LabeledSelect
+                    label="Hold reading"
+                    value={String(overlayConfig.holdMs)}
+                    onChange={(v) => onOverlayConfigChange({ ...overlayConfig, holdMs: Number(v) })}
+                    options={[
+                      { value: '2000', label: '2s' },
+                      { value: '4000', label: '4s' },
+                      { value: '10000', label: '10s' },
+                      { value: '0', label: 'Never drop' },
+                    ]}
+                  />
+                  <p className="text-xs text-muted">
                     Keep showing the last ore this long after the RS reading disappears, then clear
                     it. (Fade only changes opacity; hold clears the value.)
                   </p>
-                  <label style={S.selectRow}>
-                    <span style={S.sliderLabel}>Size</span>
-                    <select
-                      style={S.select}
-                      value={overlayConfig.scale}
-                      onChange={(e) =>
-                        onOverlayConfigChange({
-                          ...overlayConfig,
-                          scale: e.target.value as OverlayScale,
-                        })
-                      }
-                    >
-                      <option value="compact">Compact</option>
-                      <option value="normal">Normal</option>
-                      <option value="large">Large</option>
-                    </select>
-                  </label>
-                  <label style={S.selectRow}>
-                    <span style={S.sliderLabel}>Font</span>
-                    <select
-                      style={S.select}
-                      value={overlayConfig.fontFamily}
-                      onChange={(e) =>
-                        onOverlayConfigChange({ ...overlayConfig, fontFamily: e.target.value })
-                      }
-                    >
-                      <option value="system-ui, sans-serif">System</option>
-                      <option value="'Segoe UI', sans-serif">Segoe UI</option>
-                      <option value="Arial, sans-serif">Arial</option>
-                      <option value="Georgia, serif">Georgia</option>
-                      <option value="'Courier New', ui-monospace, monospace">Monospace</option>
-                    </select>
-                  </label>
-                  <label style={S.selectRow}>
-                    <span style={S.sliderLabel}>Background</span>
+                  <LabeledSelect
+                    label="Size"
+                    value={overlayConfig.scale}
+                    onChange={(v) =>
+                      onOverlayConfigChange({ ...overlayConfig, scale: v as OverlayScale })
+                    }
+                    options={[
+                      { value: 'compact', label: 'Compact' },
+                      { value: 'normal', label: 'Normal' },
+                      { value: 'large', label: 'Large' },
+                    ]}
+                  />
+                  <LabeledSelect
+                    label="Font"
+                    value={overlayConfig.fontFamily}
+                    onChange={(v) => onOverlayConfigChange({ ...overlayConfig, fontFamily: v })}
+                    options={[
+                      { value: 'system-ui, sans-serif', label: 'System' },
+                      { value: "'Segoe UI', sans-serif", label: 'Segoe UI' },
+                      { value: 'Arial, sans-serif', label: 'Arial' },
+                      { value: 'Georgia, serif', label: 'Georgia' },
+                      { value: "'Courier New', ui-monospace, monospace", label: 'Monospace' },
+                    ]}
+                  />
+                  <label className="mb-2.5 flex items-center gap-2">
+                    <span className="w-[82px] text-xs text-fg/80">Background</span>
                     <input
                       type="color"
-                      style={S.color}
+                      className="h-7 w-12 cursor-pointer rounded-md border border-border-strong bg-transparent p-0"
                       value={overlayConfig.bgColor}
                       onChange={(e) =>
                         onOverlayConfigChange({ ...overlayConfig, bgColor: e.target.value })
@@ -979,76 +877,46 @@ export function ScanView({
                     onChange={(v) => onOverlayConfigChange({ ...overlayConfig, gap: v })}
                     suffix=" px"
                   />
-                  <label style={S.checkRow}>
-                    <input
-                      type="checkbox"
-                      checked={overlayConfig.border}
-                      onChange={(e) =>
-                        onOverlayConfigChange({ ...overlayConfig, border: e.target.checked })
-                      }
-                    />
-                    Border
-                  </label>
-                  <label style={S.checkRow}>
-                    <input
-                      type="checkbox"
-                      checked={overlayConfig.autoResize}
-                      onChange={(e) =>
-                        onOverlayConfigChange({ ...overlayConfig, autoResize: e.target.checked })
-                      }
-                    />
-                    <span style={S.checkLabel}>
-                      Auto-fit height to content
-                      <span style={S.checkHint}>
-                        On: each box is exactly as tall as its content (grip resizes width only).
-                        Off: fixed height — drag the grip to resize height too.
-                      </span>
-                    </span>
-                  </label>
-                  <label style={S.checkRow}>
-                    <input
-                      type="checkbox"
-                      checked={overlayConfig.showPlaceholder}
-                      onChange={(e) =>
-                        onOverlayConfigChange({
-                          ...overlayConfig,
-                          showPlaceholder: e.target.checked,
-                        })
-                      }
-                    />
-                    Show “scanning” placeholder
-                  </label>
-                  <label style={S.checkRow}>
-                    <input
-                      type="checkbox"
-                      checked={overlayConfig.showDetail}
-                      onChange={(e) =>
-                        onOverlayConfigChange({ ...overlayConfig, showDetail: e.target.checked })
-                      }
-                    />
-                    Show ore detail box
-                  </label>
-                  <label style={S.checkRow}>
-                    <input
-                      type="checkbox"
-                      checked={overlayConfig.showScan}
-                      onChange={(e) =>
-                        onOverlayConfigChange({ ...overlayConfig, showScan: e.target.checked })
-                      }
-                    />
-                    Show scanned-rock box (SCU per quality)
-                  </label>
-                  <label style={S.checkRow}>
-                    <input
-                      type="checkbox"
-                      checked={overlayConfig.showOcrStats}
-                      onChange={(e) =>
-                        onOverlayConfigChange({ ...overlayConfig, showOcrStats: e.target.checked })
-                      }
-                    />
-                    Show OCR stats (confidence · latency · lines)
-                  </label>
-                  <p style={S.dim}>
+                  <CheckRow
+                    checked={overlayConfig.border}
+                    onChange={(border) => onOverlayConfigChange({ ...overlayConfig, border })}
+                    label="Border"
+                  />
+                  <CheckRow
+                    checked={overlayConfig.autoResize}
+                    onChange={(autoResize) =>
+                      onOverlayConfigChange({ ...overlayConfig, autoResize })
+                    }
+                    label="Auto-fit height to content"
+                    hint="On: each box is exactly as tall as its content (grip resizes width only). Off: fixed height — drag the grip to resize height too."
+                  />
+                  <CheckRow
+                    checked={overlayConfig.showPlaceholder}
+                    onChange={(showPlaceholder) =>
+                      onOverlayConfigChange({ ...overlayConfig, showPlaceholder })
+                    }
+                    label="Show “scanning” placeholder"
+                  />
+                  <CheckRow
+                    checked={overlayConfig.showDetail}
+                    onChange={(showDetail) =>
+                      onOverlayConfigChange({ ...overlayConfig, showDetail })
+                    }
+                    label="Show ore detail box"
+                  />
+                  <CheckRow
+                    checked={overlayConfig.showScan}
+                    onChange={(showScan) => onOverlayConfigChange({ ...overlayConfig, showScan })}
+                    label="Show scanned-rock box (SCU per quality)"
+                  />
+                  <CheckRow
+                    checked={overlayConfig.showOcrStats}
+                    onChange={(showOcrStats) =>
+                      onOverlayConfigChange({ ...overlayConfig, showOcrStats })
+                    }
+                    label="Show OCR stats (confidence · latency · lines)"
+                  />
+                  <p className="text-xs text-muted">
                     In edit mode (Alt+Shift+E): drag to move, drag the corner grip to resize.
                   </p>
                 </Section>
@@ -1058,68 +926,54 @@ export function ScanView({
             {panelTab === 'hotkeys' && (
               <Section title="Hotkeys">
                 {HOTKEY_ROWS.map(([action, label]) => (
-                  <div key={action} style={S.hotkeyRow}>
-                    <span style={S.sliderLabel}>{label}</span>
+                  <div key={action} className="mb-1.5 flex items-center gap-2">
+                    <span className="w-[82px] text-xs text-fg/80">{label}</span>
                     <KeyCapture
                       value={hotkeys[action]}
                       onChange={(accel) => onHotkeysChange({ ...hotkeys, [action]: accel })}
                     />
-                    {hotkeyStatus[action] === false && <span style={S.hotkeyErr}>conflict</span>}
+                    {hotkeyStatus[action] === false && (
+                      <span className="text-[11px] text-danger">conflict</span>
+                    )}
                   </div>
                 ))}
-                <p style={S.dim}>Click a binding, then press the combo (needs a modifier).</p>
+                <p className="text-xs text-muted">
+                  Click a binding, then press the combo (needs a modifier).
+                </p>
               </Section>
             )}
 
-            {panelTab === 'about' && <AboutPanel table={table} hotkeys={hotkeys} />}
+            {panelTab === 'about' && (
+              <AboutPanel table={table} hotkeys={hotkeys} onReRunSetup={onSetup} />
+            )}
           </div>
         </div>
       </div>
 
-      <footer style={S.statusbar}>
-        <span style={S.statusItem}>
-          <span style={S.statusKey}>RS</span>
-          <span style={S.statusVal}>{stableRs != null ? stableRs.toLocaleString() : '—'}</span>
-        </span>
-        <span style={S.statusItem}>
-          <span style={{ ...S.stateDot, background: stateColor }} />
+      <footer className="tnum flex items-center gap-4 border-t border-border bg-surface-alt px-3.5 py-1.5 text-[11px]">
+        <StatItem label="RS" value={stableRs != null ? stableRs.toLocaleString() : '—'} />
+        <span className="flex items-center gap-1.5">
+          <span
+            className="h-[7px] w-[7px] shrink-0 rounded-full"
+            style={{ background: stateColor }}
+          />
           <span style={{ color: stateColor }}>{voterState}</span>
         </span>
-        <span style={S.statusItem}>
-          <span style={S.statusKey}>rate</span>
-          <span style={S.statusVal}>
-            {paused ? '—' : tickRate > 0 ? `${tickRate.toFixed(1)}/s` : '…'}
-          </span>
-        </span>
-        <span style={S.statusItem} title="RS OCR confidence (best detected line)">
-          <span style={S.statusKey}>conf</span>
-          <span style={{ ...S.statusVal, color: confColor }}>
+        <StatItem
+          label="rate"
+          value={paused ? '—' : tickRate > 0 ? `${tickRate.toFixed(1)}/s` : '…'}
+        />
+        <span className="flex items-center gap-1.5" title="RS OCR confidence (best detected line)">
+          <span className="uppercase tracking-wide text-fg/50">conf</span>
+          <span className="font-semibold" style={{ color: confColor }}>
             {confPct != null ? `${confPct}%` : '—'}
           </span>
         </span>
-        <span style={S.statusItem} title="OCR latency · detected line count">
-          <span style={S.statusKey}>ocr</span>
-          <span style={S.statusVal}>{ocr ? `${ocr.ms}ms · ${ocr.lineCount}L` : '—'}</span>
-        </span>
-        <span style={S.statusItem} title="Active OCR engine (after any directml→wasm fallback)">
-          <span style={S.statusKey}>eng</span>
-          <span style={S.statusVal}>{effectiveBackend ?? '…'}</span>
-        </span>
-        <span
-          style={{ ...S.statusItem, marginLeft: 'auto', minWidth: 0 }}
-          title={ocr?.rawText || ''}
-        >
-          <span style={S.statusKey}>raw</span>
-          <span
-            style={{
-              ...S.statusVal,
-              fontWeight: 400,
-              opacity: 0.8,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
+        <StatItem label="ocr" value={ocr ? `${ocr.ms}ms · ${ocr.lineCount}L` : '—'} />
+        <StatItem label="eng" value={effectiveBackend ?? '…'} />
+        <span className="ml-auto flex min-w-0 items-center gap-1.5" title={ocr?.rawText || ''}>
+          <span className="uppercase tracking-wide text-fg/50">raw</span>
+          <span className="overflow-hidden text-ellipsis whitespace-nowrap font-normal text-fg/80">
             {ocr?.rawText || '—'}
           </span>
         </span>
@@ -1128,289 +982,99 @@ export function ScanView({
   );
 }
 
-const S: Record<string, CSSProperties> = {
-  page: {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100%',
-    color: C.text,
-    boxSizing: 'border-box',
-  },
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    padding: '10px 14px',
-    borderBottom: `1px solid ${C.border}`,
-  },
-  srcLabel: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, opacity: 0.9 },
-  spacer: { flex: 1 },
-  lostBanner: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    padding: '8px 14px',
-    background: '#3a1d1d',
-    borderBottom: '1px solid #6b2f2f',
-    fontSize: 13,
-  },
-  lostDot: { width: 8, height: 8, borderRadius: '50%', background: '#f87171', flex: '0 0 auto' },
-  lostText: { color: '#fca5a5' },
-  lostBtn: {
-    background: '#f87171',
-    color: '#1a0d0d',
-    border: 'none',
-    borderRadius: R.md,
-    padding: '6px 14px',
-    cursor: 'pointer',
-    fontSize: 13,
-    fontWeight: 700,
-  },
-  health: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    fontSize: 12,
-    fontWeight: 600,
-    padding: '4px 10px',
-    borderRadius: 999,
-    background: C.surface,
-    border: `1px solid ${C.border}`,
-  },
-  healthDot: { width: 8, height: 8, borderRadius: '50%', flex: '0 0 auto' },
-  healthConf: { color: '#9fb3c8', fontVariantNumeric: 'tabular-nums' },
-  body: { display: 'flex', flex: 1, minHeight: 0 },
-  panel: {
-    width: 380,
-    borderLeft: `1px solid ${C.border}`,
-    boxSizing: 'border-box',
-    display: 'flex',
-    flexDirection: 'column',
-    minHeight: 0,
-  },
-  // Always-visible Results pane: caps its own height and scrolls internally so
-  // the sub-tab bar and tab content below stay reachable.
-  results: {
-    padding: 14,
-    borderBottom: `1px solid ${C.border}`,
-    overflowY: 'auto',
-    maxHeight: '48%',
-    flexShrink: 0,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
-  },
-  hero: {
-    background: C.surface,
-    border: `1px solid ${C.border}`,
-    borderRadius: R.lg,
-    padding: 12,
-    textAlign: 'center',
-  },
-  heroLabel: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.6 },
-  heroReading: {
-    fontSize: 40,
-    fontWeight: 700,
-    fontVariantNumeric: 'tabular-nums',
-    lineHeight: 1.1,
-    color: C.accent,
-  },
-  heroOre: {
-    display: 'flex',
-    alignItems: 'baseline',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 2,
-  },
-  heroOreName: {
-    fontSize: 18,
-    fontWeight: 700,
-    display: 'inline-flex',
-    alignItems: 'baseline',
-    gap: 6,
-  },
-  heroNodes: { fontSize: 18, fontWeight: 700, color: C.accent, fontVariantNumeric: 'tabular-nums' },
-  heroScore: { fontSize: 12, opacity: 0.5 },
-  heroNoMatch: { fontSize: 14, color: C.danger, marginTop: 2 },
-  heroWait: { fontSize: 13, opacity: 0.5, marginTop: 2 },
-  heroMeta: { fontSize: 11, opacity: 0.55, marginTop: 4 },
-  resultsSub: {
-    fontSize: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    opacity: 0.5,
-    marginBottom: 4,
-  },
-  tabScroll: { flex: 1, minHeight: 0, overflowY: 'auto', padding: 14 },
-  subtabs: { display: 'flex', gap: 2, padding: '0 14px', borderBottom: `1px solid ${C.border}` },
-  subtab: {
-    flex: 1,
-    background: 'none',
-    color: C.text,
-    opacity: 0.5,
-    border: 'none',
-    borderBottom: '2px solid transparent',
-    padding: '6px 4px',
-    cursor: 'pointer',
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  subtabActive: { opacity: 1, color: C.accent, borderBottom: `2px solid ${C.accent}` },
-  statusbar: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 16,
-    padding: '6px 14px',
-    borderTop: `1px solid ${C.border}`,
-    background: C.surfaceAlt,
-    fontSize: 11,
-    fontVariantNumeric: 'tabular-nums',
-  },
-  statusItem: { display: 'flex', alignItems: 'center', gap: 5 },
-  statusKey: { opacity: 0.5, textTransform: 'uppercase', letterSpacing: 0.4 },
-  statusVal: { color: C.text, fontWeight: 600 },
-  stateDot: { width: 7, height: 7, borderRadius: '50%', flex: '0 0 auto' },
-  presetRow: { display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, flexWrap: 'wrap' },
-  presetLabel: { fontSize: 12, opacity: 0.8, marginRight: 2 },
-  presetBtn: {
-    background: C.btn,
-    color: C.text,
-    border: `1px solid ${C.borderStrong}`,
-    borderRadius: R.md,
-    padding: '4px 10px',
-    cursor: 'pointer',
-    fontSize: 12,
-  },
-  presetBtnActive: { borderColor: C.accent, color: C.accent },
-  previewWrap: { marginBottom: 14 },
-  previewLabel: {
-    fontSize: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    opacity: 0.65,
-    fontWeight: 600,
-    marginBottom: 6,
-  },
-  previewStage: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
-    padding: 8,
-    borderRadius: R.lg,
-    border: `1px solid ${C.border}`,
-    // Checkerboard backdrop so the cards' translucency reads like it would over
-    // the game (the overlay is transparent in-game).
-    background: 'repeating-conic-gradient(#3a3f4b 0% 25%, #2b2f38 0% 50%) 0 / 18px 18px',
-  },
-  // Each preview card sits in its own sized box (the cards are height:100%).
-  previewBox: { position: 'relative', height: 96, borderRadius: R.lg, overflow: 'hidden' },
-  previewBoxTall: { position: 'relative', height: 140, borderRadius: R.lg, overflow: 'hidden' },
-  dim: { opacity: 0.45, fontSize: 12 },
-  sliderLabel: { width: 82, fontSize: 12, opacity: 0.8 },
-  checkRow: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: 8,
-    fontSize: 12,
-    marginBottom: 10,
-    lineHeight: 1.35,
-  },
-  checkLabel: { display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 },
-  checkHint: { fontSize: 11, opacity: 0.5 },
-  btn: {
-    background: C.btn,
-    color: C.text,
-    border: `1px solid ${C.borderStrong}`,
-    borderRadius: R.md,
-    padding: '6px 10px',
-    cursor: 'pointer',
-    fontSize: 13,
-  },
-  badge: {
-    fontSize: 10,
-    textTransform: 'uppercase',
-    background: C.border,
-    borderRadius: R.sm,
-    padding: '2px 5px',
-    opacity: 0.8,
-  },
-  sourceRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 },
-  sourceName: {
-    flex: 1,
-    minWidth: 0,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-    fontSize: 13,
-  },
-  selectRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 },
-  select: {
-    flex: 1,
-    background: C.bg,
-    color: C.text,
-    border: `1px solid ${C.borderStrong}`,
-    borderRadius: R.md,
-    padding: '6px 8px',
-    fontSize: 13,
-  },
-  candList: {
-    listStyle: 'none',
-    margin: 0,
-    padding: 0,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 6,
-  },
-  candRow: {
-    display: 'flex',
-    alignItems: 'baseline',
-    gap: 8,
-    background: C.surface,
-    border: `1px solid ${C.border}`,
-    borderRadius: R.md,
-    padding: '8px 10px',
-  },
-  candName: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: 600,
-    display: 'flex',
-    alignItems: 'baseline',
-    gap: 6,
-  },
-  noiseBadge: {
-    fontSize: 10,
-    padding: '1px 5px',
-    background: '#3a2a1a',
-    color: C.amber,
-    border: '1px solid #5a3a1f',
-    borderRadius: R.sm,
-    fontVariantNumeric: 'tabular-nums',
-    fontWeight: 600,
-  },
-  looseBadge: {
-    fontSize: 10,
-    padding: '1px 5px',
-    background: '#2a1a3a',
-    color: C.purple,
-    border: '1px solid #4a2a5a',
-    borderRadius: R.sm,
-    fontWeight: 600,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  candNodes: { fontSize: 16, color: C.accent, fontVariantNumeric: 'tabular-nums' },
-  candScore: { fontSize: 11, opacity: 0.5, width: 40, textAlign: 'right' },
-  hotkeyRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 },
-  hotkeyErr: { fontSize: 11, color: C.danger },
-  color: {
-    width: 48,
-    height: 28,
-    padding: 0,
-    background: 'transparent',
-    border: `1px solid ${C.borderStrong}`,
-    borderRadius: R.md,
-    cursor: 'pointer',
-  },
-};
+function StatItem({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className="uppercase tracking-wide text-fg/50">{label}</span>
+      <span className="font-semibold text-fg">{value}</span>
+    </span>
+  );
+}
+
+function NoiseBadge({ value, sig, nodes }: { value: number; sig: number; nodes: number }) {
+  return (
+    <span
+      className="tnum rounded-sm border border-[#5a3a1f] bg-[#3a2a1a] px-1.5 py-px text-[10px] font-semibold text-amber"
+      title={`RS = ${sig * nodes} + ${value} noise`}
+    >
+      +{value.toLocaleString()}
+    </span>
+  );
+}
+
+function LooseBadge() {
+  return (
+    <span
+      className="rounded-sm border border-[#4a2a5a] bg-[#2a1a3a] px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-purple"
+      title="Outside the table's cluster range — table may be stale."
+    >
+      loose
+    </span>
+  );
+}
+
+/** A fixed-width-labelled Select row (the old `selectRow` pattern). */
+function LabeledSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: Array<{ value: string; label: string }>;
+}) {
+  return (
+    <div className="mb-2.5 flex items-center gap-2">
+      <span className="w-[82px] shrink-0 text-xs text-fg/80">{label}</span>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className="h-8">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((o) => (
+            <SelectItem key={o.value} value={o.value}>
+              {o.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+/** Location dropdown with system optgroups + an "Anywhere" sentinel. */
+function LocationSelect({
+  location,
+  onChange,
+  systemGroups,
+}: {
+  location: string | null;
+  onChange: (loc: string | null) => void;
+  systemGroups: Array<{ system: string; locations: string[] }>;
+}) {
+  return (
+    <div className="mb-2.5 flex items-center gap-2">
+      <span className="w-[82px] shrink-0 text-xs text-fg/80">Location</span>
+      <Select value={location ?? 'any'} onValueChange={(v) => onChange(v === 'any' ? null : v)}>
+        <SelectTrigger className="h-8">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="any">Anywhere</SelectItem>
+          {systemGroups.map((g) => (
+            <SelectGroup key={g.system}>
+              <SelectLabel>{g.system}</SelectLabel>
+              {g.locations.map((loc) => (
+                <SelectItem key={`${g.system}:${loc}`} value={loc}>
+                  {loc}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}

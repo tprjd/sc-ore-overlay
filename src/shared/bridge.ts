@@ -295,6 +295,11 @@ export interface ScoBridge {
   getSettings(): Promise<AppSettings>;
   /** Merge + persist settings to Electron userData (control window). */
   setSettings(patch: Partial<AppSettings>): void;
+  /**
+   * Factory reset: delete the persisted settings file and relaunch the app to a
+   * clean first-run state. The survey scan log (separate file) is left intact.
+   */
+  resetSettings(): void;
   /** Re-register the global hotkeys and persist them. Returns ok-per-action. */
   setHotkeys(map: HotkeyMap): Promise<Record<HotkeyAction, boolean>>;
   /** Control → overlay (relayed by main): push the latest matches. */

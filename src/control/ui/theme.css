@@ -1,0 +1,97 @@
+/* Control-window design system (Tailwind v4).
+ *
+ * Imported ONLY by src/control/main.tsx, so the transparent overlay/detail/scan
+ * windows never load Tailwind and keep their runtime-inline, config-driven look.
+ *
+ * The @theme palette is the single source of truth for the control UI's colors
+ * and radii — it mirrors the hexes that used to live in components/tokens.ts so
+ * the migrated UI looks identical. Utilities like `bg-surface`, `text-accent`,
+ * `border-border-strong`, `rounded-md` are generated from these tokens.
+ */
+
+@import "tailwindcss";
+
+@theme {
+  /* Surfaces / structure */
+  --color-bg: #0d0f12; /* deepest — inputs, code-ish surfaces */
+  --color-surface: #1d2128; /* card / readout surface */
+  --color-surface-alt: #16181d; /* header / tab-strip / status bar */
+  --color-btn: #2a2f3a; /* neutral button fill */
+  --color-border: #2c323d; /* hairline divider / card border */
+  --color-border-strong: #3a4150; /* stronger border for inputs */
+
+  /* Text */
+  --color-fg: #e6e6e6; /* primary text */
+  --color-muted: #9fb3c8; /* secondary / dim labels */
+
+  /* Accents */
+  --color-accent: #4fd1ff; /* RS value, node count, active tab */
+  --color-magenta: #f0abfc; /* scanned-rock ore name */
+  --color-purple: #c084fc; /* "loose" badge */
+  --color-amber: #fbbf24; /* noise badge / warnings */
+  --color-green: #6ee7b7; /* SCU value / ok */
+  --color-danger: #ffb4bd; /* error / conflict text */
+  --color-scan-bg: #160f18; /* scanned-rock block fill */
+  --color-scan-border: #5b3a63;
+
+  /* Radii (mirror tokens.ts R) */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+
+  /* Mono stack */
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* App base. Preflight already resets margins/box-sizing; this sets the dark
+   surface + smooth focus rings the inline-style era couldn't express. */
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-surface-alt);
+    color: var(--color-fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Tabular numbers everywhere readings/scores show. Opt-in via .tnum. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Thin dark scrollbars to match the surface. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--color-border-strong);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+}
+
+/* Radix Dialog overlay/content animation keyframes. */
+@keyframes sco-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes sco-pop-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.97);
+  }
+}
