@@ -209,7 +209,9 @@ export function SourceGrid({
                 onClick={() => void pickDesktop(src)}
                 title={src.name}
                 className={cn(
-                  'sco-srccard group flex flex-col gap-2 rounded-lg border bg-surface p-2 text-left transition-all',
+                  // min-w-0: this is a grid item — without it the nowrap name sets
+                  // the card's min-width and blows it past its track (no truncation).
+                  'sco-srccard group flex min-w-0 flex-col gap-2 rounded-lg border bg-surface p-2 text-left transition-all',
                   'hover:-translate-y-0.5 hover:border-accent/60 hover:shadow-lg',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60',
                   selectedId === src.id ? 'border-accent ring-2 ring-accent/50' : 'border-border',
