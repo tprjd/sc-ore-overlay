@@ -16,6 +16,7 @@ import type { PreviewRegion } from './CapturePreview';
 import { RegionList } from './RegionList';
 import { ROLE_META } from './roles';
 import { Section, Slider, NoiseEditor, KeyCapture, HOTKEY_ROWS } from './controls';
+import { AboutPanel } from './AboutPanel';
 import { C, R } from './tokens';
 import { OverlayCard } from '../../overlay/OverlayCard';
 import { DetailCard } from '../../overlay/DetailCard';
@@ -60,12 +61,13 @@ function sameRock(a: ScanResult, b: ScanResult): boolean {
 }
 
 /** Settings-panel groups, ordered by pipeline stage: Capture → Match → Show. */
-type PanelTab = 'capture' | 'match' | 'overlay' | 'hotkeys';
+type PanelTab = 'capture' | 'match' | 'overlay' | 'hotkeys' | 'about';
 const PANEL_TABS: Array<[PanelTab, string]> = [
   ['capture', 'Capture'],
   ['match', 'Match'],
   ['overlay', 'Overlay'],
   ['hotkeys', 'Hotkeys'],
+  ['about', 'About'],
 ];
 
 /**
@@ -948,6 +950,8 @@ export function ScanView({
               <p style={S.dim}>Click a binding, then press the combo (needs a modifier).</p>
             </Section>
           )}
+
+          {panelTab === 'about' && <AboutPanel table={table} hotkeys={hotkeys} />}
 
           </div>
         </div>

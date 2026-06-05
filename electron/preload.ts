@@ -70,6 +70,8 @@ const api: ScoBridge = {
 
   checkForUpdates: () => ipcRenderer.invoke('sco:check-updates') as Promise<UpdateInfo>,
   openExternal: (url: string) => ipcRenderer.send('sco:open-external', url),
+  appVersion: () => ipcRenderer.invoke('sco:app-version') as Promise<string>,
+  openLogs: () => ipcRenderer.send('sco:open-logs'),
 };
 
 contextBridge.exposeInMainWorld('sco', api);
