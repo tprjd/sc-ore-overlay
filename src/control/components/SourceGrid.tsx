@@ -209,7 +209,7 @@ export function SourceGrid({
                 onClick={() => void pickDesktop(src)}
                 title={src.name}
                 className={cn(
-                  'group flex flex-col gap-2 rounded-lg border bg-surface p-2 text-left transition-all',
+                  'sco-srccard group flex flex-col gap-2 rounded-lg border bg-surface p-2 text-left transition-all',
                   'hover:-translate-y-0.5 hover:border-accent/60 hover:shadow-lg',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60',
                   selectedId === src.id ? 'border-accent ring-2 ring-accent/50' : 'border-border',
@@ -220,11 +220,11 @@ export function SourceGrid({
                   alt=""
                   className="h-[124px] w-full rounded bg-black object-cover"
                 />
-                <span className="flex items-center gap-1.5 text-[13px] leading-tight">
-                  <span className="inline-flex items-center rounded-sm bg-border px-1.5 py-0.5 text-[10px] uppercase tracking-wide opacity-80">
+                <span className="flex min-w-0 items-center gap-1.5 text-[13px] leading-tight">
+                  <span className="inline-flex shrink-0 items-center rounded-sm bg-border px-1.5 py-0.5 text-[10px] uppercase tracking-wide opacity-80">
                     {src.type}
                   </span>
-                  <span className="truncate">{src.name}</span>
+                  <CardName name={src.name} />
                 </span>
               </button>
             ))}
@@ -232,5 +232,40 @@ export function SourceGrid({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Source-card name: truncated by default, scrolled (marquee) on card hover so a
+ * long window title is fully readable. The scroll distance/duration are measured
+ * from the actual overflow (CSS can't know it) and written as CSS vars; the
+ * `.sco-srccard:hover` rule in theme.css runs the animation. A native title
+ * tooltip is the keyboard/no-hover fallback.
+ */
+function CardName({ name }: { name: string }) {
+  const wrap = useRef<HTMLSpanElement>(null);
+  const inner = useRef<HTMLSpanElement>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-measure when the name text changes — it's read via the DOM (scrollWidth), not referenced directly.
+  useEffect(() => {
+    const w = wrap.current;
+    const i = inner.current;
+    if (!w || !i) return;
+    const measure = (): void => {
+      const over = i.scrollWidth - w.clientWidth;
+      w.style.setProperty('--marquee-d', over > 1 ? `-${over}px` : '0px');
+      // ~35 px/s, min 2.5s, so long titles don't whip past.
+      w.style.setProperty('--marquee-dur', `${Math.max(2.5, over / 35)}s`);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(w);
+    return () => ro.disconnect();
+  }, [name]);
+  return (
+    <span ref={wrap} className="sco-marquee min-w-0 flex-1 overflow-hidden" title={name}>
+      <span ref={inner} className="sco-marquee-inner block whitespace-nowrap">
+        {name}
+      </span>
+    </span>
   );
 }

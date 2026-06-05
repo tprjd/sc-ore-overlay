@@ -83,6 +83,22 @@
   }
 }
 
+/* Hover marquee for truncated labels (e.g. source-card names). The label wrap
+   measures its overflow in JS and sets --marquee-d / --marquee-dur on itself
+   (inherited by .sco-marquee-inner); this rule scrolls it while the card is
+   hovered. Short names have --marquee-d: 0px, so they don't move. */
+.sco-srccard:hover .sco-marquee-inner {
+  animation: sco-marquee var(--marquee-dur, 4s) ease-in-out infinite alternate;
+}
+@keyframes sco-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(var(--marquee-d, 0px));
+  }
+}
+
 /* Radix Dialog overlay/content animation keyframes. */
 @keyframes sco-fade-in {
   from {
