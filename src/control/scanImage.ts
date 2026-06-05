@@ -6,13 +6,13 @@
 // per-region debug (crop + raw text + parsed value) so misreads/misaligned
 // boxes are visible.
 
-import { makeEntry, matchOre, parsePos, parseScanResult, parseSystemName } from '../core';
 import type { ScanResult, SignatureTable, SurveyEntry, Vec3 } from '../core';
-import { preprocess } from './preprocess';
+import { makeEntry, matchOre, parsePos, parseScanResult, parseSystemName } from '../core';
+import type { SurveyRole } from '../shared/bridge';
 import { recognize } from './ocr';
+import { preprocess } from './preprocess';
 import { pickReading } from './useCaptureLoop';
 import type { ActiveSurveyRegion } from './useSurveyCapture';
-import type { SurveyRole } from '../shared/bridge';
 
 function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -24,11 +24,15 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 }
 
 function newId(): string {
-  return globalThis.crypto?.randomUUID?.() ?? `sim-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    `sim-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  );
 }
 
 const fmtKm = (p: Vec3): string => {
-  const km = (m: number): string => (m / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 });
+  const km = (m: number): string =>
+    (m / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 });
   return `${km(p.x)}, ${km(p.y)}, ${km(p.z)} km`;
 };
 
@@ -69,7 +73,13 @@ export async function scanImage(
     for (const reg of regions) {
       const pre = preprocess(img, reg.rect, { scale: reg.scale ?? scale });
       if (!pre) {
-        debugs.push({ role: reg.role, dataUrl: null, rawText: '(no crop)', parsed: '—', ok: false });
+        debugs.push({
+          role: reg.role,
+          dataUrl: null,
+          rawText: '(no crop)',
+          parsed: '—',
+          ok: false,
+        });
         continue;
       }
       const lines = await recognize(pre.dataUrl);
@@ -121,7 +131,12 @@ export async function scanImage(
       }),
     };
   } catch (err) {
-    return { name: scout, entry: null, regions: debugs, error: err instanceof Error ? err.message : String(err) };
+    return {
+      name: scout,
+      entry: null,
+      regions: debugs,
+      error: err instanceof Error ? err.message : String(err),
+    };
   } finally {
     URL.revokeObjectURL(url);
   }

@@ -16,11 +16,5 @@
     "noFallthroughCasesInSwitch": true,
     "noEmit": true
   },
-  "include": [
-    "electron",
-    "scripts",
-    "test",
-    "vite.config.ts",
-    "vitest.config.ts"
-  ]
+  "include": ["electron", "scripts", "test", "vite.config.ts", "vitest.config.ts"]
 }

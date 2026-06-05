@@ -5,10 +5,10 @@
 // via the library's official registerBackend hook. Jobs are serialized (one ORT
 // session), which also fixes garbled reads from concurrent runs.
 
-import Ocr, { registerBackend, ImageRawBase, FileUtilsBase } from '@gutenye/ocr-common';
+import Ocr, { FileUtilsBase, ImageRawBase, registerBackend } from '@gutenye/ocr-common';
 import { splitIntoLineImages } from '@gutenye/ocr-common/splitIntoLineImages';
 // The WebGPU build: enables the GPU execution provider (falls back to WASM).
-import { InferenceSession, env } from 'onnxruntime-web/webgpu';
+import { env, InferenceSession } from 'onnxruntime-web/webgpu';
 
 // No cross-origin isolation in the renderer → single-thread WASM (the WebGPU EP
 // still needs the wasm/JSEP glue). ORT wasm from a CDN matching the pinned version.

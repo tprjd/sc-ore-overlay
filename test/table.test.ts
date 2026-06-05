@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { loadSignatureTable, groupLocations } from '../src/core/table';
+import { groupLocations, loadSignatureTable } from '../src/core/table';
 import { fixtureTable } from './fixtures/table.fixture';
 
 describe('loadSignatureTable', () => {

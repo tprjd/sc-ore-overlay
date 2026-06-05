@@ -5,8 +5,13 @@
 // decides which region it updates. The parent owns `mediaRef` so its capture
 // loop can read the same element this component attaches the stream to.
 
+import type {
+  CSSProperties,
+  MutableRefObject,
+  ReactNode,
+  PointerEvent as ReactPointerEvent,
+} from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { CSSProperties, MutableRefObject, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 
 import type { DrawableSource, NormRegion } from '../preprocess';
 import type { PickedSource } from './SourcePicker';
@@ -55,7 +60,13 @@ export function CapturePreview({ source, mediaRef, regions, onDraw, hint }: Capt
   const imgRef = useRef<HTMLImageElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const areaRef = useRef<HTMLDivElement | null>(null);
-  const pendingZoom = useRef<{ ratio: number; cx: number; cy: number; contentX: number; contentY: number } | null>(null);
+  const pendingZoom = useRef<{
+    ratio: number;
+    cx: number;
+    cy: number;
+    contentX: number;
+    contentY: number;
+  } | null>(null);
 
   const [zoom, setZoom] = useState(1);
   const [drag, setDrag] = useState<DragBox | null>(null);
@@ -101,6 +112,7 @@ export function CapturePreview({ source, mediaRef, regions, onDraw, hint }: Capt
   }, []);
 
   // After a wheel-zoom re-renders, adjust scroll so the cursor point holds.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `zoom` is the trigger — the effect reads refs and must re-run only when zoom changes.
   useLayoutEffect(() => {
     const p = pendingZoom.current;
     const area = areaRef.current;
@@ -164,7 +176,13 @@ export function CapturePreview({ source, mediaRef, regions, onDraw, hint }: Capt
           onPointerUp={onPointerUp}
         >
           {source.kind === 'desktop' || source.kind === 'video' ? (
-            <video ref={videoRef} muted playsInline loop={source.kind === 'video'} style={S.media} />
+            <video
+              ref={videoRef}
+              muted
+              playsInline
+              loop={source.kind === 'video'}
+              style={S.media}
+            />
           ) : (
             <img
               ref={imgRef}
@@ -230,7 +248,13 @@ const S: Record<string, CSSProperties> = {
     touchAction: 'none',
     cursor: 'crosshair',
   },
-  media: { display: 'block', width: '100%', height: 'auto', userSelect: 'none', pointerEvents: 'none' },
+  media: {
+    display: 'block',
+    width: '100%',
+    height: 'auto',
+    userSelect: 'none',
+    pointerEvents: 'none',
+  },
   box: { position: 'absolute', borderWidth: 2, pointerEvents: 'none' },
   boxLabel: {
     position: 'absolute',

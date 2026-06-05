@@ -3,8 +3,8 @@
 // against a saved HUD screenshot or a recorded mining clip without Star Citizen
 // running (a looping video gives reproducible live-ish frames for debugging).
 
-import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, CSSProperties } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CaptureSource } from '../../shared/bridge';
 
 /** What the picker hands back to the app once a source is chosen. */
@@ -38,7 +38,9 @@ export function SourcePicker({
     setError(null);
     try {
       if (!window.sco) {
-        throw new Error('Preload bridge unavailable — run inside Electron, or use “Load image” below.');
+        throw new Error(
+          'Preload bridge unavailable — run inside Electron, or use “Load image” below.',
+        );
       }
       setSources(await window.sco.getCaptureSources());
     } catch (e) {
@@ -48,6 +50,7 @@ export function SourcePicker({
     }
   };
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only — enumerate sources once on open.
   useEffect(() => {
     void refresh();
   }, []);
@@ -72,6 +75,7 @@ export function SourcePicker({
   };
 
   // Auto-reconnect to the last-used source once it appears in the list.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-runs on source/id change only — pickDesktop is stable for this purpose.
   useEffect(() => {
     if (reconnected.current || !lastSourceId) return;
     const hit = sources.find((s) => s.id === lastSourceId);
@@ -106,7 +110,10 @@ export function SourcePicker({
           Load image…
           <input type="file" accept="image/*" onChange={pickImage} style={{ display: 'none' }} />
         </label>
-        <label style={{ ...S.btn, ...S.fileBtn }} title="Use a recorded clip as the source — loops for reproducible debugging">
+        <label
+          style={{ ...S.btn, ...S.fileBtn }}
+          title="Use a recorded clip as the source — loops for reproducible debugging"
+        >
           Load video…
           <input type="file" accept="video/*" onChange={pickVideo} style={{ display: 'none' }} />
         </label>
@@ -116,7 +123,12 @@ export function SourcePicker({
 
       <div style={S.grid}>
         {sources.map((src) => (
-          <button key={src.id} style={S.card} onClick={() => void pickDesktop(src)} title={src.name}>
+          <button
+            key={src.id}
+            style={S.card}
+            onClick={() => void pickDesktop(src)}
+            title={src.name}
+          >
             <img src={src.thumbnailDataUrl} alt="" style={S.thumb} />
             <span style={S.cardLabel}>
               <span style={S.badge}>{src.type}</span>

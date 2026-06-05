@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { parseDistanceToken, parsePosLine, parsePos, parseSystemName } from '../src/core/coords';
+import { parseDistanceToken, parsePos, parsePosLine, parseSystemName } from '../src/core/coords';
 
 // The real debug-overlay block from the user's HUD (relevant lines).
 const SAMPLE = [
@@ -52,7 +52,9 @@ describe('parseDistanceToken', () => {
 
 describe('parsePosLine', () => {
   it('parses a "Zone: … Pos: x y z" line into zone + meters', () => {
-    const r = parsePosLine('Zone: SolarSystem_285626946665 Pos: -14215974.6126km -4787767.8108km 734.87m');
+    const r = parsePosLine(
+      'Zone: SolarSystem_285626946665 Pos: -14215974.6126km -4787767.8108km 734.87m',
+    );
     expect(r).not.toBeNull();
     expect(r!.zone).toBe('SolarSystem_285626946665');
     expect(r!.pos.x).toBeCloseTo(-14_215_974_612.6, 0);

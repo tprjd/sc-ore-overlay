@@ -8,43 +8,42 @@
 // Hotkeys · Regions) so only one group shows at a time — no single scroll wall.
 // Reusable field/section widgets live in ./controls; colors/radii in ./tokens.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-
-import { CapturePreview } from './CapturePreview';
-import type { PreviewRegion } from './CapturePreview';
-import { RegionList } from './RegionList';
-import { ROLE_META } from './roles';
-import { Section, Slider, NoiseEditor, KeyCapture, HOTKEY_ROWS } from './controls';
-import { AboutPanel } from './AboutPanel';
-import { C, R } from './tokens';
-import { OverlayCard } from '../../overlay/OverlayCard';
-import { DetailCard } from '../../overlay/DetailCard';
-import { ScanCard } from '../../overlay/ScanCard';
-import type { PickedSource } from './SourcePicker';
-import { useSurveyCapture } from '../useSurveyCapture';
-import type { ActiveSurveyRegion } from '../useSurveyCapture';
-import type { LoopParams } from '../useCaptureLoop';
-import type { OcrBackend } from '../ocr';
-import type { DrawableSource, NormRegion } from '../preprocess';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ScanResult, SignatureTable, Voter } from '../../core';
 import {
   createVoter,
+  getQualityDetail,
+  groupLocations,
   isExpired,
   matchWithNoise,
-  groupLocations,
-  getQualityDetail,
   snapMaterial,
 } from '../../core';
-import type { ScanResult, SignatureTable, Voter } from '../../core';
-import type { OverlayStatus } from '../../shared/bridge';
-import { DEFAULT_OVERLAY_CONFIG } from '../../shared/bridge';
+import { DetailCard } from '../../overlay/DetailCard';
+import { OverlayCard } from '../../overlay/OverlayCard';
+import { ScanCard } from '../../overlay/ScanCard';
 import type {
   HotkeyAction,
   HotkeyMap,
   OverlayConfig,
   OverlayScale,
+  OverlayStatus,
   SurveyRegionSetting,
 } from '../../shared/bridge';
+import { DEFAULT_OVERLAY_CONFIG } from '../../shared/bridge';
+import type { OcrBackend } from '../ocr';
+import type { DrawableSource, NormRegion } from '../preprocess';
+import type { LoopParams } from '../useCaptureLoop';
+import type { ActiveSurveyRegion } from '../useSurveyCapture';
+import { useSurveyCapture } from '../useSurveyCapture';
+import { AboutPanel } from './AboutPanel';
+import type { PreviewRegion } from './CapturePreview';
+import { CapturePreview } from './CapturePreview';
+import { HOTKEY_ROWS, KeyCapture, NoiseEditor, Section, Slider } from './controls';
+import { RegionList } from './RegionList';
+import { ROLE_META } from './roles';
+import type { PickedSource } from './SourcePicker';
+import { C, R } from './tokens';
 
 /**
  * Two scans are "the same rock" when the OCR'd ore matches and the rock's
@@ -77,9 +76,42 @@ const PANEL_TABS: Array<[PanelTab, string]> = [
  */
 type OverlayPreset = 'minimal' | 'standard' | 'detailed';
 const OVERLAY_PRESETS: Array<[OverlayPreset, string, Partial<OverlayConfig>]> = [
-  ['minimal', 'Minimal', { scale: 'compact', border: false, showPlaceholder: false, showDetail: false, showScan: false, showOcrStats: false }],
-  ['standard', 'Standard', { scale: 'normal', border: true, showPlaceholder: true, showDetail: false, showScan: false, showOcrStats: false }],
-  ['detailed', 'Detailed', { scale: 'normal', border: true, showPlaceholder: true, showDetail: true, showScan: true, showOcrStats: true }],
+  [
+    'minimal',
+    'Minimal',
+    {
+      scale: 'compact',
+      border: false,
+      showPlaceholder: false,
+      showDetail: false,
+      showScan: false,
+      showOcrStats: false,
+    },
+  ],
+  [
+    'standard',
+    'Standard',
+    {
+      scale: 'normal',
+      border: true,
+      showPlaceholder: true,
+      showDetail: false,
+      showScan: false,
+      showOcrStats: false,
+    },
+  ],
+  [
+    'detailed',
+    'Detailed',
+    {
+      scale: 'normal',
+      border: true,
+      showPlaceholder: true,
+      showDetail: true,
+      showScan: true,
+      showOcrStats: true,
+    },
+  ],
 ];
 
 export interface ScanViewProps {
@@ -146,7 +178,10 @@ export function ScanView({
   const [panelTab, setPanelTab] = useState<PanelTab>('match');
 
   const active: ActiveSurveyRegion[] = useMemo(
-    () => regions.filter((r) => r.enabled).map((r) => ({ id: r.id, role: r.role, rect: r.rect, scale: r.scale })),
+    () =>
+      regions
+        .filter((r) => r.enabled)
+        .map((r) => ({ id: r.id, role: r.role, rect: r.rect, scale: r.scale })),
     [regions],
   );
   const readout = useSurveyCapture(mediaRef, active, params, !paused, table);
@@ -164,7 +199,9 @@ export function ScanView({
   const [settling, setSettling] = useState(false);
   // Read-pipeline reason for what the overlay shows — feeds the status footer +
   // overlay reason chip so a blank overlay explains itself.
-  const [readState, setReadState] = useState<'reading' | 'held' | 'expired' | 'low-conf' | 'no-rs'>('no-rs');
+  const [readState, setReadState] = useState<'reading' | 'held' | 'expired' | 'low-conf' | 'no-rs'>(
+    'no-rs',
+  );
   // performance.now() of the last *valid* RS reading — drives hold-then-drop.
   const lastValidAt = useRef<number | null>(null);
   // Whether a valid reading has ever been seen (expired vs never-read).
@@ -177,6 +214,7 @@ export function ScanView({
   const minConf = params.minConfidence ?? 0;
   const holdMs = overlayConfig.holdMs;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on `readout` only — minConf/holdMs are read deliberately and must not re-fire the effect per render.
   useEffect(() => {
     const reading = readout.rs;
     const now = performance.now();
@@ -207,7 +245,6 @@ export function ScanView({
     t.push(now);
     if (t.length > 8) t.shift();
     setTickRate(t.length >= 2 ? (t.length - 1) / ((t[t.length - 1] - t[0]) / 1000) : 0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readout]);
   // Clear the rate window when paused so resuming doesn't show a stale gap.
   useEffect(() => {
@@ -228,16 +265,19 @@ export function ScanView({
     if (!stream) return;
     const tracks = stream.getVideoTracks();
     const onEnded = (): void => setSourceLost(true);
-    tracks.forEach((t) => t.addEventListener('ended', onEnded));
+    tracks.forEach((t) => {
+      t.addEventListener('ended', onEnded);
+    });
     const id = window.setInterval(() => {
       if (tracks.some((t) => t.readyState === 'ended')) setSourceLost(true);
     }, 1000);
     return () => {
-      tracks.forEach((t) => t.removeEventListener('ended', onEnded));
+      tracks.forEach((t) => {
+        t.removeEventListener('ended', onEnded);
+      });
       window.clearInterval(id);
     };
   }, [source]);
-
 
   const systemGroups = useMemo(() => groupLocations(table), [table]);
   const matches = useMemo(
@@ -332,24 +372,23 @@ export function ScanView({
   // Single source of truth for *why* the overlay shows (or doesn't) what it
   // does — threaded to both the control footer and the overlay so the reason
   // isn't re-derived twice and can't drift.
-  const overlayStatus: OverlayStatus =
-    sourceLost
-      ? 'source-lost'
-      : paused
-        ? 'paused'
-        : readState === 'held'
-          ? 'held'
-          : stableRs != null
-            ? matches.length > 0
-              ? 'ok'
-              : 'no-match'
-            : readState === 'low-conf'
-              ? 'low-conf'
-              : readState === 'expired'
-                ? 'expired'
-                : hasScanRegion && !frozenScan && readout.rs == null
-                  ? 'no-scan'
-                  : 'no-rs';
+  const overlayStatus: OverlayStatus = sourceLost
+    ? 'source-lost'
+    : paused
+      ? 'paused'
+      : readState === 'held'
+        ? 'held'
+        : stableRs != null
+          ? matches.length > 0
+            ? 'ok'
+            : 'no-match'
+          : readState === 'low-conf'
+            ? 'low-conf'
+            : readState === 'expired'
+              ? 'expired'
+              : hasScanRegion && !frozenScan && readout.rs == null
+                ? 'no-scan'
+                : 'no-rs';
 
   useEffect(() => {
     // On source loss, clear everything so the overlay vanishes — don't ship a
@@ -363,7 +402,16 @@ export function ScanView({
       ocr: ocrPush ? { score: ocrPush.score, ms: ocrPush.ms, lineCount: ocrPush.lineCount } : null,
       status: overlayStatus,
     });
-  }, [stableRs, overlayCandidates, detail, frozenScan, settling, ocrPush, overlayStatus, sourceLost]);
+  }, [
+    stableRs,
+    overlayCandidates,
+    detail,
+    frozenScan,
+    settling,
+    ocrPush,
+    overlayStatus,
+    sourceLost,
+  ]);
 
   // Global-hotkey commands relayed from the main process. Recalibrate clears
   // both the regions *and* the frozen scan so the next rock takes over.
@@ -412,7 +460,8 @@ export function ScanView({
   const ocr = readout.ocr;
   const confPct = ocr ? Math.round(ocr.score * 100) : null;
   // PP-OCR scores run high; treat <90% as worth noticing, <70% as bad.
-  const confColor = confPct == null ? '#9fb3c8' : confPct >= 90 ? C.green : confPct >= 70 ? C.amber : '#f87171';
+  const confColor =
+    confPct == null ? '#9fb3c8' : confPct >= 90 ? C.green : confPct >= 70 ? C.amber : '#f87171';
 
   // Header health pill — one-glance pipeline rollup, colored by the worst
   // stage: source connected → RS region drawn → frames flowing → OCR confidence.
@@ -421,18 +470,18 @@ export function ScanView({
   const health = sourceLost
     ? { color: '#f87171', label: 'source lost' }
     : paused
-    ? { color: '#9fb3c8', label: 'paused' }
-    : !hasRsRegion
-      ? { color: '#f87171', label: 'add RS region' }
-      : !capturing
-        ? { color: C.amber, label: 'starting…' }
-        : confPct == null
-          ? { color: C.amber, label: 'no reading' }
-          : confPct >= 90
-            ? { color: C.green, label: 'ready' }
-            : confPct >= 70
-              ? { color: C.amber, label: 'low conf' }
-              : { color: '#f87171', label: 'poor conf' };
+      ? { color: '#9fb3c8', label: 'paused' }
+      : !hasRsRegion
+        ? { color: '#f87171', label: 'add RS region' }
+        : !capturing
+          ? { color: C.amber, label: 'starting…' }
+          : confPct == null
+            ? { color: C.amber, label: 'no reading' }
+            : confPct >= 90
+              ? { color: C.green, label: 'ready' }
+              : confPct >= 70
+                ? { color: C.amber, label: 'low conf' }
+                : { color: '#f87171', label: 'poor conf' };
   const healthTip =
     `source ${sourceLost ? '✗ lost' : '✓'} · RS region ${hasRsRegion ? '✓' : '✗'} · ` +
     `reads ${capturing ? '✓' : '✗'} · conf ${confPct != null ? `${confPct}%` : '—'}`;
@@ -446,7 +495,9 @@ export function ScanView({
   return (
     <div style={S.page}>
       <header style={S.header}>
-        <button style={S.btn} onClick={onBack}>← Sources</button>
+        <button style={S.btn} onClick={onBack}>
+          ← Sources
+        </button>
         <span style={S.srcLabel}>
           <span style={S.badge}>{source.kind}</span>
           {source.label}
@@ -457,7 +508,11 @@ export function ScanView({
           <span style={{ color: health.color }}>{health.label}</span>
           {confPct != null && <span style={S.healthConf}>{confPct}%</span>}
         </span>
-        <button style={S.btn} onClick={onSetup} title="Re-run the guided setup (source, region, location)">
+        <button
+          style={S.btn}
+          onClick={onSetup}
+          title="Re-run the guided setup (source, region, location)"
+        >
           Setup
         </button>
         <button style={S.btn} onClick={() => setPaused((p) => !p)}>
@@ -492,12 +547,18 @@ export function ScanView({
                   <span style={S.heroOreName}>
                     {top.name}
                     {top.noise != null && (
-                      <span style={S.noiseBadge} title={`RS = ${top.signature * top.nodes} + ${top.noise} noise`}>
+                      <span
+                        style={S.noiseBadge}
+                        title={`RS = ${top.signature * top.nodes} + ${top.noise} noise`}
+                      >
                         +{top.noise.toLocaleString()}
                       </span>
                     )}
                     {top.loose && (
-                      <span style={S.looseBadge} title="Outside the table's cluster range — table may be stale.">
+                      <span
+                        style={S.looseBadge}
+                        title="Outside the table's cluster range — table may be stale."
+                      >
                         loose
                       </span>
                     )}
@@ -521,16 +582,25 @@ export function ScanView({
                 <div style={S.resultsSub}>also matches</div>
                 <ul style={S.candList}>
                   {matches.slice(1).map((c, i) => (
-                    <li key={`${c.name}-${c.noise ?? 'n'}-${c.loose ? 'L' : 'S'}-${i}`} style={S.candRow}>
+                    <li
+                      key={`${c.name}-${c.noise ?? 'n'}-${c.loose ? 'L' : 'S'}-${i}`}
+                      style={S.candRow}
+                    >
                       <span style={S.candName}>
                         {c.name}
                         {c.noise != null && (
-                          <span style={S.noiseBadge} title={`RS = ${c.signature * c.nodes} + ${c.noise} noise`}>
+                          <span
+                            style={S.noiseBadge}
+                            title={`RS = ${c.signature * c.nodes} + ${c.noise} noise`}
+                          >
                             +{c.noise.toLocaleString()}
                           </span>
                         )}
                         {c.loose && (
-                          <span style={S.looseBadge} title="Outside the table's cluster range — table may be stale.">
+                          <span
+                            style={S.looseBadge}
+                            title="Outside the table's cluster range — table may be stale."
+                          >
                             loose
                           </span>
                         )}
@@ -567,392 +637,424 @@ export function ScanView({
           </nav>
 
           <div style={S.tabScroll}>
+            {panelTab === 'match' && (
+              <>
+                <Section title="Match">
+                  <label style={S.selectRow}>
+                    <span style={S.sliderLabel}>Patch</span>
+                    <select
+                      style={S.select}
+                      value={activePatch}
+                      onChange={(e) => onPatchChange(e.target.value)}
+                    >
+                      {patches.map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label style={S.selectRow}>
+                    <span style={S.sliderLabel}>Location</span>
+                    <select
+                      style={S.select}
+                      value={location ?? ''}
+                      onChange={(e) => onLocationChange(e.target.value || null)}
+                    >
+                      <option value="">Anywhere</option>
+                      {systemGroups.map((g) => (
+                        <optgroup key={g.system} label={g.system}>
+                          {g.locations.map((loc) => (
+                            <option key={`${g.system}:${loc}`} value={loc}>
+                              {loc}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                  </label>
+                  <label style={S.checkRow}>
+                    <input
+                      type="checkbox"
+                      checked={enforceCluster}
+                      onChange={(e) => onEnforceClusterChange(e.target.checked)}
+                    />
+                    <span style={S.checkLabel}>
+                      Enforce cluster-size range
+                      <span style={S.checkHint}>
+                        Disable when the table is stale and an out-of-range node count is real.
+                      </span>
+                    </span>
+                  </label>
+                </Section>
 
-          {panelTab === 'match' && (
-            <>
-              <Section title="Match">
-                <label style={S.selectRow}>
-                  <span style={S.sliderLabel}>Patch</span>
-                  <select style={S.select} value={activePatch} onChange={(e) => onPatchChange(e.target.value)}>
-                    {patches.map((p) => (
-                      <option key={p} value={p}>
-                        {p}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label style={S.selectRow}>
-                  <span style={S.sliderLabel}>Location</span>
-                  <select
-                    style={S.select}
-                    value={location ?? ''}
-                    onChange={(e) => onLocationChange(e.target.value || null)}
-                  >
-                    <option value="">Anywhere</option>
-                    {systemGroups.map((g) => (
-                      <optgroup key={g.system} label={g.system}>
-                        {g.locations.map((loc) => (
-                          <option key={`${g.system}:${loc}`} value={loc}>
-                            {loc}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                </label>
-                <label style={S.checkRow}>
-                  <input
-                    type="checkbox"
-                    checked={enforceCluster}
-                    onChange={(e) => onEnforceClusterChange(e.target.checked)}
-                  />
-                  <span style={S.checkLabel}>
-                    Enforce cluster-size range
-                    <span style={S.checkHint}>Disable when the table is stale and an out-of-range node count is real.</span>
-                  </span>
-                </label>
-              </Section>
+                <Section title="Noise signatures" defaultOpen={false}>
+                  <p style={S.dim}>
+                    Non-ore signals (wrecks, satellites, debris) that can sit on top of an RS
+                    reading. Each value is tried as a subtraction before matching.
+                  </p>
+                  <NoiseEditor values={noiseSignatures} onChange={onNoiseSignaturesChange} />
+                </Section>
+              </>
+            )}
 
-              <Section title="Noise signatures" defaultOpen={false}>
-                <p style={S.dim}>
-                  Non-ore signals (wrecks, satellites, debris) that can sit on top of an RS reading.
-                  Each value is tried as a subtraction before matching.
-                </p>
-                <NoiseEditor values={noiseSignatures} onChange={onNoiseSignaturesChange} />
-              </Section>
-            </>
-          )}
-
-          {panelTab === 'capture' && (
-            <>
-              <Section title="Source">
-                <div style={S.sourceRow}>
-                  <span style={S.badge}>{source.kind}</span>
-                  <span style={S.sourceName} title={source.label}>{source.label}</span>
-                  <button type="button" style={S.btn} onClick={onBack}>
-                    Change
-                  </button>
-                </div>
-                <p style={S.dim}>Switch the captured screen/window, or reconnect if the source was lost.</p>
-              </Section>
-
-              <Section title="Regions">
-                <RegionList
-                  regions={regions}
-                  onRegionsChange={onRegionsChange}
-                  activeId={activeId}
-                  onActiveChange={setActiveId}
-                  debug={readout.regions}
-                  roles={['rs', 'scanResult']}
-                  defaultScale={params.scale}
-                  hint="Box the RS number and the SCAN RESULTS panel."
-                />
-              </Section>
-
-              <Section title="Upscale">
-                <Slider
-                  label="Upscale"
-                  min={1}
-                  max={8}
-                  value={params.scale}
-                  onChange={(v) => set('scale', v)}
-                  suffix="×"
-                />
-                <p style={S.dim}>Global crop upscale before OCR; override per region above.</p>
-              </Section>
-
-              <Section title="Timing">
-                <Slider
-                  label="Interval"
-                  min={300}
-                  max={2000}
-                  step={50}
-                  value={params.intervalMs}
-                  onChange={(v) => set('intervalMs', v)}
-                  suffix=" ms"
-                />
-                <Slider
-                  label="Vote quorum"
-                  min={1}
-                  max={8}
-                  value={params.quorum}
-                  onChange={(v) => set('quorum', v)}
-                  suffix=" frames"
-                />
-                <Slider
-                  label="Min confidence"
-                  min={0}
-                  max={100}
-                  step={5}
-                  value={Math.round((params.minConfidence ?? 0) * 100)}
-                  onChange={(v) => set('minConfidence', v / 100)}
-                  suffix="%"
-                />
-                <p style={S.dim}>
-                  Reads below this OCR confidence are ignored (treated as no reading), so
-                  garbage can't move the lock. 0% = accept everything.
-                </p>
-              </Section>
-
-              <Section title="OCR backend">
-                <label style={S.selectRow}>
-                  <span style={S.sliderLabel}>Engine</span>
-                  <select
-                    style={S.select}
-                    value={ocrBackend}
-                    onChange={(e) => onOcrBackendChange(e.target.value as OcrBackend)}
-                  >
-                    <option value="directml">DirectML (GPU)</option>
-                    <option value="wasm">WASM (CPU)</option>
-                    <option value="webgpu">WebGPU (experimental)</option>
-                  </select>
-                </label>
-                <p style={S.dim}>
-                  {effectiveBackend && effectiveBackend !== ocrBackend
-                    ? `Selected ${ocrBackend} — running on ${effectiveBackend} (fell back). `
-                    : effectiveBackend
-                      ? `Running on ${effectiveBackend}. `
-                      : ''}
-                  DirectML uses any DX12 GPU and falls back to WASM if unavailable.
-                  Changing the engine takes effect after a relaunch.
-                </p>
-              </Section>
-            </>
-          )}
-
-          {panelTab === 'overlay' && (
-            <>
-            <div style={S.previewWrap}>
-              <div style={S.previewLabel}>Live preview</div>
-              <div style={S.previewStage}>
-                <div style={S.previewBox}>
-                  <OverlayCard
-                    reading={stableRs}
-                    candidates={overlayCandidates}
-                    settling={settling}
-                    ocr={overlayConfig.showOcrStats ? readout.ocr : null}
-                    status={overlayStatus}
-                    config={overlayConfig}
-                  />
-                </div>
-                {overlayConfig.showDetail && (
-                  <div style={S.previewBoxTall}>
-                    <DetailCard detail={detail} config={overlayConfig} />
+            {panelTab === 'capture' && (
+              <>
+                <Section title="Source">
+                  <div style={S.sourceRow}>
+                    <span style={S.badge}>{source.kind}</span>
+                    <span style={S.sourceName} title={source.label}>
+                      {source.label}
+                    </span>
+                    <button type="button" style={S.btn} onClick={onBack}>
+                      Change
+                    </button>
                   </div>
-                )}
-                {overlayConfig.showScan && (
-                  <div style={S.previewBoxTall}>
-                    <ScanCard
-                      scan={frozenScan}
-                      config={overlayConfig}
-                      onSortChange={(scanSort, scanSortDir) =>
-                        onOverlayConfigChange({ ...overlayConfig, scanSort, scanSortDir })
+                  <p style={S.dim}>
+                    Switch the captured screen/window, or reconnect if the source was lost.
+                  </p>
+                </Section>
+
+                <Section title="Regions">
+                  <RegionList
+                    regions={regions}
+                    onRegionsChange={onRegionsChange}
+                    activeId={activeId}
+                    onActiveChange={setActiveId}
+                    debug={readout.regions}
+                    roles={['rs', 'scanResult']}
+                    defaultScale={params.scale}
+                    hint="Box the RS number and the SCAN RESULTS panel."
+                  />
+                </Section>
+
+                <Section title="Upscale">
+                  <Slider
+                    label="Upscale"
+                    min={1}
+                    max={8}
+                    value={params.scale}
+                    onChange={(v) => set('scale', v)}
+                    suffix="×"
+                  />
+                  <p style={S.dim}>Global crop upscale before OCR; override per region above.</p>
+                </Section>
+
+                <Section title="Timing">
+                  <Slider
+                    label="Interval"
+                    min={300}
+                    max={2000}
+                    step={50}
+                    value={params.intervalMs}
+                    onChange={(v) => set('intervalMs', v)}
+                    suffix=" ms"
+                  />
+                  <Slider
+                    label="Vote quorum"
+                    min={1}
+                    max={8}
+                    value={params.quorum}
+                    onChange={(v) => set('quorum', v)}
+                    suffix=" frames"
+                  />
+                  <Slider
+                    label="Min confidence"
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={Math.round((params.minConfidence ?? 0) * 100)}
+                    onChange={(v) => set('minConfidence', v / 100)}
+                    suffix="%"
+                  />
+                  <p style={S.dim}>
+                    Reads below this OCR confidence are ignored (treated as no reading), so garbage
+                    can't move the lock. 0% = accept everything.
+                  </p>
+                </Section>
+
+                <Section title="OCR backend">
+                  <label style={S.selectRow}>
+                    <span style={S.sliderLabel}>Engine</span>
+                    <select
+                      style={S.select}
+                      value={ocrBackend}
+                      onChange={(e) => onOcrBackendChange(e.target.value as OcrBackend)}
+                    >
+                      <option value="directml">DirectML (GPU)</option>
+                      <option value="wasm">WASM (CPU)</option>
+                      <option value="webgpu">WebGPU (experimental)</option>
+                    </select>
+                  </label>
+                  <p style={S.dim}>
+                    {effectiveBackend && effectiveBackend !== ocrBackend
+                      ? `Selected ${ocrBackend} — running on ${effectiveBackend} (fell back). `
+                      : effectiveBackend
+                        ? `Running on ${effectiveBackend}. `
+                        : ''}
+                    DirectML uses any DX12 GPU and falls back to WASM if unavailable. Changing the
+                    engine takes effect after a relaunch.
+                  </p>
+                </Section>
+              </>
+            )}
+
+            {panelTab === 'overlay' && (
+              <>
+                <div style={S.previewWrap}>
+                  <div style={S.previewLabel}>Live preview</div>
+                  <div style={S.previewStage}>
+                    <div style={S.previewBox}>
+                      <OverlayCard
+                        reading={stableRs}
+                        candidates={overlayCandidates}
+                        settling={settling}
+                        ocr={overlayConfig.showOcrStats ? readout.ocr : null}
+                        status={overlayStatus}
+                        config={overlayConfig}
+                      />
+                    </div>
+                    {overlayConfig.showDetail && (
+                      <div style={S.previewBoxTall}>
+                        <DetailCard detail={detail} config={overlayConfig} />
+                      </div>
+                    )}
+                    {overlayConfig.showScan && (
+                      <div style={S.previewBoxTall}>
+                        <ScanCard
+                          scan={frozenScan}
+                          config={overlayConfig}
+                          onSortChange={(scanSort, scanSortDir) =>
+                            onOverlayConfigChange({ ...overlayConfig, scanSort, scanSortDir })
+                          }
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <Section title="Overlay">
+                  <div style={S.presetRow}>
+                    <span style={S.presetLabel}>Preset</span>
+                    {OVERLAY_PRESETS.map(([id, label, patch]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        style={{
+                          ...S.presetBtn,
+                          ...(activePreset === id ? S.presetBtnActive : null),
+                        }}
+                        onClick={() => onOverlayConfigChange({ ...overlayConfig, ...patch })}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      style={{ ...S.presetBtn, marginLeft: 'auto' }}
+                      onClick={() => onOverlayConfigChange(DEFAULT_OVERLAY_CONFIG)}
+                      title="Restore all overlay settings to defaults"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                  <label style={S.selectRow}>
+                    <span style={S.sliderLabel}>Fade after</span>
+                    <select
+                      style={S.select}
+                      value={overlayConfig.idleMs}
+                      onChange={(e) =>
+                        onOverlayConfigChange({ ...overlayConfig, idleMs: Number(e.target.value) })
+                      }
+                    >
+                      <option value={5000}>5s</option>
+                      <option value={10000}>10s</option>
+                      <option value={30000}>30s</option>
+                      <option value={60000}>60s</option>
+                      <option value={0}>Never</option>
+                    </select>
+                  </label>
+                  <label style={S.selectRow}>
+                    <span style={S.sliderLabel}>Hold reading</span>
+                    <select
+                      style={S.select}
+                      value={overlayConfig.holdMs}
+                      onChange={(e) =>
+                        onOverlayConfigChange({ ...overlayConfig, holdMs: Number(e.target.value) })
+                      }
+                    >
+                      <option value={2000}>2s</option>
+                      <option value={4000}>4s</option>
+                      <option value={10000}>10s</option>
+                      <option value={0}>Never drop</option>
+                    </select>
+                  </label>
+                  <p style={S.dim}>
+                    Keep showing the last ore this long after the RS reading disappears, then clear
+                    it. (Fade only changes opacity; hold clears the value.)
+                  </p>
+                  <label style={S.selectRow}>
+                    <span style={S.sliderLabel}>Size</span>
+                    <select
+                      style={S.select}
+                      value={overlayConfig.scale}
+                      onChange={(e) =>
+                        onOverlayConfigChange({
+                          ...overlayConfig,
+                          scale: e.target.value as OverlayScale,
+                        })
+                      }
+                    >
+                      <option value="compact">Compact</option>
+                      <option value="normal">Normal</option>
+                      <option value="large">Large</option>
+                    </select>
+                  </label>
+                  <label style={S.selectRow}>
+                    <span style={S.sliderLabel}>Font</span>
+                    <select
+                      style={S.select}
+                      value={overlayConfig.fontFamily}
+                      onChange={(e) =>
+                        onOverlayConfigChange({ ...overlayConfig, fontFamily: e.target.value })
+                      }
+                    >
+                      <option value="system-ui, sans-serif">System</option>
+                      <option value="'Segoe UI', sans-serif">Segoe UI</option>
+                      <option value="Arial, sans-serif">Arial</option>
+                      <option value="Georgia, serif">Georgia</option>
+                      <option value="'Courier New', ui-monospace, monospace">Monospace</option>
+                    </select>
+                  </label>
+                  <label style={S.selectRow}>
+                    <span style={S.sliderLabel}>Background</span>
+                    <input
+                      type="color"
+                      style={S.color}
+                      value={overlayConfig.bgColor}
+                      onChange={(e) =>
+                        onOverlayConfigChange({ ...overlayConfig, bgColor: e.target.value })
                       }
                     />
-                  </div>
-                )}
-              </div>
-            </div>
-            <Section title="Overlay">
-              <div style={S.presetRow}>
-                <span style={S.presetLabel}>Preset</span>
-                {OVERLAY_PRESETS.map(([id, label, patch]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    style={{ ...S.presetBtn, ...(activePreset === id ? S.presetBtnActive : null) }}
-                    onClick={() => onOverlayConfigChange({ ...overlayConfig, ...patch })}
-                  >
-                    {label}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  style={{ ...S.presetBtn, marginLeft: 'auto' }}
-                  onClick={() => onOverlayConfigChange(DEFAULT_OVERLAY_CONFIG)}
-                  title="Restore all overlay settings to defaults"
-                >
-                  Reset
-                </button>
-              </div>
-              <label style={S.selectRow}>
-                <span style={S.sliderLabel}>Fade after</span>
-                <select
-                  style={S.select}
-                  value={overlayConfig.idleMs}
-                  onChange={(e) =>
-                    onOverlayConfigChange({ ...overlayConfig, idleMs: Number(e.target.value) })
-                  }
-                >
-                  <option value={5000}>5s</option>
-                  <option value={10000}>10s</option>
-                  <option value={30000}>30s</option>
-                  <option value={60000}>60s</option>
-                  <option value={0}>Never</option>
-                </select>
-              </label>
-              <label style={S.selectRow}>
-                <span style={S.sliderLabel}>Hold reading</span>
-                <select
-                  style={S.select}
-                  value={overlayConfig.holdMs}
-                  onChange={(e) =>
-                    onOverlayConfigChange({ ...overlayConfig, holdMs: Number(e.target.value) })
-                  }
-                >
-                  <option value={2000}>2s</option>
-                  <option value={4000}>4s</option>
-                  <option value={10000}>10s</option>
-                  <option value={0}>Never drop</option>
-                </select>
-              </label>
-              <p style={S.dim}>
-                Keep showing the last ore this long after the RS reading disappears, then
-                clear it. (Fade only changes opacity; hold clears the value.)
-              </p>
-              <label style={S.selectRow}>
-                <span style={S.sliderLabel}>Size</span>
-                <select
-                  style={S.select}
-                  value={overlayConfig.scale}
-                  onChange={(e) =>
-                    onOverlayConfigChange({ ...overlayConfig, scale: e.target.value as OverlayScale })
-                  }
-                >
-                  <option value="compact">Compact</option>
-                  <option value="normal">Normal</option>
-                  <option value="large">Large</option>
-                </select>
-              </label>
-              <label style={S.selectRow}>
-                <span style={S.sliderLabel}>Font</span>
-                <select
-                  style={S.select}
-                  value={overlayConfig.fontFamily}
-                  onChange={(e) => onOverlayConfigChange({ ...overlayConfig, fontFamily: e.target.value })}
-                >
-                  <option value="system-ui, sans-serif">System</option>
-                  <option value="'Segoe UI', sans-serif">Segoe UI</option>
-                  <option value="Arial, sans-serif">Arial</option>
-                  <option value="Georgia, serif">Georgia</option>
-                  <option value="'Courier New', ui-monospace, monospace">Monospace</option>
-                </select>
-              </label>
-              <label style={S.selectRow}>
-                <span style={S.sliderLabel}>Background</span>
-                <input
-                  type="color"
-                  style={S.color}
-                  value={overlayConfig.bgColor}
-                  onChange={(e) => onOverlayConfigChange({ ...overlayConfig, bgColor: e.target.value })}
-                />
-              </label>
-              <Slider
-                label="Opacity"
-                min={0}
-                max={100}
-                value={Math.round(overlayConfig.bgOpacity * 100)}
-                onChange={(v) => onOverlayConfigChange({ ...overlayConfig, bgOpacity: v / 100 })}
-                suffix="%"
-              />
-              <Slider
-                label="Padding"
-                min={0}
-                max={40}
-                value={overlayConfig.padding}
-                onChange={(v) => onOverlayConfigChange({ ...overlayConfig, padding: v })}
-                suffix=" px"
-              />
-              <Slider
-                label="Line gap"
-                min={0}
-                max={24}
-                value={overlayConfig.gap}
-                onChange={(v) => onOverlayConfigChange({ ...overlayConfig, gap: v })}
-                suffix=" px"
-              />
-              <label style={S.checkRow}>
-                <input
-                  type="checkbox"
-                  checked={overlayConfig.border}
-                  onChange={(e) => onOverlayConfigChange({ ...overlayConfig, border: e.target.checked })}
-                />
-                Border
-              </label>
-              <label style={S.checkRow}>
-                <input
-                  type="checkbox"
-                  checked={overlayConfig.autoResize}
-                  onChange={(e) => onOverlayConfigChange({ ...overlayConfig, autoResize: e.target.checked })}
-                />
-                <span style={S.checkLabel}>
-                  Auto-fit height to content
-                  <span style={S.checkHint}>On: each box is exactly as tall as its content (grip resizes width only). Off: fixed height — drag the grip to resize height too.</span>
-                </span>
-              </label>
-              <label style={S.checkRow}>
-                <input
-                  type="checkbox"
-                  checked={overlayConfig.showPlaceholder}
-                  onChange={(e) =>
-                    onOverlayConfigChange({ ...overlayConfig, showPlaceholder: e.target.checked })
-                  }
-                />
-                Show “scanning” placeholder
-              </label>
-              <label style={S.checkRow}>
-                <input
-                  type="checkbox"
-                  checked={overlayConfig.showDetail}
-                  onChange={(e) =>
-                    onOverlayConfigChange({ ...overlayConfig, showDetail: e.target.checked })
-                  }
-                />
-                Show ore detail box
-              </label>
-              <label style={S.checkRow}>
-                <input
-                  type="checkbox"
-                  checked={overlayConfig.showScan}
-                  onChange={(e) =>
-                    onOverlayConfigChange({ ...overlayConfig, showScan: e.target.checked })
-                  }
-                />
-                Show scanned-rock box (SCU per quality)
-              </label>
-              <label style={S.checkRow}>
-                <input
-                  type="checkbox"
-                  checked={overlayConfig.showOcrStats}
-                  onChange={(e) =>
-                    onOverlayConfigChange({ ...overlayConfig, showOcrStats: e.target.checked })
-                  }
-                />
-                Show OCR stats (confidence · latency · lines)
-              </label>
-              <p style={S.dim}>In edit mode (Alt+Shift+E): drag to move, drag the corner grip to resize.</p>
-            </Section>
-            </>
-          )}
-
-          {panelTab === 'hotkeys' && (
-            <Section title="Hotkeys">
-              {HOTKEY_ROWS.map(([action, label]) => (
-                <div key={action} style={S.hotkeyRow}>
-                  <span style={S.sliderLabel}>{label}</span>
-                  <KeyCapture
-                    value={hotkeys[action]}
-                    onChange={(accel) => onHotkeysChange({ ...hotkeys, [action]: accel })}
+                  </label>
+                  <Slider
+                    label="Opacity"
+                    min={0}
+                    max={100}
+                    value={Math.round(overlayConfig.bgOpacity * 100)}
+                    onChange={(v) =>
+                      onOverlayConfigChange({ ...overlayConfig, bgOpacity: v / 100 })
+                    }
+                    suffix="%"
                   />
-                  {hotkeyStatus[action] === false && <span style={S.hotkeyErr}>conflict</span>}
-                </div>
-              ))}
-              <p style={S.dim}>Click a binding, then press the combo (needs a modifier).</p>
-            </Section>
-          )}
+                  <Slider
+                    label="Padding"
+                    min={0}
+                    max={40}
+                    value={overlayConfig.padding}
+                    onChange={(v) => onOverlayConfigChange({ ...overlayConfig, padding: v })}
+                    suffix=" px"
+                  />
+                  <Slider
+                    label="Line gap"
+                    min={0}
+                    max={24}
+                    value={overlayConfig.gap}
+                    onChange={(v) => onOverlayConfigChange({ ...overlayConfig, gap: v })}
+                    suffix=" px"
+                  />
+                  <label style={S.checkRow}>
+                    <input
+                      type="checkbox"
+                      checked={overlayConfig.border}
+                      onChange={(e) =>
+                        onOverlayConfigChange({ ...overlayConfig, border: e.target.checked })
+                      }
+                    />
+                    Border
+                  </label>
+                  <label style={S.checkRow}>
+                    <input
+                      type="checkbox"
+                      checked={overlayConfig.autoResize}
+                      onChange={(e) =>
+                        onOverlayConfigChange({ ...overlayConfig, autoResize: e.target.checked })
+                      }
+                    />
+                    <span style={S.checkLabel}>
+                      Auto-fit height to content
+                      <span style={S.checkHint}>
+                        On: each box is exactly as tall as its content (grip resizes width only).
+                        Off: fixed height — drag the grip to resize height too.
+                      </span>
+                    </span>
+                  </label>
+                  <label style={S.checkRow}>
+                    <input
+                      type="checkbox"
+                      checked={overlayConfig.showPlaceholder}
+                      onChange={(e) =>
+                        onOverlayConfigChange({
+                          ...overlayConfig,
+                          showPlaceholder: e.target.checked,
+                        })
+                      }
+                    />
+                    Show “scanning” placeholder
+                  </label>
+                  <label style={S.checkRow}>
+                    <input
+                      type="checkbox"
+                      checked={overlayConfig.showDetail}
+                      onChange={(e) =>
+                        onOverlayConfigChange({ ...overlayConfig, showDetail: e.target.checked })
+                      }
+                    />
+                    Show ore detail box
+                  </label>
+                  <label style={S.checkRow}>
+                    <input
+                      type="checkbox"
+                      checked={overlayConfig.showScan}
+                      onChange={(e) =>
+                        onOverlayConfigChange({ ...overlayConfig, showScan: e.target.checked })
+                      }
+                    />
+                    Show scanned-rock box (SCU per quality)
+                  </label>
+                  <label style={S.checkRow}>
+                    <input
+                      type="checkbox"
+                      checked={overlayConfig.showOcrStats}
+                      onChange={(e) =>
+                        onOverlayConfigChange({ ...overlayConfig, showOcrStats: e.target.checked })
+                      }
+                    />
+                    Show OCR stats (confidence · latency · lines)
+                  </label>
+                  <p style={S.dim}>
+                    In edit mode (Alt+Shift+E): drag to move, drag the corner grip to resize.
+                  </p>
+                </Section>
+              </>
+            )}
 
-          {panelTab === 'about' && <AboutPanel table={table} hotkeys={hotkeys} />}
+            {panelTab === 'hotkeys' && (
+              <Section title="Hotkeys">
+                {HOTKEY_ROWS.map(([action, label]) => (
+                  <div key={action} style={S.hotkeyRow}>
+                    <span style={S.sliderLabel}>{label}</span>
+                    <KeyCapture
+                      value={hotkeys[action]}
+                      onChange={(accel) => onHotkeysChange({ ...hotkeys, [action]: accel })}
+                    />
+                    {hotkeyStatus[action] === false && <span style={S.hotkeyErr}>conflict</span>}
+                  </div>
+                ))}
+                <p style={S.dim}>Click a binding, then press the combo (needs a modifier).</p>
+              </Section>
+            )}
 
+            {panelTab === 'about' && <AboutPanel table={table} hotkeys={hotkeys} />}
           </div>
         </div>
       </div>
@@ -968,11 +1070,15 @@ export function ScanView({
         </span>
         <span style={S.statusItem}>
           <span style={S.statusKey}>rate</span>
-          <span style={S.statusVal}>{paused ? '—' : tickRate > 0 ? `${tickRate.toFixed(1)}/s` : '…'}</span>
+          <span style={S.statusVal}>
+            {paused ? '—' : tickRate > 0 ? `${tickRate.toFixed(1)}/s` : '…'}
+          </span>
         </span>
         <span style={S.statusItem} title="RS OCR confidence (best detected line)">
           <span style={S.statusKey}>conf</span>
-          <span style={{ ...S.statusVal, color: confColor }}>{confPct != null ? `${confPct}%` : '—'}</span>
+          <span style={{ ...S.statusVal, color: confColor }}>
+            {confPct != null ? `${confPct}%` : '—'}
+          </span>
         </span>
         <span style={S.statusItem} title="OCR latency · detected line count">
           <span style={S.statusKey}>ocr</span>
@@ -982,9 +1088,21 @@ export function ScanView({
           <span style={S.statusKey}>eng</span>
           <span style={S.statusVal}>{effectiveBackend ?? '…'}</span>
         </span>
-        <span style={{ ...S.statusItem, marginLeft: 'auto', minWidth: 0 }} title={ocr?.rawText || ''}>
+        <span
+          style={{ ...S.statusItem, marginLeft: 'auto', minWidth: 0 }}
+          title={ocr?.rawText || ''}
+        >
           <span style={S.statusKey}>raw</span>
-          <span style={{ ...S.statusVal, fontWeight: 400, opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span
+            style={{
+              ...S.statusVal,
+              fontWeight: 400,
+              opacity: 0.8,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
             {ocr?.rawText || '—'}
           </span>
         </span>
@@ -994,32 +1112,112 @@ export function ScanView({
 }
 
 const S: Record<string, CSSProperties> = {
-  page: { display: 'flex', flexDirection: 'column', height: '100%', color: C.text, boxSizing: 'border-box' },
-  header: { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: `1px solid ${C.border}` },
+  page: {
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
+    color: C.text,
+    boxSizing: 'border-box',
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '10px 14px',
+    borderBottom: `1px solid ${C.border}`,
+  },
   srcLabel: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, opacity: 0.9 },
   spacer: { flex: 1 },
-  health: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 999, background: C.surface, border: `1px solid ${C.border}` },
+  health: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    fontSize: 12,
+    fontWeight: 600,
+    padding: '4px 10px',
+    borderRadius: 999,
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+  },
   healthDot: { width: 8, height: 8, borderRadius: '50%', flex: '0 0 auto' },
   healthConf: { color: '#9fb3c8', fontVariantNumeric: 'tabular-nums' },
   body: { display: 'flex', flex: 1, minHeight: 0 },
-  panel: { width: 380, borderLeft: `1px solid ${C.border}`, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', minHeight: 0 },
+  panel: {
+    width: 380,
+    borderLeft: `1px solid ${C.border}`,
+    boxSizing: 'border-box',
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: 0,
+  },
   // Always-visible Results pane: caps its own height and scrolls internally so
   // the sub-tab bar and tab content below stay reachable.
-  results: { padding: 14, borderBottom: `1px solid ${C.border}`, overflowY: 'auto', maxHeight: '48%', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 },
-  hero: { background: C.surface, border: `1px solid ${C.border}`, borderRadius: R.lg, padding: 12, textAlign: 'center' },
+  results: {
+    padding: 14,
+    borderBottom: `1px solid ${C.border}`,
+    overflowY: 'auto',
+    maxHeight: '48%',
+    flexShrink: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+  },
+  hero: {
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderRadius: R.lg,
+    padding: 12,
+    textAlign: 'center',
+  },
   heroLabel: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.6 },
-  heroReading: { fontSize: 40, fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1, color: C.accent },
-  heroOre: { display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 8, marginTop: 2 },
-  heroOreName: { fontSize: 18, fontWeight: 700, display: 'inline-flex', alignItems: 'baseline', gap: 6 },
+  heroReading: {
+    fontSize: 40,
+    fontWeight: 700,
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: 1.1,
+    color: C.accent,
+  },
+  heroOre: {
+    display: 'flex',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 2,
+  },
+  heroOreName: {
+    fontSize: 18,
+    fontWeight: 700,
+    display: 'inline-flex',
+    alignItems: 'baseline',
+    gap: 6,
+  },
   heroNodes: { fontSize: 18, fontWeight: 700, color: C.accent, fontVariantNumeric: 'tabular-nums' },
   heroScore: { fontSize: 12, opacity: 0.5 },
   heroNoMatch: { fontSize: 14, color: C.danger, marginTop: 2 },
   heroWait: { fontSize: 13, opacity: 0.5, marginTop: 2 },
   heroMeta: { fontSize: 11, opacity: 0.55, marginTop: 4 },
-  resultsSub: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.5, marginBottom: 4 },
+  resultsSub: {
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    opacity: 0.5,
+    marginBottom: 4,
+  },
   tabScroll: { flex: 1, minHeight: 0, overflowY: 'auto', padding: 14 },
   subtabs: { display: 'flex', gap: 2, padding: '0 14px', borderBottom: `1px solid ${C.border}` },
-  subtab: { flex: 1, background: 'none', color: C.text, opacity: 0.5, border: 'none', borderBottom: '2px solid transparent', padding: '6px 4px', cursor: 'pointer', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4 },
+  subtab: {
+    flex: 1,
+    background: 'none',
+    color: C.text,
+    opacity: 0.5,
+    border: 'none',
+    borderBottom: '2px solid transparent',
+    padding: '6px 4px',
+    cursor: 'pointer',
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
   subtabActive: { opacity: 1, color: C.accent, borderBottom: `2px solid ${C.accent}` },
   statusbar: {
     display: 'flex',
@@ -1037,7 +1235,15 @@ const S: Record<string, CSSProperties> = {
   stateDot: { width: 7, height: 7, borderRadius: '50%', flex: '0 0 auto' },
   presetRow: { display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, flexWrap: 'wrap' },
   presetLabel: { fontSize: 12, opacity: 0.8, marginRight: 2 },
-  presetBtn: { background: C.btn, color: C.text, border: `1px solid ${C.borderStrong}`, borderRadius: R.md, padding: '4px 10px', cursor: 'pointer', fontSize: 12 },
+  presetBtn: {
+    background: C.btn,
+    color: C.text,
+    border: `1px solid ${C.borderStrong}`,
+    borderRadius: R.md,
+    padding: '4px 10px',
+    cursor: 'pointer',
+    fontSize: 12,
+  },
   presetBtnActive: { borderColor: C.accent, color: C.accent },
   previewWrap: { marginBottom: 14 },
   previewLabel: {
@@ -1064,23 +1270,109 @@ const S: Record<string, CSSProperties> = {
   previewBoxTall: { position: 'relative', height: 140, borderRadius: R.lg, overflow: 'hidden' },
   dim: { opacity: 0.45, fontSize: 12 },
   sliderLabel: { width: 82, fontSize: 12, opacity: 0.8 },
-  checkRow: { display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, marginBottom: 10, lineHeight: 1.35 },
+  checkRow: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: 8,
+    fontSize: 12,
+    marginBottom: 10,
+    lineHeight: 1.35,
+  },
   checkLabel: { display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 },
   checkHint: { fontSize: 11, opacity: 0.5 },
-  btn: { background: C.btn, color: C.text, border: `1px solid ${C.borderStrong}`, borderRadius: R.md, padding: '6px 10px', cursor: 'pointer', fontSize: 13 },
-  badge: { fontSize: 10, textTransform: 'uppercase', background: C.border, borderRadius: R.sm, padding: '2px 5px', opacity: 0.8 },
+  btn: {
+    background: C.btn,
+    color: C.text,
+    border: `1px solid ${C.borderStrong}`,
+    borderRadius: R.md,
+    padding: '6px 10px',
+    cursor: 'pointer',
+    fontSize: 13,
+  },
+  badge: {
+    fontSize: 10,
+    textTransform: 'uppercase',
+    background: C.border,
+    borderRadius: R.sm,
+    padding: '2px 5px',
+    opacity: 0.8,
+  },
   sourceRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 },
-  sourceName: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13 },
+  sourceName: {
+    flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    fontSize: 13,
+  },
   selectRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 },
-  select: { flex: 1, background: C.bg, color: C.text, border: `1px solid ${C.borderStrong}`, borderRadius: R.md, padding: '6px 8px', fontSize: 13 },
-  candList: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 },
-  candRow: { display: 'flex', alignItems: 'baseline', gap: 8, background: C.surface, border: `1px solid ${C.border}`, borderRadius: R.md, padding: '8px 10px' },
-  candName: { flex: 1, fontSize: 16, fontWeight: 600, display: 'flex', alignItems: 'baseline', gap: 6 },
-  noiseBadge: { fontSize: 10, padding: '1px 5px', background: '#3a2a1a', color: C.amber, border: '1px solid #5a3a1f', borderRadius: R.sm, fontVariantNumeric: 'tabular-nums', fontWeight: 600 },
-  looseBadge: { fontSize: 10, padding: '1px 5px', background: '#2a1a3a', color: C.purple, border: '1px solid #4a2a5a', borderRadius: R.sm, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 },
+  select: {
+    flex: 1,
+    background: C.bg,
+    color: C.text,
+    border: `1px solid ${C.borderStrong}`,
+    borderRadius: R.md,
+    padding: '6px 8px',
+    fontSize: 13,
+  },
+  candList: {
+    listStyle: 'none',
+    margin: 0,
+    padding: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+  },
+  candRow: {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: 8,
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderRadius: R.md,
+    padding: '8px 10px',
+  },
+  candName: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: 600,
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: 6,
+  },
+  noiseBadge: {
+    fontSize: 10,
+    padding: '1px 5px',
+    background: '#3a2a1a',
+    color: C.amber,
+    border: '1px solid #5a3a1f',
+    borderRadius: R.sm,
+    fontVariantNumeric: 'tabular-nums',
+    fontWeight: 600,
+  },
+  looseBadge: {
+    fontSize: 10,
+    padding: '1px 5px',
+    background: '#2a1a3a',
+    color: C.purple,
+    border: '1px solid #4a2a5a',
+    borderRadius: R.sm,
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
   candNodes: { fontSize: 16, color: C.accent, fontVariantNumeric: 'tabular-nums' },
   candScore: { fontSize: 11, opacity: 0.5, width: 40, textAlign: 'right' },
   hotkeyRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 },
   hotkeyErr: { fontSize: 11, color: C.danger },
-  color: { width: 48, height: 28, padding: 0, background: 'transparent', border: `1px solid ${C.borderStrong}`, borderRadius: R.md, cursor: 'pointer' },
+  color: {
+    width: 48,
+    height: 28,
+    padding: 0,
+    background: 'transparent',
+    border: `1px solid ${C.borderStrong}`,
+    borderRadius: R.md,
+    cursor: 'pointer',
+  },
 };

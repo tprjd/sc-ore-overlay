@@ -53,9 +53,17 @@ const buffers = await Promise.all(
 writeFileSync(path.join(root, 'build', 'icon.ico'), buildIco(buffers));
 
 // 512px PNG for electron-builder (Linux/mac fallback) + previews.
-await sharp(svg, { density: 512 }).resize(512, 512).png().toFile(path.join(root, 'build', 'icon.png'));
+await sharp(svg, { density: 512 })
+  .resize(512, 512)
+  .png()
+  .toFile(path.join(root, 'build', 'icon.png'));
 
 // 256px preview so the result can be eyeballed.
-await sharp(svg, { density: 512 }).resize(256, 256).png().toFile(path.join(root, 'build', 'icon-preview.png'));
+await sharp(svg, { density: 512 })
+  .resize(256, 256)
+  .png()
+  .toFile(path.join(root, 'build', 'icon-preview.png'));
 
-console.log(`Wrote build/icon.ico (${ICO_SIZES.join(', ')}px), build/icon.png (512px), build/icon-preview.png`);
+console.log(
+  `Wrote build/icon.ico (${ICO_SIZES.join(', ')}px), build/icon.png (512px), build/icon-preview.png`,
+);

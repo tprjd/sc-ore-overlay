@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { parseReading, bestReading } from '../src/core/parse';
+import { bestReading, parseReading } from '../src/core/parse';
 
 describe('parseReading', () => {
   it('parses a clean digit string', () => {

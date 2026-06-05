@@ -3,10 +3,10 @@
 // (matched ore rendering) is the shared OverlayCard, so the control window's
 // live preview always matches what ships here.
 
-import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
-import { DEFAULT_OVERLAY_CONFIG } from '../shared/bridge';
+import { useEffect, useRef, useState } from 'react';
 import type { OverlayConfig, OverlayPayload } from '../shared/bridge';
+import { DEFAULT_OVERLAY_CONFIG } from '../shared/bridge';
 import { OverlayCard } from './OverlayCard';
 
 const EMPTY: OverlayPayload = { reading: null, candidates: [], status: 'no-rs' };
@@ -80,7 +80,12 @@ export function Overlay() {
 
   const onGripDown = (e: ReactPointerEvent<HTMLDivElement>): void => {
     e.currentTarget.setPointerCapture(e.pointerId);
-    resizeStart.current = { x: e.screenX, y: e.screenY, w: window.innerWidth, h: window.innerHeight };
+    resizeStart.current = {
+      x: e.screenX,
+      y: e.screenY,
+      w: window.innerWidth,
+      h: window.innerHeight,
+    };
   };
   const onGripMove = (e: ReactPointerEvent<HTMLDivElement>): void => {
     const start = resizeStart.current;
@@ -101,13 +106,30 @@ export function Overlay() {
   // "no match" message is visible), or — when enabled — the "scanning…"
   // placeholder. Idle fade handles eventual disappearance.
   const hasContent = candidates.length > 0 || reading != null || config.showPlaceholder;
-  const visible = !sourceLost && (editing || (!hidden && hasContent && (config.idleMs <= 0 || !idle)));
+  const visible =
+    !sourceLost && (editing || (!hidden && hasContent && (config.idleMs <= 0 || !idle)));
 
   return (
-    <div ref={contentRef} style={{ ...S.root, height: autoResize ? 'auto' : '100%', opacity: visible ? 1 : 0 }}>
-      <OverlayCard reading={reading} candidates={candidates} settling={settling} ocr={ocr} status={status} config={config} editing={editing} />
+    <div
+      ref={contentRef}
+      style={{ ...S.root, height: autoResize ? 'auto' : '100%', opacity: visible ? 1 : 0 }}
+    >
+      <OverlayCard
+        reading={reading}
+        candidates={candidates}
+        settling={settling}
+        ocr={ocr}
+        status={status}
+        config={config}
+        editing={editing}
+      />
       {editing && (
-        <div style={GRIP} onPointerDown={onGripDown} onPointerMove={onGripMove} onPointerUp={onGripUp} />
+        <div
+          style={GRIP}
+          onPointerDown={onGripDown}
+          onPointerMove={onGripMove}
+          onPointerUp={onGripUp}
+        />
       )}
     </div>
   );

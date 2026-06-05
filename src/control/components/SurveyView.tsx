@@ -3,26 +3,25 @@
 // the debug-overlay coordinate read working and verified; logging + the map come
 // in S2/S3. Reuses the shared CapturePreview and the existing OCR pipeline.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-
-import { CapturePreview } from './CapturePreview';
-import type { PreviewRegion } from './CapturePreview';
-import { SurveyMap } from './SurveyMap';
-import { ScanResults } from './ScanResults';
-import { RegionList } from './RegionList';
-import { ROLE_META, newRegionId } from './roles';
-import type { PickedSource } from './SourcePicker';
-import { useSurveyCapture } from '../useSurveyCapture';
-import type { ActiveSurveyRegion } from '../useSurveyCapture';
-import type { LoopParams } from '../useCaptureLoop';
-import type { DrawableSource, NormRegion } from '../preprocess';
-import { DEBUG_SHIP, debugEntries } from '../survey-debug';
-import { scanImage } from '../scanImage';
-import type { SimScan } from '../scanImage';
-import { isStablePos, makeEntry, mergeEntries } from '../../core';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AxisPlane, SignatureTable, SurveyEntry, Vec3 } from '../../core';
+import { isStablePos, makeEntry, mergeEntries } from '../../core';
 import type { SurveyRegionSetting } from '../../shared/bridge';
+import type { DrawableSource, NormRegion } from '../preprocess';
+import type { SimScan } from '../scanImage';
+import { scanImage } from '../scanImage';
+import { DEBUG_SHIP, debugEntries } from '../survey-debug';
+import type { LoopParams } from '../useCaptureLoop';
+import type { ActiveSurveyRegion } from '../useSurveyCapture';
+import { useSurveyCapture } from '../useSurveyCapture';
+import type { PreviewRegion } from './CapturePreview';
+import { CapturePreview } from './CapturePreview';
+import { RegionList } from './RegionList';
+import { newRegionId, ROLE_META } from './roles';
+import { ScanResults } from './ScanResults';
+import type { PickedSource } from './SourcePicker';
+import { SurveyMap } from './SurveyMap';
 
 type LeftMode = 'preview' | 'map';
 
@@ -39,7 +38,8 @@ export interface SurveyViewProps {
 
 // Full precision (km) so the readout matches the HUD digit-for-digit — coordinate
 // decimals are meaningful, so don't round to 2 places.
-const km = (m: number): string => (m / 1000).toLocaleString(undefined, { maximumFractionDigits: 6 });
+const km = (m: number): string =>
+  (m / 1000).toLocaleString(undefined, { maximumFractionDigits: 6 });
 
 /** Trigger a client-side file download. */
 function download(name: string, mime: string, text: string): void {
@@ -74,7 +74,10 @@ export function SurveyView({
   const [simBusy, setSimBusy] = useState(false);
 
   const active: ActiveSurveyRegion[] = useMemo(
-    () => regions.filter((r) => r.enabled).map((r) => ({ id: r.id, role: r.role, rect: r.rect, scale: r.scale })),
+    () =>
+      regions
+        .filter((r) => r.enabled)
+        .map((r) => ({ id: r.id, role: r.role, rect: r.rect, scale: r.scale })),
     [regions],
   );
   // Pause the live OCR loop while batch-scanning uploads — they share one
@@ -163,7 +166,18 @@ export function SurveyView({
     } else {
       const head = 'ts,iso,scout,system,ore,nodes,rs,x,y,z';
       const rows = log.map((e) =>
-        [e.ts, new Date(e.ts).toISOString(), csv(e.scout), csv(e.system), csv(e.ore ?? ''), e.nodes ?? '', e.rs, e.pos.x, e.pos.y, e.pos.z].join(','),
+        [
+          e.ts,
+          new Date(e.ts).toISOString(),
+          csv(e.scout),
+          csv(e.system),
+          csv(e.ore ?? ''),
+          e.nodes ?? '',
+          e.rs,
+          e.pos.x,
+          e.pos.y,
+          e.pos.z,
+        ].join(','),
       );
       download('survey-log.csv', 'text/csv', [head, ...rows].join('\n'));
     }
@@ -207,7 +221,9 @@ export function SurveyView({
   return (
     <div style={S.page}>
       <header style={S.header}>
-        <button style={S.btn} onClick={onBack}>← Sources</button>
+        <button style={S.btn} onClick={onBack}>
+          ← Sources
+        </button>
         <span style={S.srcLabel}>
           <span style={S.badge}>{source.kind}</span>
           {source.label}
@@ -264,7 +280,8 @@ export function SurveyView({
             </div>
             <div style={S.coordBlock}>
               <div style={S.coordTitle}>
-                Ship position {readout.posZone ? <span style={S.dim}>· {readout.posZone}</span> : null}
+                Ship position{' '}
+                {readout.posZone ? <span style={S.dim}>· {readout.posZone}</span> : null}
               </div>
               {readout.pos ? (
                 <div style={S.coordGrid}>
@@ -286,7 +303,9 @@ export function SurveyView({
                   {readout.scan.scu != null && <span style={S.dim}> · {readout.scan.scu} SCU</span>}
                 </div>
                 <div style={S.scanMeta}>
-                  {readout.scan.mass != null && <span>mass {readout.scan.mass.toLocaleString()}</span>}
+                  {readout.scan.mass != null && (
+                    <span>mass {readout.scan.mass.toLocaleString()}</span>
+                  )}
                   {readout.scan.resistance != null && <span>res {readout.scan.resistance}%</span>}
                   {readout.scan.instability != null && <span>inst {readout.scan.instability}</span>}
                 </div>
@@ -322,7 +341,11 @@ export function SurveyView({
               </ul>
             )}
             {readout.error && <div style={S.error}>{readout.error}</div>}
-            <button style={{ ...S.logBtn, ...(canLog ? null : S.logBtnOff) }} disabled={!canLog} onClick={logScan}>
+            <button
+              style={{ ...S.logBtn, ...(canLog ? null : S.logBtnOff) }}
+              disabled={!canLog}
+              onClick={logScan}
+            >
               + Log scan
             </button>
             {!canLog && <p style={S.dim}>Need a ship position to log (box a Ship Pos region).</p>}
@@ -370,12 +393,20 @@ export function SurveyView({
 
           <Card title="Map">
             <label style={S.checkRow}>
-              <input type="checkbox" checked={debugMode} onChange={(e) => setDebugMode(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={debugMode}
+                onChange={(e) => setDebugMode(e.target.checked)}
+              />
               Debug values (synthetic field)
             </label>
             <div style={{ ...S.kv, marginTop: 8 }}>
               <span style={S.k}>Plane</span>
-              <select style={S.select} value={plane} onChange={(e) => setPlane(e.target.value as AxisPlane)}>
+              <select
+                style={S.select}
+                value={plane}
+                onChange={(e) => setPlane(e.target.value as AxisPlane)}
+              >
                 <option value="xy">X / Y (Z depth)</option>
                 <option value="xz">X / Z (Y depth)</option>
                 <option value="yz">Y / Z (X depth)</option>
@@ -394,7 +425,8 @@ export function SurveyView({
           <Card title="Simulated scans">
             <p style={S.dim}>
               Upload screenshots (debug overlay visible, same HUD layout as your regions). Each is
-              OCR&apos;d through the regions and added as a peer scan — a stand-in for networked scouts.
+              OCR&apos;d through the regions and added as a peer scan — a stand-in for networked
+              scouts.
             </p>
             <input
               type="file"
@@ -484,79 +516,311 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
 }
 
 const S: Record<string, CSSProperties> = {
-  page: { display: 'flex', flexDirection: 'column', height: '100%', color: '#e6e6e6', boxSizing: 'border-box' },
-  header: { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid #2c323d' },
+  page: {
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
+    color: '#e6e6e6',
+    boxSizing: 'border-box',
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '10px 14px',
+    borderBottom: '1px solid #2c323d',
+  },
   srcLabel: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, opacity: 0.9 },
   spacer: { flex: 1 },
   body: { display: 'flex', flex: 1, minHeight: 0 },
   leftCol: { flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 },
   segmented: { display: 'flex', gap: 4, padding: '10px 14px 0' },
-  segBtn: { background: 'none', color: '#9fb3c8', border: '1px solid #3a4150', borderRadius: 6, padding: '4px 14px', cursor: 'pointer', fontSize: 12 },
+  segBtn: {
+    background: 'none',
+    color: '#9fb3c8',
+    border: '1px solid #3a4150',
+    borderRadius: 6,
+    padding: '4px 14px',
+    cursor: 'pointer',
+    fontSize: 12,
+  },
   segBtnActive: { background: '#1d2128', color: '#e6e6e6', borderColor: '#4fd1ff' },
   leftBody: { position: 'relative', flex: 1, minHeight: 0, display: 'flex' },
-  mapOverlay: { position: 'absolute', inset: 0, padding: '8px 14px 14px', boxSizing: 'border-box', background: '#16181d' },
+  mapOverlay: {
+    position: 'absolute',
+    inset: 0,
+    padding: '8px 14px 14px',
+    boxSizing: 'border-box',
+    background: '#16181d',
+  },
   checkRow: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 },
   file: { width: '100%', fontSize: 12, color: '#9fb3c8' },
-  logBtn: { width: '100%', marginTop: 10, background: '#1f6f4a', color: '#eafff3', border: '1px solid #2e9a68', borderRadius: 6, padding: '8px 10px', cursor: 'pointer', fontSize: 14, fontWeight: 600 },
-  logBtnOff: { background: '#23272e', color: '#6b7480', border: '1px solid #2c323d', cursor: 'not-allowed' },
-  input: { flex: 1, background: '#0d0f12', color: '#e6e6e6', border: '1px solid #3a4150', borderRadius: 6, padding: '5px 8px', fontSize: 13 },
+  logBtn: {
+    width: '100%',
+    marginTop: 10,
+    background: '#1f6f4a',
+    color: '#eafff3',
+    border: '1px solid #2e9a68',
+    borderRadius: 6,
+    padding: '8px 10px',
+    cursor: 'pointer',
+    fontSize: 14,
+    fontWeight: 600,
+  },
+  logBtnOff: {
+    background: '#23272e',
+    color: '#6b7480',
+    border: '1px solid #2c323d',
+    cursor: 'not-allowed',
+  },
+  input: {
+    flex: 1,
+    background: '#0d0f12',
+    color: '#e6e6e6',
+    border: '1px solid #3a4150',
+    borderRadius: 6,
+    padding: '5px 8px',
+    fontSize: 13,
+  },
   logActions: { display: 'flex', gap: 4 },
-  miniBtn: { background: '#2a2f3a', color: '#e6e6e6', border: '1px solid #3a4150', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontSize: 11 },
-  logList: { display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8, maxHeight: 240, overflowY: 'auto' },
+  miniBtn: {
+    background: '#2a2f3a',
+    color: '#e6e6e6',
+    border: '1px solid #3a4150',
+    borderRadius: 6,
+    padding: '3px 8px',
+    cursor: 'pointer',
+    fontSize: 11,
+  },
+  logList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+    marginTop: 8,
+    maxHeight: 240,
+    overflowY: 'auto',
+  },
   logRow: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '3px 0' },
-  logOre: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  logOre: {
+    flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
   logNodes: { color: '#4fd1ff' },
   logRs: { fontFamily: 'ui-monospace, monospace', opacity: 0.7, width: 56, textAlign: 'right' },
-  logScout: { opacity: 0.5, width: 64, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  logScout: {
+    opacity: 0.5,
+    width: 64,
+    textAlign: 'right',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
   simList: { display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 },
   simCard: { background: '#0d0f12', border: '1px solid #2c323d', borderRadius: 6, padding: 8 },
-  simHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 },
+  simHead: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 6,
+  },
   simName: { fontSize: 13, fontWeight: 600, wordBreak: 'break-all' },
-  panel: { width: 380, borderLeft: '1px solid #2c323d', padding: 14, overflowY: 'auto', boxSizing: 'border-box' },
-  card: { background: '#1d2128', border: '1px solid #2c323d', borderRadius: 8, padding: 12, marginBottom: 14 },
-  cardTitle: { fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.6, margin: '0 0 10px' },
+  panel: {
+    width: 380,
+    borderLeft: '1px solid #2c323d',
+    padding: 14,
+    overflowY: 'auto',
+    boxSizing: 'border-box',
+  },
+  card: {
+    background: '#1d2128',
+    border: '1px solid #2c323d',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 14,
+  },
+  cardTitle: {
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    opacity: 0.6,
+    margin: '0 0 10px',
+  },
   kv: { display: 'flex', justifyContent: 'space-between', gap: 8, padding: '3px 0' },
   k: { opacity: 0.6, fontSize: 13 },
   v: { fontFamily: 'ui-monospace, monospace', fontSize: 14 },
-  coordBlock: { margin: '8px 0', padding: '8px 10px', background: '#0d0f12', border: '1px solid #2c323d', borderRadius: 6 },
-  scanBlock: { margin: '8px 0', padding: '8px 10px', background: '#160f18', border: '1px solid #5b3a63', borderRadius: 6 },
+  coordBlock: {
+    margin: '8px 0',
+    padding: '8px 10px',
+    background: '#0d0f12',
+    border: '1px solid #2c323d',
+    borderRadius: 6,
+  },
+  scanBlock: {
+    margin: '8px 0',
+    padding: '8px 10px',
+    background: '#160f18',
+    border: '1px solid #5b3a63',
+    borderRadius: 6,
+  },
   scanOre: { fontSize: 16, fontWeight: 700, color: '#f0abfc' },
-  scanMeta: { display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 11, opacity: 0.7, margin: '2px 0 6px', fontVariantNumeric: 'tabular-nums' },
-  compHead: { display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.4, opacity: 0.4, marginBottom: 2 },
+  scanMeta: {
+    display: 'flex',
+    gap: 10,
+    flexWrap: 'wrap',
+    fontSize: 11,
+    opacity: 0.7,
+    margin: '2px 0 6px',
+    fontVariantNumeric: 'tabular-nums',
+  },
+  compHead: {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: 8,
+    fontSize: 9,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    opacity: 0.4,
+    marginBottom: 2,
+  },
   compRow: { display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 12, padding: '1px 0' },
   compPct: { width: 44, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#f0abfc' },
-  compMat: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  compMat: {
+    flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
   compVal: { width: 40, textAlign: 'right', fontVariantNumeric: 'tabular-nums', opacity: 0.7 },
   compScu: { width: 48, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#6ee7b7' },
   coordTitle: { fontSize: 11, opacity: 0.6, marginBottom: 6 },
-  coordGrid: { display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 8px', alignItems: 'baseline' },
+  coordGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'auto 1fr',
+    gap: '2px 8px',
+    alignItems: 'baseline',
+  },
   axis: { fontSize: 11, opacity: 0.5 },
-  coord: { fontFamily: 'ui-monospace, monospace', fontSize: 14, color: '#6ee7b7', textAlign: 'right' },
+  coord: {
+    fontFamily: 'ui-monospace, monospace',
+    fontSize: 14,
+    color: '#6ee7b7',
+    textAlign: 'right',
+  },
   dim: { opacity: 0.45, fontSize: 12 },
-  candList: { listStyle: 'none', margin: '8px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 6 },
-  candRow: { display: 'flex', alignItems: 'baseline', gap: 8, background: '#0d0f12', border: '1px solid #2c323d', borderRadius: 6, padding: '6px 8px' },
+  candList: {
+    listStyle: 'none',
+    margin: '8px 0 0',
+    padding: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+  },
+  candRow: {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: 8,
+    background: '#0d0f12',
+    border: '1px solid #2c323d',
+    borderRadius: 6,
+    padding: '6px 8px',
+  },
   candName: { flex: 1, fontSize: 14, fontWeight: 600 },
   candNodes: { fontSize: 14, color: '#4fd1ff', fontVariantNumeric: 'tabular-nums' },
   candScore: { fontSize: 11, opacity: 0.5, width: 40, textAlign: 'right' },
   addRow: { display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, flexWrap: 'wrap' },
-  addBtn: { background: '#2a2f3a', color: '#e6e6e6', border: '1px solid #3a4150', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12 },
+  addBtn: {
+    background: '#2a2f3a',
+    color: '#e6e6e6',
+    border: '1px solid #3a4150',
+    borderRadius: 6,
+    padding: '4px 8px',
+    cursor: 'pointer',
+    fontSize: 12,
+  },
   regionList: { display: 'flex', flexDirection: 'column', gap: 8 },
-  regionCard: { background: '#0d0f12', border: '1px solid #2c323d', borderRadius: 6, padding: 8, cursor: 'pointer' },
+  regionCard: {
+    background: '#0d0f12',
+    border: '1px solid #2c323d',
+    borderRadius: 6,
+    padding: 8,
+    cursor: 'pointer',
+  },
   regionCardActive: { borderColor: '#4fd1ff' },
   regionTop: { display: 'flex', alignItems: 'center', gap: 8 },
   dot: { width: 10, height: 10, borderRadius: 5, flex: '0 0 auto' },
-  select: { flex: 1, background: '#0d0f12', color: '#e6e6e6', border: '1px solid #3a4150', borderRadius: 6, padding: '4px 6px', fontSize: 13 },
+  select: {
+    flex: 1,
+    background: '#0d0f12',
+    color: '#e6e6e6',
+    border: '1px solid #3a4150',
+    borderRadius: 6,
+    padding: '4px 6px',
+    fontSize: 13,
+  },
   enableLabel: { display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, opacity: 0.8 },
   scaleLabel: { display: 'flex', alignItems: 'center', gap: 2, fontSize: 11, opacity: 0.7 },
-  scaleInput: { width: 36, background: '#0d0f12', color: '#e6e6e6', border: '1px solid #3a4150', borderRadius: 4, padding: '2px 4px', fontSize: 12 },
-  delBtn: { background: 'none', color: '#9fb3c8', border: '1px solid #3a4150', borderRadius: 6, padding: '2px 7px', cursor: 'pointer', fontSize: 12 },
+  scaleInput: {
+    width: 36,
+    background: '#0d0f12',
+    color: '#e6e6e6',
+    border: '1px solid #3a4150',
+    borderRadius: 4,
+    padding: '2px 4px',
+    fontSize: 12,
+  },
+  delBtn: {
+    background: 'none',
+    color: '#9fb3c8',
+    border: '1px solid #3a4150',
+    borderRadius: 6,
+    padding: '2px 7px',
+    cursor: 'pointer',
+    fontSize: 12,
+  },
   regionBody: { display: 'flex', gap: 8, marginTop: 8, alignItems: 'flex-start' },
-  cropWrap: { minWidth: 96, minHeight: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000', border: '1px solid #2c323d', borderRadius: 4, padding: 2 },
+  cropWrap: {
+    minWidth: 96,
+    minHeight: 36,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: '#000',
+    border: '1px solid #2c323d',
+    borderRadius: 4,
+    padding: 2,
+  },
   crop: { maxWidth: 140, maxHeight: 60, imageRendering: 'pixelated' },
   regionMeta: { flex: 1, minWidth: 0 },
   parsed: { fontFamily: 'ui-monospace, monospace', fontSize: 13, wordBreak: 'break-all' },
   raw: { fontSize: 11, opacity: 0.5, marginTop: 2, wordBreak: 'break-all' },
-  btn: { background: '#2a2f3a', color: '#e6e6e6', border: '1px solid #3a4150', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontSize: 13 },
-  badge: { fontSize: 10, textTransform: 'uppercase', background: '#2c323d', borderRadius: 4, padding: '2px 5px', opacity: 0.8 },
-  error: { marginTop: 8, background: '#3a1f24', border: '1px solid #7a3b44', color: '#ffb4bd', padding: '6px 10px', borderRadius: 6, fontSize: 12 },
+  btn: {
+    background: '#2a2f3a',
+    color: '#e6e6e6',
+    border: '1px solid #3a4150',
+    borderRadius: 6,
+    padding: '6px 10px',
+    cursor: 'pointer',
+    fontSize: 13,
+  },
+  badge: {
+    fontSize: 10,
+    textTransform: 'uppercase',
+    background: '#2c323d',
+    borderRadius: 4,
+    padding: '2px 5px',
+    opacity: 0.8,
+  },
+  error: {
+    marginTop: 8,
+    background: '#3a1f24',
+    border: '1px solid #7a3b44',
+    color: '#ffb4bd',
+    padding: '6px 10px',
+    borderRadius: 6,
+    fontSize: 12,
+  },
 };

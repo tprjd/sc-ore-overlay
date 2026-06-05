@@ -21,8 +21,8 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import type {
-  ClusterParam,
   Clustering,
+  ClusterParam,
   Deposit,
   DepositLocation,
   QualityMaterial,
@@ -119,8 +119,7 @@ const ALL_METHODS = hasFlag('all-methods');
 const REFRESH = hasFlag('refresh');
 const DELAY_MS = Number(getOpt('delay', '150'));
 
-const sleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ---------------------------------------------------------------------------
 // Fetch + cache helpers
@@ -262,9 +261,7 @@ async function main(): Promise<void> {
   // mineable count so we can confirm we enumerated everything.
   const targets = ALL_METHODS
     ? mineable
-    : mineable.filter(
-        (c) => (c.methods ?? []).includes(METHOD) || c.has_ship_mineables === true,
-      );
+    : mineable.filter((c) => (c.methods ?? []).includes(METHOD) || c.has_ship_mineables === true);
 
   console.log(
     `commodities=${all.length} mineable=${mineable.length} ` +
@@ -307,8 +304,7 @@ async function main(): Promise<void> {
             methods: new Set<string>(),
             clustering,
             locations: new Map<string, DepositLocation>(),
-            commoditySignature:
-              typeof data.signature === 'number' ? data.signature : undefined,
+            commoditySignature: typeof data.signature === 'number' ? data.signature : undefined,
             commodityName: data.name,
             resourceKey: res.key,
             materials: toMaterials(res.materials),
@@ -326,8 +322,7 @@ async function main(): Promise<void> {
             name: locName,
             uuid: loc.uuid,
             type: loc.type,
-            probability:
-              typeof loc.group_probability === 'number' ? loc.group_probability : 1,
+            probability: typeof loc.group_probability === 'number' ? loc.group_probability : 1,
             occurrence:
               typeof loc.relative_probability === 'number' ? loc.relative_probability : undefined,
           });
@@ -363,9 +358,7 @@ async function main(): Promise<void> {
   await writeFile(OUT, `${JSON.stringify(table, null, 2)}\n`);
 
   // ----- sanity log -----
-  console.log(
-    `rows=${rows.size} deposits=${deposits.length} skippedResources=${skippedResources}`,
-  );
+  console.log(`rows=${rows.size} deposits=${deposits.length} skippedResources=${skippedResources}`);
   console.log(`wrote ${path.relative(repoRoot, OUT)} (patch=${patch})`);
 
   const distinctOres = new Set(deposits.map((d) => d.name)).size;

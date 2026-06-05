@@ -8,9 +8,9 @@
 // numerics, cleaned material names; materials sorted by mean quality desc.
 
 import type { CSSProperties } from 'react';
-import type { OverlayConfig } from '../shared/bridge';
-import { cleanMaterial } from '../core';
 import type { QualityDetail } from '../core';
+import { cleanMaterial } from '../core';
+import type { OverlayConfig } from '../shared/bridge';
 
 const COLORS = {
   accent: '#4fd1ff',
@@ -284,7 +284,14 @@ const S: Record<string, CSSProperties> = {
     margin: '0 0 4px',
     ...text,
   },
-  quantizedRow: { ...text, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, fontSize: 11 },
+  quantizedRow: {
+    ...text,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 3,
+    fontSize: 11,
+  },
   quantizedName: {
     width: 100,
     flexShrink: 0,

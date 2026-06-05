@@ -6,5 +6,3 @@ declare global {
     sco: ScoBridge;
   }
 }
-
-export {};

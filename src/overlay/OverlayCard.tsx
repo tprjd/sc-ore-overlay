@@ -9,7 +9,13 @@
 // single line. The shown ore/count flashes briefly when it changes.
 
 import type { CSSProperties } from 'react';
-import type { OverlayCandidate, OverlayConfig, OverlayOcr, OverlayScale, OverlayStatus } from '../shared/bridge';
+import type {
+  OverlayCandidate,
+  OverlayConfig,
+  OverlayOcr,
+  OverlayScale,
+  OverlayStatus,
+} from '../shared/bridge';
 
 /** Font sizes per preset (padding + gap come from config). */
 const SCALE: Record<OverlayScale, { font: number; muted: number }> = {
@@ -77,7 +83,15 @@ function placeholderText(status: OverlayStatus | undefined, settling: boolean): 
   }
 }
 
-export function OverlayCard({ reading, candidates, settling = false, ocr = null, status, config, editing = false }: OverlayCardProps) {
+export function OverlayCard({
+  reading,
+  candidates,
+  settling = false,
+  ocr = null,
+  status,
+  config,
+  editing = false,
+}: OverlayCardProps) {
   const sz = SCALE[config.scale];
   const compact = config.scale === 'compact';
   const secFont = Math.max(11, Math.round(sz.font * 0.7));
@@ -116,7 +130,10 @@ export function OverlayCard({ reading, candidates, settling = false, ocr = null,
       {top && compact ? (
         // Compact: top candidate only, on a single line. No bar/hierarchy, but
         // still honor the signature toggle (inline, so it stays one line).
-        <div key={`${top.name}-${top.nodes}-${top.noise ?? 'n'}-${top.loose ? 'L' : 'S'}`} style={{ ...S.row, animation: ENTER_FLASH }}>
+        <div
+          key={`${top.name}-${top.nodes}-${top.noise ?? 'n'}-${top.loose ? 'L' : 'S'}`}
+          style={{ ...S.row, animation: ENTER_FLASH }}
+        >
           {dot}
           <span style={{ ...S.name, fontSize: sz.font }}>{top.name}</span>
           <span style={{ ...S.nodes, fontSize: sz.font }}>×{top.nodes}</span>
@@ -124,7 +141,10 @@ export function OverlayCard({ reading, candidates, settling = false, ocr = null,
       ) : top ? (
         <>
           {/* Primary candidate — emphasized. */}
-          <div key={`${top.name}-${top.nodes}-${top.noise ?? 'n'}-${top.loose ? 'L' : 'S'}`} style={{ ...S.primaryBlock, animation: ENTER_FLASH }}>
+          <div
+            key={`${top.name}-${top.nodes}-${top.noise ?? 'n'}-${top.loose ? 'L' : 'S'}`}
+            style={{ ...S.primaryBlock, animation: ENTER_FLASH }}
+          >
             <div style={S.row}>
               {dot}
               <span style={{ ...S.name, fontSize: sz.font }}>
@@ -135,7 +155,9 @@ export function OverlayCard({ reading, candidates, settling = false, ocr = null,
                   </span>
                 )}
                 {top.loose && (
-                  <span style={{ ...S.looseBadge, fontSize: Math.max(10, sz.font * 0.45) }}>loose</span>
+                  <span style={{ ...S.looseBadge, fontSize: Math.max(10, sz.font * 0.45) }}>
+                    loose
+                  </span>
                 )}
               </span>
               <span style={{ ...S.nodes, fontSize: sz.font }}>×{top.nodes}</span>
@@ -157,7 +179,9 @@ export function OverlayCard({ reading, candidates, settling = false, ocr = null,
                   </span>
                 )}
                 {c.loose && (
-                  <span style={{ ...S.looseBadge, fontSize: Math.max(9, secFont * 0.5) }}>loose</span>
+                  <span style={{ ...S.looseBadge, fontSize: Math.max(9, secFont * 0.5) }}>
+                    loose
+                  </span>
                 )}
               </span>
               <span style={{ ...S.secNodes, fontSize: secFont }}>×{c.nodes}</span>
@@ -182,8 +206,13 @@ export function OverlayCard({ reading, candidates, settling = false, ocr = null,
       ) : null}
       {config.showOcrStats && ocr && top && (
         <div style={S.ocr}>
-          <span style={{ color: ocrColor(ocr.score), fontWeight: 600 }}>{Math.round(ocr.score * 100)}%</span>
-          <span style={S.ocrDim}> · {ocr.ms}ms · {ocr.lineCount}L</span>
+          <span style={{ color: ocrColor(ocr.score), fontWeight: 600 }}>
+            {Math.round(ocr.score * 100)}%
+          </span>
+          <span style={S.ocrDim}>
+            {' '}
+            · {ocr.ms}ms · {ocr.lineCount}L
+          </span>
         </div>
       )}
     </div>

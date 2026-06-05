@@ -12,9 +12,9 @@
 // update check must never block or crash the app.
 
 import { app, net } from 'electron';
-import { log } from './log';
 import { isVersionNewer } from '../src/core/semver';
 import type { UpdateInfo } from '../src/shared/bridge';
+import { log } from './log';
 
 const OWNER = 'tprjd';
 const REPO = 'sc-ore-overlay';
@@ -46,7 +46,9 @@ export async function checkForUpdate(): Promise<UpdateInfo> {
     info.latest = data.tag_name ?? null;
     if (data.html_url) info.url = data.html_url;
     info.available = info.latest != null && isVersionNewer(info.latest, current);
-    log.info(`[update] current=${current} latest=${info.latest ?? '?'} available=${info.available}`);
+    log.info(
+      `[update] current=${current} latest=${info.latest ?? '?'} available=${info.available}`,
+    );
   } catch (err) {
     log.info('[update] check failed:', err instanceof Error ? err.message : String(err));
   } finally {

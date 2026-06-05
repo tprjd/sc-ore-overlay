@@ -2,8 +2,8 @@
 // any future settings UI share one set of field/section widgets. Pure
 // presentation + small local state; no app logic. Styled via design tokens.
 
-import { useEffect, useState } from 'react';
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { HotkeyAction } from '../../shared/bridge';
 import { C, F, R } from './tokens';
@@ -144,7 +144,13 @@ function normalizeKey(key: string): string | null {
 }
 
 /** A button that records the next key combo into an Electron accelerator. */
-export function KeyCapture({ value, onChange }: { value: string; onChange: (accel: string) => void }) {
+export function KeyCapture({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (accel: string) => void;
+}) {
   const [capturing, setCapturing] = useState(false);
   const onKeyDown = (e: ReactKeyboardEvent<HTMLButtonElement>): void => {
     e.preventDefault();
@@ -210,7 +216,26 @@ const s: Record<string, CSSProperties> = {
   sliderRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 },
   range: { flex: 1 },
   sliderValue: { width: 56, textAlign: 'right', fontSize: 12, fontVariantNumeric: 'tabular-nums' },
-  input: { flex: 1, background: C.bg, color: C.text, border: `1px solid ${C.borderStrong}`, borderRadius: R.md, padding: '6px 8px', fontSize: 13 },
-  keyBtn: { flex: 1, background: C.bg, color: C.text, border: `1px solid ${C.borderStrong}`, borderRadius: R.md, padding: '5px 8px', fontSize: 12, fontFamily: F.mono, cursor: 'pointer', textAlign: 'left' },
+  input: {
+    flex: 1,
+    background: C.bg,
+    color: C.text,
+    border: `1px solid ${C.borderStrong}`,
+    borderRadius: R.md,
+    padding: '6px 8px',
+    fontSize: 13,
+  },
+  keyBtn: {
+    flex: 1,
+    background: C.bg,
+    color: C.text,
+    border: `1px solid ${C.borderStrong}`,
+    borderRadius: R.md,
+    padding: '5px 8px',
+    fontSize: 12,
+    fontFamily: F.mono,
+    cursor: 'pointer',
+    textAlign: 'left',
+  },
   keyBtnActive: { borderColor: C.accent, color: C.accent },
 };

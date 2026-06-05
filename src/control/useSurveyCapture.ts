@@ -6,17 +6,16 @@
 // Phase S1 shows the latest parse live so coordinate reads can be verified on a
 // real HUD (the human checkpoint). Stability/voting and logging come in S3.
 
-import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
-
-import { hashPixels, matchOre, parsePos, parseScanResult, parseSystemName } from '../core';
+import { useEffect, useRef, useState } from 'react';
 import type { OreCandidate, ScanResult, SignatureTable, Vec3 } from '../core';
-import { preprocess } from './preprocess';
-import type { DrawableSource, NormRegion } from './preprocess';
-import { recognize } from './ocr';
-import { pickReading } from './useCaptureLoop';
-import type { LoopParams } from './useCaptureLoop';
+import { hashPixels, matchOre, parsePos, parseScanResult, parseSystemName } from '../core';
 import type { SurveyRole } from '../shared/bridge';
+import { recognize } from './ocr';
+import type { DrawableSource, NormRegion } from './preprocess';
+import { preprocess } from './preprocess';
+import type { LoopParams } from './useCaptureLoop';
+import { pickReading } from './useCaptureLoop';
 
 /** A region the loop should read this tick. */
 export interface ActiveSurveyRegion {
@@ -118,7 +117,8 @@ interface StableMeta {
 
 /** Format a position vector in km for the debug line (full precision). */
 function fmtKm(p: Vec3): string {
-  const km = (m: number): string => (m / 1000).toLocaleString(undefined, { maximumFractionDigits: 4 });
+  const km = (m: number): string =>
+    (m / 1000).toLocaleString(undefined, { maximumFractionDigits: 4 });
   return `${km(p.x)}, ${km(p.y)}, ${km(p.z)} km`;
 }
 
@@ -140,9 +140,12 @@ export function useSurveyCapture(
   const minConf = minConfidence ?? 0;
   // Restart the loop when the set/role/rect of regions changes.
   const regionsKey = regions
-    .map((r) => `${r.id}:${r.role}:${r.scale ?? ''}:${r.rect.x},${r.rect.y},${r.rect.w},${r.rect.h}`)
+    .map(
+      (r) => `${r.id}:${r.role}:${r.scale ?? ''}:${r.rect.x},${r.rect.y},${r.rect.w},${r.rect.h}`,
+    )
     .join('|');
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `regionsKey` is the stable derived dep standing in for `regions` (restart only when a region's set/role/rect changes).
   useEffect(() => {
     if (!enabled) return;
     cache.current = new Map();
@@ -208,7 +211,19 @@ export function useSurveyCapture(
           } else {
             system = parseSystemName(texts.join(' '));
           }
-          next.set(reg.id, { hash, role: reg.role, dataUrl: pre.dataUrl, rawText, rs, pos, system, scan, score, ms, lineCount });
+          next.set(reg.id, {
+            hash,
+            role: reg.role,
+            dataUrl: pre.dataUrl,
+            rawText,
+            rs,
+            pos,
+            system,
+            scan,
+            score,
+            ms,
+            lineCount,
+          });
           // Track result stability to drive the backoff above.
           const key =
             reg.role === 'rs'
@@ -234,7 +249,13 @@ export function useSurveyCapture(
         for (const reg of current) {
           const c = next.get(reg.id);
           if (!c) {
-            regionsDebug[reg.id] = { role: reg.role, dataUrl: null, rawText: '(not ready)', parsed: '—', ok: false };
+            regionsDebug[reg.id] = {
+              role: reg.role,
+              dataUrl: null,
+              rawText: '(not ready)',
+              parsed: '—',
+              ok: false,
+            };
             continue;
           }
           let parsed = '—';
@@ -265,10 +286,29 @@ export function useSurveyCapture(
             parsed = c.system;
             ok = true;
           }
-          regionsDebug[reg.id] = { role: c.role, dataUrl: c.dataUrl, rawText: c.rawText, parsed, ok, score: c.score, ms: c.ms, lineCount: c.lineCount };
+          regionsDebug[reg.id] = {
+            role: c.role,
+            dataUrl: c.dataUrl,
+            rawText: c.rawText,
+            parsed,
+            ok,
+            score: c.score,
+            ms: c.ms,
+            lineCount: c.lineCount,
+          };
         }
         const candidates = rs != null ? matchOre(rs, table, { method: 'Ship' }) : [];
-        setState({ rs, candidates, pos, posZone, system, scan, regions: regionsDebug, ocr, error: null });
+        setState({
+          rs,
+          candidates,
+          pos,
+          posZone,
+          system,
+          scan,
+          regions: regionsDebug,
+          ocr,
+          error: null,
+        });
       } catch (err) {
         if (!cancelled) {
           setState((s) => ({ ...s, error: err instanceof Error ? err.message : String(err) }));

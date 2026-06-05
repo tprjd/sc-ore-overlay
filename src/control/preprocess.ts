@@ -43,8 +43,7 @@ function intrinsicSize(src: DrawableSource): { width: number; height: number } {
   return { width: src.width, height: src.height };
 }
 
-const clamp = (v: number, min: number, max: number): number =>
-  Math.min(max, Math.max(min, v));
+const clamp = (v: number, min: number, max: number): number => Math.min(max, Math.max(min, v));
 
 /**
  * Produce an upscaled color crop of `region` from `src`. Returns null when the

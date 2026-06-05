@@ -13,6 +13,11 @@
     "predev": "npm run setup:models && node scripts/ensure-electron.mjs",
     "prebuild": "npm run setup:models",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "ci": "biome ci .",
     "test": "vitest run",
     "test:watch": "vitest",
     "crawl": "tsx scripts/crawl-wiki.ts",
@@ -28,6 +33,7 @@
     "sharp": "^0.33.5"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.16",
     "@gutenye/ocr-node": "^1.4.8",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.18",

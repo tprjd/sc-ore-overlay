@@ -43,11 +43,7 @@ export function isPlausibleReading(
  * read) is not expired. Pure so the hold-then-drop timer is unit-testable; the
  * caller owns the wall clock and what counts as "valid".
  */
-export function isExpired(
-  lastValidTs: number | null,
-  now: number,
-  holdMs: number,
-): boolean {
+export function isExpired(lastValidTs: number | null, now: number, holdMs: number): boolean {
   if (holdMs <= 0 || lastValidTs == null) return false;
   return now - lastValidTs > holdMs;
 }
@@ -123,11 +119,7 @@ function leaderOf(window: number[]): { value: number | null; count: number } {
  *   count reaches `quorum`; until then the previous latch is kept (sticky), so
  *   a stray frame neither blocks the initial lock nor flickers it to null.
  */
-export function voteStep(
-  state: VoteState,
-  reading: number | null,
-  opts: VoteOptions,
-): VoteResult {
+export function voteStep(state: VoteState, reading: number | null, opts: VoteOptions): VoteResult {
   const { quorum, windowSize } = resolveWindow(opts);
 
   if (reading == null) {

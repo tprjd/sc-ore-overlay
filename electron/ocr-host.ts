@@ -19,23 +19,14 @@
 // differ. Jobs are serialized (one ORT session can't run concurrently).
 
 import { readFile } from 'node:fs/promises';
-
-import Ocr, {
-  registerBackend,
-  ImageRawBase,
-  FileUtilsBase,
-} from '@gutenye/ocr-common';
+import type { SizeOption } from '@gutenye/ocr-common';
+import Ocr, { FileUtilsBase, ImageRawBase, registerBackend } from '@gutenye/ocr-common';
 import { splitIntoLineImages } from '@gutenye/ocr-common/splitIntoLineImages';
-import type { ImageRawData, SizeOption } from '@gutenye/ocr-common';
 import { InferenceSession } from 'onnxruntime-node';
 import sharp from 'sharp';
 
 /** Node image backend: sharp, decoding a `data:` URL or a file path to RGBA. */
 class ImageRaw extends ImageRawBase {
-  constructor(d: ImageRawData) {
-    super(d);
-  }
-
   static async open(input: string): Promise<ImageRaw> {
     // The renderer sends a PNG `data:` URL (same contract as the Web Worker);
     // a bare path is also accepted so the spike/debug tooling can pass a file.
@@ -44,8 +35,15 @@ class ImageRaw extends ImageRawBase {
       : await readFile(input);
     // 4-channel RGBA to match the browser getImageData backend the library is
     // proven against (its recognition path expects that channel layout).
-    const { data, info } = await sharp(buf).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-    return new ImageRaw({ data: new Uint8ClampedArray(data), width: info.width, height: info.height });
+    const { data, info } = await sharp(buf)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    return new ImageRaw({
+      data: new Uint8ClampedArray(data),
+      width: info.width,
+      height: info.height,
+    });
   }
 
   async resize({ width, height, fit }: SizeOption): Promise<this> {
