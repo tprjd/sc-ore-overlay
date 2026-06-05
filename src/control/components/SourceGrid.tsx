@@ -222,8 +222,10 @@ export function SourceGrid({
                   alt=""
                   className="h-[124px] w-full rounded bg-black object-cover"
                 />
-                <span className="flex min-w-0 items-center gap-1.5 text-[13px] leading-tight">
-                  <span className="inline-flex shrink-0 items-center rounded-sm bg-border px-1.5 py-0.5 text-[10px] uppercase tracking-wide opacity-80">
+                {/* Grid row: badge auto-sized, name column capped at minmax(0,1fr)
+                    so a long title is bounded (and truncates) regardless of length. */}
+                <span className="grid w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-1.5 text-[13px] leading-tight">
+                  <span className="inline-flex items-center rounded-sm bg-border px-1.5 py-0.5 text-[10px] uppercase tracking-wide opacity-80">
                     {src.type}
                   </span>
                   <CardName name={src.name} />
@@ -264,8 +266,10 @@ function CardName({ name }: { name: string }) {
     return () => ro.disconnect();
   }, [name]);
   return (
-    <span ref={wrap} className="sco-marquee min-w-0 flex-1 overflow-hidden" title={name}>
-      <span ref={inner} className="sco-marquee-inner block whitespace-nowrap">
+    // wrap is the fixed clip box (a grid item in the minmax(0,1fr) column); inner
+    // is w-max so it can be wider than the box and is clipped / scrolled on hover.
+    <span ref={wrap} className="sco-marquee block min-w-0 overflow-hidden" title={name}>
+      <span ref={inner} className="sco-marquee-inner block w-max max-w-none whitespace-nowrap">
         {name}
       </span>
     </span>

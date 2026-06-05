@@ -211,9 +211,9 @@ export function SetupWizard({
                 <Check className="h-5 w-5" />
               </span>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <Badge>{source.kind}</Badge>
-                  <span className="truncate font-semibold">{source.label}</span>
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <Badge className="shrink-0">{source.kind}</Badge>
+                  <span className="min-w-0 truncate font-semibold">{source.label}</span>
                 </div>
                 <p className="mt-0.5 text-xs text-muted">Capturing this source.</p>
               </div>
