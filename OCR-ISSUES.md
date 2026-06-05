@@ -29,7 +29,7 @@ interval/quorum settings, so it read as a regression.
 2. **Pipeline unchanged.** `git log` over the suspect window showed the OCR read
    path — `preprocess → recognize → pickReading` (`src/control/preprocess.ts`,
    `src/control/ocr.ts`, `src/control/ocr.worker.ts`, `src/core/parse.ts`,
-   `src/core/matcher.ts`) — was **byte-identical** to v1.2.0. Only UI
+   `src/core/matcher.ts`) — was **byte-identical** to v0.3.0. Only UI
    (`ScanView`, `OverlayCard`) and, later, the fix changed. So the reads weren't
    getting worse; something *runtime* was.
 
