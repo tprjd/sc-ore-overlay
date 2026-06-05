@@ -94,6 +94,18 @@ export interface OverlayPayload {
   status?: OverlayStatus;
 }
 
+/** Result of an app-version check against GitHub Releases (see electron/update.ts). */
+export interface UpdateInfo {
+  /** The running app version (from package.json). */
+  current: string;
+  /** Latest published release tag (e.g. "v1.3.0"), or null if none/unreachable. */
+  latest: string | null;
+  /** Release page to open for a manual download. */
+  url: string;
+  /** True when `latest` is newer than `current`. */
+  available: boolean;
+}
+
 /** Commands raised by global hotkeys in the main process. */
 export type OverlayCommand = 'pause' | 'recalibrate';
 
@@ -246,6 +258,11 @@ export interface AppSettings {
   /** True once the first-run setup wizard has been completed or skipped. */
   setupComplete?: boolean;
   /**
+   * Latest release tag the user dismissed in the update banner. The banner stays
+   * hidden for this version, then reappears when a newer tag ships.
+   */
+  dismissedUpdate?: string;
+  /**
    * OCR execution backend.
    * - 'wasm' (CPU, default): never touches the GPU, so it can't be starved by
    *   the overlay window's compositor. Slowest (~1–2 s/fresh read).
@@ -312,4 +329,8 @@ export interface ScoBridge {
   getSurveyLog(): Promise<SurveyEntry[]>;
   /** Survey Mode: persist the full scan log (append-only, managed in renderer). */
   saveSurveyLog(entries: SurveyEntry[]): void;
+  /** Check GitHub Releases for a newer version (startup + manual). Never throws. */
+  checkForUpdates(): Promise<UpdateInfo>;
+  /** Open an external https URL in the user's browser (e.g. a release page). */
+  openExternal(url: string): void;
 }
