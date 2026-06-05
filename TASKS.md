@@ -5,24 +5,24 @@ matcher wired to UI, transparent overlay + global hotkeys + edit mode, settings/
 persistence, ore-quality detail box). See `CLAUDE.md` for the domain knowledge and matcher spec,
 and git history for how each shipped.
 
-Both v1 human-verification gates passed (2026-06-03) and **v1.0.0 shipped** (ship mining: capture
-→ OCR → match → live overlay, confirmed in-game). The **UI/UX** chapter shipped as **v1.1.0**
+Both v1 human-verification gates passed (2026-06-03) and **v0.1.0 shipped** (ship mining: capture
+→ OCR → match → live overlay, confirmed in-game). The **UI/UX** chapter shipped as **v0.2.0**
 (Survey feature-flag, overlay polish, panel restructure, setup wizard, status bar + live preview;
-commits `U0`–`U4`). **v1.2.0** then dropped the low-value signature echo and added live OCR stats
+commits `U0`–`U4`). **v0.3.0** then dropped the low-value signature echo and added live OCR stats
 (confidence / latency / line count / raw text) to the status footer and, behind a toggle, the
 overlay card (commits `F1`–`F3`).
 
 What's left below: the **remaining UX items** (Part I) and the **deferred/optional** feature work
 (Part II). Read `CLAUDE.md` first — locked stack, guardrails, and matcher spec live there.
 
-Current version: **1.2.0**. Most of the UX chapter has shipped on `main` since v1.2.0 (unreleased) —
+Current version: **0.3.0**. Most of the UX chapter has shipped on `main` since v0.3.0 (unreleased) —
 see the summary under Part I. Part II (other mining methods) is the next minor/major.
 
 ---
 
 # Part I — UX (remaining)
 
-**Shipped since v1.2.0 (unreleased on `main`):** tab restructure to "4 tabs + Results pane"
+**Shipped since v0.3.0 (unreleased on `main`):** tab restructure to "4 tabs + Results pane"
 (Capture · Match · Overlay · Hotkeys; live output pulled into an always-visible Results pane,
 T1–T3); preview parity for the detail + scan boxes (`DetailCard` / `ScanCard` extracted, T4);
 per-region calibration verdict (A1); header health pill (A3); overlay presets + reset (C1/C2);
