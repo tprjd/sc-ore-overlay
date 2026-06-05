@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="rockGrad" x1="170" y1="150" x2="340" y2="350" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5D7086"/>
+      <stop offset="1" stop-color="#182636"/>
+    </linearGradient>
+    <linearGradient id="facetLight" x1="215" y1="165" x2="275" y2="250" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#70839A"/>
+      <stop offset="1" stop-color="#42566D"/>
+    </linearGradient>
+    <linearGradient id="oreGrad" x1="295" y1="170" x2="348" y2="244" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD15A"/>
+      <stop offset="1" stop-color="#F59E0B"/>
+    </linearGradient>
+    <style>
+      .hud { stroke: #1FD0D8; stroke-width: 16; stroke-linecap: round; }
+      .tick { stroke: #1FD0D8; stroke-width: 18; stroke-linecap: round; }
+    </style>
+  </defs>
+
+  <!-- HUD reticle -->
+  <path class="hud" d="M124 220 A132 132 0 0 1 220 124"/>
+  <path class="hud" d="M292 124 A132 132 0 0 1 388 220"/>
+  <path class="hud" d="M388 292 A132 132 0 0 1 292 388"/>
+  <path class="hud" d="M220 388 A132 132 0 0 1 124 292"/>
+
+  <line class="tick" x1="256" y1="88" x2="256" y2="124"/>
+  <line class="tick" x1="256" y1="388" x2="256" y2="424"/>
+  <line class="tick" x1="88" y1="256" x2="124" y2="256"/>
+  <line class="tick" x1="388" y1="256" x2="424" y2="256"/>
+
+  <!-- Rock shifted slightly left to center it -->
+  <g transform="translate(-14 0)">
+    <!-- Rock body -->
+    <path d="M183 186L240 154L319 172L368 228L363 306L312 352L233 352L180 311L171 240L183 186Z" fill="url(#rockGrad)"/>
+
+    <!-- Rock facets -->
+    <path d="M183 186L240 154L230 221L171 240L183 186Z" fill="#50657D"/>
+    <path d="M230 221L240 154L319 172L296 225L230 221Z" fill="#3D5168"/>
+    <path d="M171 240L230 221L233 352L180 311L171 240Z" fill="#243749"/>
+    <path d="M230 221L296 225L312 352L233 352L230 221Z" fill="#1B2B3B"/>
+    <path d="M296 225L368 228L363 306L312 352L296 225Z" fill="#112131"/>
+    <path d="M196 208L240 182L264 239L214 275L182 248L196 208Z" fill="url(#facetLight)" opacity="0.95"/>
+
+    <!-- Ore inclusions -->
+    <path d="M289 178L320 190L302 244L278 232L289 178Z" fill="url(#oreGrad)"/>
+    <path d="M256 270L282 253L304 309L273 291L256 270Z" fill="url(#oreGrad)"/>
+    <path d="M328 258L344 272L338 298L322 288L328 258Z" fill="url(#oreGrad)"/>
+    <path d="M194 288L213 300L210 323L191 311L194 288Z" fill="url(#oreGrad)"/>
+  </g>
+</svg>

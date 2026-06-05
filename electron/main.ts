@@ -9,6 +9,7 @@ import { app, BrowserWindow, desktopCapturer, globalShortcut, ipcMain, utilityPr
 import type { IpcMainEvent, IpcMainInvokeEvent, UtilityProcess } from 'electron';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { installCrashHandlers, log } from './log';
 import { DEFAULT_HOTKEYS } from '../src/shared/bridge';
 import type {
   AppSettings,
@@ -26,6 +27,10 @@ const dirname = __dirname;
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 const RENDERER_DIST = path.join(dirname, '..', 'dist');
 const PRELOAD = path.join(dirname, 'preload.js');
+
+// Capture crashes/throws to <userData>/logs/main.log before anything else can
+// fail silently (see electron/log.ts).
+installCrashHandlers();
 
 // WSL2 / headless Linux GPU init often fails and leaves a blank window. On the
 // real target (Windows) keep hardware acceleration ON so the OCR worker can use
@@ -145,17 +150,21 @@ function startOcrHost(): Promise<boolean> {
   ocrReady = new Promise<boolean>((resolve) => {
     let host: UtilityProcess;
     try {
+      // Pipe (not inherit) so the host's stdout/stderr land in main.log too —
+      // packaged builds have no terminal, and OCR is the most failure-prone path.
       host = utilityProcess.fork(path.join(dirname, 'ocr-host.js'), [], {
         serviceName: 'sco-ocr-host',
-        stdio: 'inherit',
+        stdio: 'pipe',
       });
     } catch (err) {
-      console.error('[ocr] failed to fork host:', err);
+      log.error('[ocr] failed to fork host:', err);
       ocrReady = null;
       resolve(false);
       return;
     }
     ocrHost = host;
+    host.stdout?.on('data', (d: Buffer) => log.info('[ocr-host]', d.toString().trimEnd()));
+    host.stderr?.on('data', (d: Buffer) => log.warn('[ocr-host]', d.toString().trimEnd()));
     const dir = ocrModelDir();
     host.on('spawn', () => {
       host.postMessage({
@@ -171,7 +180,7 @@ function startOcrHost(): Promise<boolean> {
       if (msg.type === 'ready') {
         resolve(true);
       } else if (msg.type === 'init-error') {
-        console.error('[ocr] host init error:', msg.error);
+        log.error('[ocr] host init error:', msg.error);
         resolve(false);
       } else if (msg.type === 'result' && typeof msg.id === 'number') {
         const p = ocrPending.get(msg.id);
@@ -182,7 +191,7 @@ function startOcrHost(): Promise<boolean> {
       }
     });
     host.on('exit', (code) => {
-      console.warn('[ocr] host exited:', code);
+      log.warn('[ocr] host exited:', code);
       ocrHost = null;
       ocrReady = null; // allow a re-spawn on the next probe
       for (const p of ocrPending.values()) p.reject(new Error('OCR host exited'));
@@ -468,6 +477,7 @@ ipcMain.handle(
 );
 
 void app.whenReady().then(() => {
+  log.info(`SC Ore Overlay v${app.getVersion()} starting (electron ${process.versions.electron})`);
   controlWin = createControlWindow();
   ownerWin = createOwnerWindow();
   overlayWin = createOverlayWindow();
@@ -487,6 +497,7 @@ void app.whenReady().then(() => {
 });
 
 app.on('will-quit', () => {
+  log.info('app quitting');
   globalShortcut.unregisterAll();
   ocrHost?.kill();
 });

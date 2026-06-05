@@ -15,6 +15,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "crawl": "tsx scripts/crawl-wiki.ts",
+    "icon": "node scripts/make-icon.mjs",
     "dist": "npm run build && electron-builder"
   },
   "dependencies": {
@@ -58,7 +59,12 @@
       }
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
     }
   },
   "engines": {
