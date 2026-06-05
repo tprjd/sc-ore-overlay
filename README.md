@@ -108,3 +108,12 @@ source auto-reconnects if it's still available.
 
 Read-only by design: screen capture + public-data lookup only. The app never
 reads game memory, injects into the game, hooks input, or automates gameplay.
+
+## License
+
+[MIT](LICENSE). Use, modify, and redistribute freely; keep the copyright notice.
+
+This license covers the app's own source only. Star Citizen and its assets are
+trademarks of Cloud Imperium Games — this is an unofficial, fan-made tool, not
+affiliated with or endorsed by CIG. Signature data is derived at build time from
+the [Star Citizen Wiki](https://starcitizen.tools) and remains under its own terms.
