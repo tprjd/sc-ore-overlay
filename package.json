@@ -50,6 +50,9 @@
   "build": {
     "appId": "com.scoreoverlay.app",
     "productName": "SC Ore Overlay",
+    "directories": {
+      "output": "release"
+    },
     "files": [
       "dist/**/*",
       "dist-electron/**/*"
