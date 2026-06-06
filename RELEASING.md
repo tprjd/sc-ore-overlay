@@ -19,8 +19,9 @@ What exists:
 - electron-builder config lives in `package.json > build`: Windows `nsis` target, icon,
   and `extraResources` (bundled OCR `models/` + `icon.png`).
 - **Release CI** (`release.yml`): on push of a `v*` tag (or manual `workflow_dispatch`),
-  `npm ci → npm run dist`, uploads the installer as a build artifact, and on a tag attaches the
-  `.exe` to the GitHub Release (pre-release for tags with a hyphen, e.g. `v1.0.0-rc.1`).
+  `npm ci → npm run build → electron-builder --publish never`, uploads the installer as a build
+  artifact, and on a tag attaches the `.exe` to the GitHub Release (pre-release for tags with a
+  hyphen, e.g. `v1.0.0-rc.1`). The `--publish never` is required (see gotcha below).
 - `electron/update.ts` polls `https://api.github.com/repos/tprjd/sc-ore-overlay/releases/latest`
   on startup and shows an in-app "new version" banner. So releases are **expected to live on
   GitHub Releases** with version tags — the in-app updater already depends on that.
@@ -53,8 +54,16 @@ To build without tagging (smoke test), trigger `release.yml` manually via **work
 it uploads the installer as a build artifact and skips the Release attach step.
 
 `softprops/action-gh-release` uses the default `GITHUB_TOKEN` (job has `contents: write`); no PAT
-needed. electron-builder runs with no `--publish` flag, so it never uploads on its own — the
-artifact upload + Release attach are explicit workflow steps.
+needed. The artifact upload + Release attach are explicit workflow steps — electron-builder itself
+does **not** publish, because the build step runs it with `--publish never`.
+
+> **Gotcha (why `--publish never`):** on a CI tag build, electron-builder auto-detects the tag
+> (`reason=tag is defined`) and tries to publish to GitHub *itself*, then dies with
+> `⨯ GitHub Personal Access Token is not set, neither programmatically, nor using env "GH_TOKEN"`
+> — even though the `.exe` already built fine. The earlier "no `--publish` flag → never uploads"
+> assumption was wrong; `--publish never` is what actually disables it. Do **not** remove it (or
+> add `GH_TOKEN` to let electron-builder publish) unless you also drop the `softprops` attach step,
+> or you'll get duplicate/competing uploads.
 
 Still unsigned until a code-signing cert / Trusted Signing budget exists. Once signing lands,
 revisit full `electron-updater` auto-download/install (NOTES.md → deferred product decisions).
