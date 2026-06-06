@@ -41,11 +41,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # vite build && electron-builder. `prebuild` copies the PP-OCR models into
-      # public/models so extraResources can bundle them. No --publish flag, so
-      # electron-builder builds but uploads nothing (output → release/).
+      # vite build, then electron-builder with `--publish never`. `prebuild` copies
+      # the PP-OCR models into public/models so extraResources can bundle them.
+      # `--publish never` is required: on a CI tag build electron-builder otherwise
+      # auto-publishes to GitHub and fails without GH_TOKEN. We build only here; the
+      # explicit "Attach to GitHub Release" step below does the upload.
       - name: Build installer
-        run: npm run dist
+        run: |
+          npm run build
+          npx electron-builder --publish never
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
