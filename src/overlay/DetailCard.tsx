@@ -1,6 +1,6 @@
 // Presentational ore-detail card — pure, no IPC/window logic. Shared by the
 // Detail overlay window (Detail.tsx) and the control window's live preview
-// (ScanView Overlay tab), so the preview can't drift from what ships.
+// (Prospect Overlay tab), so the preview can't drift from what ships.
 //
 // Renders the top candidate's quality breakdown: possible qualities + the
 // spread (mean ± std-dev) + composition, scoped to the selected location.

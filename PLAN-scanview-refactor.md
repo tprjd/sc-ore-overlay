@@ -1,6 +1,14 @@
 # Plan — ScanView Refactor (→ Prospect feature + Zustand)
 
-Status: proposed (v2) · Branch: `release/1.0.0-rc.1` · Author: David + Claude
+Status: **implemented 2026-06-06** · Branch: `release/1.0.0-rc.1` · Author: David + Claude
+
+> **Done.** `ScanView` (1080) → `src/control/prospect/`: `ProspectView` (orchestrator),
+> `ProspectResults` / `ProspectSettings` / `ProspectStatusBar` (presentational), a Zustand
+> `store` (runtime pipeline), `useSourceLost` hook, and pure `rsReading` (`nextReadingState`,
+> `tickRateOf`) + `status` (`deriveOverlayStatus`, `deriveHealth`, `STATUS_META`) modules.
+> 26 new unit tests (148 total). Behavior/markup unchanged. typecheck + `biome ci` + build green.
+> Settings stayed App-owned props as planned; the live preview reads runtime values from the
+> store. SurveyView refactor remains a follow-up.
 
 ## Goal
 

@@ -1,6 +1,6 @@
 // The overlay's presentational card — pure, no IPC/window logic. Shared by the
 // real transparent overlay window (Overlay.tsx) and the live preview in the
-// control window (ScanView), so the preview can't drift from what ships.
+// control window (Prospect tab), so the preview can't drift from what ships.
 //
 // Renders the matched ore(s): the top candidate is emphasized (confidence dot);
 // overlap candidates are demoted below a divider. A pulsing dot in the

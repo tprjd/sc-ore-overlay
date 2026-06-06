@@ -15,7 +15,6 @@ import type {
 } from '../shared/bridge';
 import { DEFAULT_HOTKEYS, DEFAULT_OVERLAY_CONFIG } from '../shared/bridge';
 import { newRegionId } from './components/roles';
-import { ScanView } from './components/ScanView';
 import type { SetupResult } from './components/SetupWizard';
 import { SetupWizard } from './components/SetupWizard';
 import type { PickedSource } from './components/SourcePicker';
@@ -23,6 +22,7 @@ import { SourcePicker } from './components/SourcePicker';
 import { SurveyView } from './components/SurveyView';
 import type { OcrBackend } from './ocr';
 import { getEffectiveBackend, setOcrBackend } from './ocr';
+import { ProspectView } from './prospect/ProspectView';
 import { Button } from './ui';
 import { cn } from './ui/cn';
 import type { LoopParams } from './useCaptureLoop';
@@ -365,7 +365,7 @@ export function App() {
       )}
       <div className="min-h-0 flex-1">
         {activeTab === 'mining' ? (
-          <ScanView
+          <ProspectView
             source={source}
             regions={miningRegions}
             onRegionsChange={setMiningRegions}

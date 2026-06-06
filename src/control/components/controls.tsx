@@ -1,4 +1,4 @@
-// Reusable control-window widgets, extracted from ScanView so the panel and any
+// Reusable control-window widgets, extracted from the prospect panel so it and any
 // future settings UI share one set of field/section widgets. Pure presentation +
 // small local state; no app logic. Styled with Tailwind (control design system).
 
