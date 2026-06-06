@@ -3,7 +3,7 @@
 // the debug-overlay coordinate read working and verified; logging + the map come
 // in S2/S3. Reuses the shared CapturePreview and the existing OCR pipeline.
 
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AxisPlane, SignatureTable, SurveyEntry, Vec3 } from '../../core';
 import { isStablePos, makeEntry, mergeEntries } from '../../core';
@@ -12,6 +12,8 @@ import type { DrawableSource, NormRegion } from '../preprocess';
 import type { SimScan } from '../scanImage';
 import { scanImage } from '../scanImage';
 import { DEBUG_SHIP, debugEntries } from '../survey-debug';
+import { Button } from '../ui';
+import { cn } from '../ui/cn';
 import type { LoopParams } from '../useCaptureLoop';
 import type { ActiveSurveyRegion } from '../useSurveyCapture';
 import { useSurveyCapture } from '../useSurveyCapture';
@@ -54,6 +56,10 @@ function download(name: string, mime: string, text: string): void {
 
 /** Quote a CSV field. */
 const csv = (s: string): string => `"${String(s).replace(/"/g, '""')}"`;
+
+const INPUT =
+  'rounded-md border border-border-strong bg-bg px-2 py-1 text-[13px] text-fg outline-none focus:border-accent/60';
+const SELECT = `flex-1 ${INPUT} px-1.5`;
 
 export function SurveyView({
   source,
@@ -198,8 +204,8 @@ export function SurveyView({
     setSimBusy(true);
     const results: SimScan[] = [];
     for (const file of Array.from(files)) {
-      const scout = file.name.replace(/\.[^.]+$/, '') || 'Scout';
-      results.push(await scanImage(file, active, table, scout, params.scale));
+      const scoutName = file.name.replace(/\.[^.]+$/, '') || 'Scout';
+      results.push(await scanImage(file, active, table, scoutName, params.scale));
     }
     // One state update for the whole batch → one re-render / map redraw.
     setSimScans((prev) => [...prev, ...results]);
@@ -219,38 +225,42 @@ export function SurveyView({
   };
 
   return (
-    <div style={S.page}>
-      <header style={S.header}>
-        <button style={S.btn} onClick={onBack}>
+    <div className="flex h-full flex-col">
+      <header className="flex items-center gap-2.5 border-b border-border px-3.5 py-2.5">
+        <Button variant="secondary" size="sm" onClick={onBack}>
           ← Sources
-        </button>
-        <span style={S.srcLabel}>
-          <span style={S.badge}>{source.kind}</span>
+        </Button>
+        <span className="flex items-center gap-1.5 text-[13px] text-fg/90">
+          <span className="inline-flex items-center rounded-sm bg-border px-1.5 py-0.5 text-[10px] uppercase tracking-wide opacity-80">
+            {source.kind}
+          </span>
           {source.label}
         </span>
-        <span style={S.spacer} />
-        <span style={S.dim}>Survey · scout &amp; map (S1: coordinate read)</span>
+        <span className="flex-1" />
+        <span className="text-xs text-muted">Survey · scout &amp; map (S1: coordinate read)</span>
       </header>
 
-      <div style={S.body}>
-        <div style={S.leftCol}>
-          <div style={S.segmented}>
-            <button
-              style={{ ...S.segBtn, ...(leftMode === 'preview' ? S.segBtnActive : null) }}
-              onClick={() => setLeftMode('preview')}
-            >
-              Preview
-            </button>
-            <button
-              style={{ ...S.segBtn, ...(leftMode === 'map' ? S.segBtnActive : null) }}
-              onClick={() => setLeftMode('map')}
-            >
-              Map
-            </button>
+      <div className="flex min-h-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex gap-1 px-3.5 pt-2.5">
+            {(['preview', 'map'] as const).map((m) => (
+              <button
+                key={m}
+                className={cn(
+                  'rounded-md border px-3.5 py-1 text-xs capitalize transition-colors',
+                  leftMode === m
+                    ? 'border-accent bg-surface text-fg'
+                    : 'border-border-strong text-muted hover:text-fg',
+                )}
+                onClick={() => setLeftMode(m)}
+              >
+                {m}
+              </button>
+            ))}
           </div>
           {/* CapturePreview stays mounted in both views so the capture <video>
               keeps feeding the live OCR loop; the Map is drawn over it. */}
-          <div style={S.leftBody}>
+          <div className="relative flex min-h-0 flex-1">
             <CapturePreview
               source={source}
               mediaRef={mediaRef}
@@ -263,7 +273,7 @@ export function SurveyView({
               }
             />
             {leftMode === 'map' && (
-              <div style={S.mapOverlay}>
+              <div className="absolute inset-0 bg-surface-alt p-2 px-3.5 pb-3.5">
                 <SurveyMap ship={mapShip} entries={mapEntries} plane={plane} />
               </div>
             )}
@@ -272,138 +282,174 @@ export function SurveyView({
 
         <ScanResults entries={resultsEntries} onRemove={removeResult} />
 
-        <div style={S.panel}>
+        <div className="w-[380px] overflow-y-auto border-l border-border p-3.5">
           <Card title="Live readout">
-            <div style={S.kv}>
-              <span style={S.k}>System</span>
-              <span style={S.v}>{readout.system ?? '—'}</span>
-            </div>
-            <div style={S.coordBlock}>
-              <div style={S.coordTitle}>
+            <KV k="System" v={readout.system ?? '—'} />
+            <div className="my-2 rounded-md border border-border bg-bg px-2.5 py-2">
+              <div className="mb-1.5 text-[11px] text-muted">
                 Ship position{' '}
-                {readout.posZone ? <span style={S.dim}>· {readout.posZone}</span> : null}
+                {readout.posZone ? <span className="text-muted">· {readout.posZone}</span> : null}
               </div>
               {readout.pos ? (
-                <div style={S.coordGrid}>
-                  <span style={S.axis}>X</span>
-                  <span style={S.coord}>{km(readout.pos.x)} km</span>
-                  <span style={S.axis}>Y</span>
-                  <span style={S.coord}>{km(readout.pos.y)} km</span>
-                  <span style={S.axis}>Z</span>
-                  <span style={S.coord}>{km(readout.pos.z)} km</span>
+                <div className="grid grid-cols-[auto_1fr] items-baseline gap-x-2 gap-y-0.5">
+                  <span className="text-[11px] text-fg/50">X</span>
+                  <Coord>{km(readout.pos.x)} km</Coord>
+                  <span className="text-[11px] text-fg/50">Y</span>
+                  <Coord>{km(readout.pos.y)} km</Coord>
+                  <span className="text-[11px] text-fg/50">Z</span>
+                  <Coord>{km(readout.pos.z)} km</Coord>
                 </div>
               ) : (
-                <div style={S.dim}>no coordinates yet</div>
+                <div className="text-xs text-muted">no coordinates yet</div>
               )}
             </div>
             {readout.scan && (
-              <div style={S.scanBlock}>
-                <div style={S.scanOre}>
+              <div className="my-2 rounded-md border border-scan-border bg-scan-bg px-2.5 py-2">
+                <div className="text-base font-bold text-magenta">
                   {readout.scan.ore}
-                  {readout.scan.scu != null && <span style={S.dim}> · {readout.scan.scu} SCU</span>}
+                  {readout.scan.scu != null && (
+                    <span className="text-xs text-muted"> · {readout.scan.scu} SCU</span>
+                  )}
                 </div>
-                <div style={S.scanMeta}>
+                <div className="tnum mx-0 my-1.5 flex flex-wrap gap-2.5 text-[11px] text-fg/70">
                   {readout.scan.mass != null && (
                     <span>mass {readout.scan.mass.toLocaleString()}</span>
                   )}
                   {readout.scan.resistance != null && <span>res {readout.scan.resistance}%</span>}
                   {readout.scan.instability != null && <span>inst {readout.scan.instability}</span>}
                 </div>
-                <div style={S.compHead}>
-                  <span style={S.compPct}>%</span>
-                  <span style={S.compMat}>content</span>
-                  <span style={S.compVal}>qual</span>
-                  <span style={S.compScu}>SCU</span>
+                <div className="mb-0.5 flex items-baseline gap-2 text-[9px] uppercase tracking-wide text-fg/40">
+                  <span className="w-11 text-right">%</span>
+                  <span className="min-w-0 flex-1">content</span>
+                  <span className="w-10 text-right">qual</span>
+                  <span className="w-12 text-right">SCU</span>
                 </div>
                 {readout.scan.composition.map((c, i) => (
-                  <div key={i} style={S.compRow}>
-                    <span style={S.compPct}>{c.percent}%</span>
-                    <span style={S.compMat}>{c.material}</span>
-                    <span style={S.compVal}>{c.quality}</span>
-                    <span style={S.compScu}>{c.scu != null ? c.scu.toFixed(2) : '—'}</span>
+                  <div key={i} className="flex items-baseline gap-2 py-px text-xs">
+                    <span className="tnum w-11 text-right text-magenta">{c.percent}%</span>
+                    <span className="min-w-0 flex-1 truncate">{c.material}</span>
+                    <span className="tnum w-10 text-right text-fg/70">{c.quality}</span>
+                    <span className="tnum w-12 text-right text-green">
+                      {c.scu != null ? c.scu.toFixed(2) : '—'}
+                    </span>
                   </div>
                 ))}
               </div>
             )}
-            <div style={S.kv}>
-              <span style={S.k}>RS</span>
-              <span style={S.v}>{readout.rs ?? '—'}</span>
-            </div>
+            <KV k="RS" v={readout.rs ?? '—'} />
             {readout.candidates.length > 0 && (
-              <ul style={S.candList}>
+              <ul className="m-0 mt-2 flex list-none flex-col gap-1.5 p-0">
                 {readout.candidates.map((c) => (
-                  <li key={c.name} style={S.candRow}>
-                    <span style={S.candName}>{c.name}</span>
-                    <span style={S.candNodes}>×{c.nodes}</span>
-                    <span style={S.candScore}>{Math.round(c.score * 100)}%</span>
+                  <li
+                    key={c.name}
+                    className="flex items-baseline gap-2 rounded-md border border-border bg-bg px-2 py-1.5"
+                  >
+                    <span className="flex-1 text-sm font-semibold">{c.name}</span>
+                    <span className="tnum text-sm text-accent">×{c.nodes}</span>
+                    <span className="w-10 text-right text-[11px] text-fg/50">
+                      {Math.round(c.score * 100)}%
+                    </span>
                   </li>
                 ))}
               </ul>
             )}
-            {readout.error && <div style={S.error}>{readout.error}</div>}
+            {readout.error && (
+              <div className="mt-2 rounded-md border border-danger/40 bg-danger/10 px-2.5 py-1.5 text-xs text-danger">
+                {readout.error}
+              </div>
+            )}
             <button
-              style={{ ...S.logBtn, ...(canLog ? null : S.logBtnOff) }}
+              className={cn(
+                'mt-2.5 w-full rounded-md border px-2.5 py-2 text-sm font-semibold transition-colors',
+                canLog
+                  ? 'border-[#2e9a68] bg-[#1f6f4a] text-[#eafff3] hover:bg-[#23805a]'
+                  : 'cursor-not-allowed border-border bg-[#23272e] text-[#6b7480]',
+              )}
               disabled={!canLog}
               onClick={logScan}
             >
               + Log scan
             </button>
-            {!canLog && <p style={S.dim}>Need a ship position to log (box a Ship Pos region).</p>}
-            {logWarn && <p style={{ ...S.dim, color: '#fbbf24', opacity: 1 }}>{logWarn}</p>}
+            {!canLog && (
+              <p className="mt-1 text-xs text-muted">
+                Need a ship position to log (box a Ship Pos region).
+              </p>
+            )}
+            {logWarn && <p className="mt-1 text-xs text-amber">{logWarn}</p>}
           </Card>
 
           <Card title="Log">
-            <label style={S.kv}>
-              <span style={S.k}>Scout</span>
+            <label className="flex items-center justify-between gap-2 py-0.5">
+              <span className="text-[13px] text-muted">Scout</span>
               <input
-                style={S.input}
+                className={`flex-1 ${INPUT}`}
                 value={scout}
                 placeholder="your callsign"
                 onChange={(e) => onScoutChange(e.target.value)}
               />
             </label>
-            <div style={{ ...S.kv, marginTop: 6 }}>
-              <span style={S.k}>{log.length} logged</span>
-              <span style={S.logActions}>
-                <button style={S.miniBtn} disabled={!log.length} onClick={() => exportLog('json')}>
+            <div className="mt-1.5 flex items-center justify-between gap-2 py-0.5">
+              <span className="text-[13px] text-muted">{log.length} logged</span>
+              <span className="flex gap-1">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={!log.length}
+                  onClick={() => exportLog('json')}
+                >
                   JSON
-                </button>
-                <button style={S.miniBtn} disabled={!log.length} onClick={() => exportLog('csv')}>
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={!log.length}
+                  onClick={() => exportLog('csv')}
+                >
                   CSV
-                </button>
-                <label style={S.miniBtn}>
-                  Import
-                  <input
-                    type="file"
-                    accept="application/json"
-                    style={{ display: 'none' }}
-                    onChange={(e) => {
-                      void importLog(e.target.files);
-                      e.target.value = '';
-                    }}
-                  />
-                </label>
-                <button style={S.miniBtn} disabled={!log.length} onClick={() => setLog([])}>
+                </Button>
+                <Button variant="secondary" size="sm" asChild>
+                  <label className="cursor-pointer">
+                    Import
+                    <input
+                      type="file"
+                      accept="application/json"
+                      className="hidden"
+                      onChange={(e) => {
+                        void importLog(e.target.files);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={!log.length}
+                  onClick={() => setLog([])}
+                >
                   Clear
-                </button>
+                </Button>
               </span>
             </div>
-            <p style={S.dim}>Entries appear in the Scan results column (right).</p>
+            <p className="mt-1 text-xs text-muted">
+              Entries appear in the Scan results column (right).
+            </p>
           </Card>
 
           <Card title="Map">
-            <label style={S.checkRow}>
+            <label className="flex items-center gap-2 text-[13px]">
               <input
                 type="checkbox"
+                className="accent-accent"
                 checked={debugMode}
                 onChange={(e) => setDebugMode(e.target.checked)}
               />
               Debug values (synthetic field)
             </label>
-            <div style={{ ...S.kv, marginTop: 8 }}>
-              <span style={S.k}>Plane</span>
+            <div className="mt-2 flex items-center justify-between gap-2 py-0.5">
+              <span className="text-[13px] text-muted">Plane</span>
               <select
-                style={S.select}
+                className={SELECT}
                 value={plane}
                 onChange={(e) => setPlane(e.target.value as AxisPlane)}
               >
@@ -412,18 +458,15 @@ export function SurveyView({
                 <option value="yz">Y / Z (X depth)</option>
               </select>
             </div>
-            <div style={{ ...S.kv, marginTop: 4 }}>
-              <span style={S.k}>Points</span>
-              <span style={S.v}>{mapEntries.length}</span>
-            </div>
-            <p style={S.dim}>
+            <KV k="Points" v={mapEntries.length} className="mt-1" />
+            <p className="mt-1 text-xs text-muted">
               Open the <b>Map</b> view on the left. Ship is centered; hover a point for details.
               {debugMode ? '' : ' Real logging arrives in S3 — use Debug values to preview.'}
             </p>
           </Card>
 
           <Card title="Simulated scans">
-            <p style={S.dim}>
+            <p className="text-xs text-muted">
               Upload screenshots (debug overlay visible, same HUD layout as your regions). Each is
               OCR&apos;d through the regions and added as a peer scan — a stand-in for networked
               scouts.
@@ -432,48 +475,64 @@ export function SurveyView({
               type="file"
               accept="image/*"
               multiple
-              style={S.file}
+              className="mt-2 w-full text-xs text-muted"
               disabled={simBusy}
               onChange={(e) => {
                 void onSimFiles(e.target.files);
                 e.target.value = '';
               }}
             />
-            <div style={{ ...S.kv, marginTop: 8 }}>
-              <span style={S.k}>
+            <div className="mt-2 flex items-center justify-between gap-2 py-0.5">
+              <span className="text-[13px] text-muted">
                 {simBusy ? 'scanning…' : `${simEntries.length}/${simScans.length} placed`}
               </span>
-              <button style={S.delBtn} disabled={!simScans.length} onClick={() => setSimScans([])}>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={!simScans.length}
+                onClick={() => setSimScans([])}
+              >
                 Clear
-              </button>
+              </Button>
             </div>
             {active.every((r) => r.role !== 'shipPos') && (
-              <p style={S.dim}>Add a “Ship Pos” region first, or scans can’t be placed.</p>
+              <p className="mt-1 text-xs text-muted">
+                Add a “Ship Pos” region first, or scans can’t be placed.
+              </p>
             )}
             {simScans.length > 0 && (
-              <div style={S.simList}>
+              <div className="mt-2.5 flex flex-col gap-2">
                 {simScans.map((s, i) => (
-                  <div key={i} style={S.simCard}>
-                    <div style={S.simHead}>
-                      <span style={S.simName}>{s.name}</span>
-                      <span style={{ fontSize: 11, color: s.entry ? '#6ee7b7' : '#ffb4bd' }}>
+                  <div key={i} className="rounded-md border border-border bg-bg p-2">
+                    <div className="mb-1.5 flex items-baseline justify-between">
+                      <span className="break-all text-[13px] font-semibold">{s.name}</span>
+                      <span className={cn('text-[11px]', s.entry ? 'text-green' : 'text-danger')}>
                         {s.entry ? 'placed' : (s.error ?? 'failed')}
                       </span>
                     </div>
                     {s.regions.map((r, j) => (
-                      <div key={j} style={S.regionBody}>
-                        <div style={S.cropWrap}>
+                      <div key={j} className="mt-2 flex items-start gap-2">
+                        <div className="flex min-h-9 min-w-24 items-center justify-center rounded-sm border border-border bg-black p-0.5">
                           {r.dataUrl ? (
-                            <img src={r.dataUrl} alt="crop" style={S.crop} />
+                            <img
+                              src={r.dataUrl}
+                              alt="crop"
+                              className="max-h-[60px] max-w-[140px] [image-rendering:pixelated]"
+                            />
                           ) : (
-                            <span style={S.dim}>—</span>
+                            <span className="text-xs text-muted">—</span>
                           )}
                         </div>
-                        <div style={S.regionMeta}>
-                          <div style={{ ...S.parsed, color: r.ok ? '#6ee7b7' : '#9fb3c8' }}>
+                        <div className="min-w-0 flex-1">
+                          <div
+                            className={cn(
+                              'break-all font-mono text-[13px]',
+                              r.ok ? 'text-green' : 'text-muted',
+                            )}
+                          >
                             {ROLE_META[r.role].label}: {r.parsed}
                           </div>
-                          <div style={S.raw}>{r.rawText}</div>
+                          <div className="mt-0.5 break-all text-[11px] text-fg/50">{r.rawText}</div>
                         </div>
                       </div>
                     ))}
@@ -508,319 +567,22 @@ export function SurveyView({
 
 function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section style={S.card}>
-      <h2 style={S.cardTitle}>{title}</h2>
+    <section className="mb-3.5 rounded-lg border border-border bg-surface p-3">
+      <h2 className="m-0 mb-2.5 text-xs uppercase tracking-wide text-fg/60">{title}</h2>
       {children}
     </section>
   );
 }
 
-const S: Record<string, CSSProperties> = {
-  page: {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100%',
-    color: '#e6e6e6',
-    boxSizing: 'border-box',
-  },
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    padding: '10px 14px',
-    borderBottom: '1px solid #2c323d',
-  },
-  srcLabel: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, opacity: 0.9 },
-  spacer: { flex: 1 },
-  body: { display: 'flex', flex: 1, minHeight: 0 },
-  leftCol: { flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 },
-  segmented: { display: 'flex', gap: 4, padding: '10px 14px 0' },
-  segBtn: {
-    background: 'none',
-    color: '#9fb3c8',
-    border: '1px solid #3a4150',
-    borderRadius: 6,
-    padding: '4px 14px',
-    cursor: 'pointer',
-    fontSize: 12,
-  },
-  segBtnActive: { background: '#1d2128', color: '#e6e6e6', borderColor: '#4fd1ff' },
-  leftBody: { position: 'relative', flex: 1, minHeight: 0, display: 'flex' },
-  mapOverlay: {
-    position: 'absolute',
-    inset: 0,
-    padding: '8px 14px 14px',
-    boxSizing: 'border-box',
-    background: '#16181d',
-  },
-  checkRow: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 },
-  file: { width: '100%', fontSize: 12, color: '#9fb3c8' },
-  logBtn: {
-    width: '100%',
-    marginTop: 10,
-    background: '#1f6f4a',
-    color: '#eafff3',
-    border: '1px solid #2e9a68',
-    borderRadius: 6,
-    padding: '8px 10px',
-    cursor: 'pointer',
-    fontSize: 14,
-    fontWeight: 600,
-  },
-  logBtnOff: {
-    background: '#23272e',
-    color: '#6b7480',
-    border: '1px solid #2c323d',
-    cursor: 'not-allowed',
-  },
-  input: {
-    flex: 1,
-    background: '#0d0f12',
-    color: '#e6e6e6',
-    border: '1px solid #3a4150',
-    borderRadius: 6,
-    padding: '5px 8px',
-    fontSize: 13,
-  },
-  logActions: { display: 'flex', gap: 4 },
-  miniBtn: {
-    background: '#2a2f3a',
-    color: '#e6e6e6',
-    border: '1px solid #3a4150',
-    borderRadius: 6,
-    padding: '3px 8px',
-    cursor: 'pointer',
-    fontSize: 11,
-  },
-  logList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 4,
-    marginTop: 8,
-    maxHeight: 240,
-    overflowY: 'auto',
-  },
-  logRow: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '3px 0' },
-  logOre: {
-    flex: 1,
-    minWidth: 0,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-  logNodes: { color: '#4fd1ff' },
-  logRs: { fontFamily: 'ui-monospace, monospace', opacity: 0.7, width: 56, textAlign: 'right' },
-  logScout: {
-    opacity: 0.5,
-    width: 64,
-    textAlign: 'right',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-  simList: { display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 },
-  simCard: { background: '#0d0f12', border: '1px solid #2c323d', borderRadius: 6, padding: 8 },
-  simHead: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginBottom: 6,
-  },
-  simName: { fontSize: 13, fontWeight: 600, wordBreak: 'break-all' },
-  panel: {
-    width: 380,
-    borderLeft: '1px solid #2c323d',
-    padding: 14,
-    overflowY: 'auto',
-    boxSizing: 'border-box',
-  },
-  card: {
-    background: '#1d2128',
-    border: '1px solid #2c323d',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 14,
-  },
-  cardTitle: {
-    fontSize: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    opacity: 0.6,
-    margin: '0 0 10px',
-  },
-  kv: { display: 'flex', justifyContent: 'space-between', gap: 8, padding: '3px 0' },
-  k: { opacity: 0.6, fontSize: 13 },
-  v: { fontFamily: 'ui-monospace, monospace', fontSize: 14 },
-  coordBlock: {
-    margin: '8px 0',
-    padding: '8px 10px',
-    background: '#0d0f12',
-    border: '1px solid #2c323d',
-    borderRadius: 6,
-  },
-  scanBlock: {
-    margin: '8px 0',
-    padding: '8px 10px',
-    background: '#160f18',
-    border: '1px solid #5b3a63',
-    borderRadius: 6,
-  },
-  scanOre: { fontSize: 16, fontWeight: 700, color: '#f0abfc' },
-  scanMeta: {
-    display: 'flex',
-    gap: 10,
-    flexWrap: 'wrap',
-    fontSize: 11,
-    opacity: 0.7,
-    margin: '2px 0 6px',
-    fontVariantNumeric: 'tabular-nums',
-  },
-  compHead: {
-    display: 'flex',
-    alignItems: 'baseline',
-    gap: 8,
-    fontSize: 9,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    opacity: 0.4,
-    marginBottom: 2,
-  },
-  compRow: { display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 12, padding: '1px 0' },
-  compPct: { width: 44, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#f0abfc' },
-  compMat: {
-    flex: 1,
-    minWidth: 0,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-  compVal: { width: 40, textAlign: 'right', fontVariantNumeric: 'tabular-nums', opacity: 0.7 },
-  compScu: { width: 48, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#6ee7b7' },
-  coordTitle: { fontSize: 11, opacity: 0.6, marginBottom: 6 },
-  coordGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'auto 1fr',
-    gap: '2px 8px',
-    alignItems: 'baseline',
-  },
-  axis: { fontSize: 11, opacity: 0.5 },
-  coord: {
-    fontFamily: 'ui-monospace, monospace',
-    fontSize: 14,
-    color: '#6ee7b7',
-    textAlign: 'right',
-  },
-  dim: { opacity: 0.45, fontSize: 12 },
-  candList: {
-    listStyle: 'none',
-    margin: '8px 0 0',
-    padding: 0,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 6,
-  },
-  candRow: {
-    display: 'flex',
-    alignItems: 'baseline',
-    gap: 8,
-    background: '#0d0f12',
-    border: '1px solid #2c323d',
-    borderRadius: 6,
-    padding: '6px 8px',
-  },
-  candName: { flex: 1, fontSize: 14, fontWeight: 600 },
-  candNodes: { fontSize: 14, color: '#4fd1ff', fontVariantNumeric: 'tabular-nums' },
-  candScore: { fontSize: 11, opacity: 0.5, width: 40, textAlign: 'right' },
-  addRow: { display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, flexWrap: 'wrap' },
-  addBtn: {
-    background: '#2a2f3a',
-    color: '#e6e6e6',
-    border: '1px solid #3a4150',
-    borderRadius: 6,
-    padding: '4px 8px',
-    cursor: 'pointer',
-    fontSize: 12,
-  },
-  regionList: { display: 'flex', flexDirection: 'column', gap: 8 },
-  regionCard: {
-    background: '#0d0f12',
-    border: '1px solid #2c323d',
-    borderRadius: 6,
-    padding: 8,
-    cursor: 'pointer',
-  },
-  regionCardActive: { borderColor: '#4fd1ff' },
-  regionTop: { display: 'flex', alignItems: 'center', gap: 8 },
-  dot: { width: 10, height: 10, borderRadius: 5, flex: '0 0 auto' },
-  select: {
-    flex: 1,
-    background: '#0d0f12',
-    color: '#e6e6e6',
-    border: '1px solid #3a4150',
-    borderRadius: 6,
-    padding: '4px 6px',
-    fontSize: 13,
-  },
-  enableLabel: { display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, opacity: 0.8 },
-  scaleLabel: { display: 'flex', alignItems: 'center', gap: 2, fontSize: 11, opacity: 0.7 },
-  scaleInput: {
-    width: 36,
-    background: '#0d0f12',
-    color: '#e6e6e6',
-    border: '1px solid #3a4150',
-    borderRadius: 4,
-    padding: '2px 4px',
-    fontSize: 12,
-  },
-  delBtn: {
-    background: 'none',
-    color: '#9fb3c8',
-    border: '1px solid #3a4150',
-    borderRadius: 6,
-    padding: '2px 7px',
-    cursor: 'pointer',
-    fontSize: 12,
-  },
-  regionBody: { display: 'flex', gap: 8, marginTop: 8, alignItems: 'flex-start' },
-  cropWrap: {
-    minWidth: 96,
-    minHeight: 36,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: '#000',
-    border: '1px solid #2c323d',
-    borderRadius: 4,
-    padding: 2,
-  },
-  crop: { maxWidth: 140, maxHeight: 60, imageRendering: 'pixelated' },
-  regionMeta: { flex: 1, minWidth: 0 },
-  parsed: { fontFamily: 'ui-monospace, monospace', fontSize: 13, wordBreak: 'break-all' },
-  raw: { fontSize: 11, opacity: 0.5, marginTop: 2, wordBreak: 'break-all' },
-  btn: {
-    background: '#2a2f3a',
-    color: '#e6e6e6',
-    border: '1px solid #3a4150',
-    borderRadius: 6,
-    padding: '6px 10px',
-    cursor: 'pointer',
-    fontSize: 13,
-  },
-  badge: {
-    fontSize: 10,
-    textTransform: 'uppercase',
-    background: '#2c323d',
-    borderRadius: 4,
-    padding: '2px 5px',
-    opacity: 0.8,
-  },
-  error: {
-    marginTop: 8,
-    background: '#3a1f24',
-    border: '1px solid #7a3b44',
-    color: '#ffb4bd',
-    padding: '6px 10px',
-    borderRadius: 6,
-    fontSize: 12,
-  },
-};
+function KV({ k, v, className }: { k: string; v: ReactNode; className?: string }) {
+  return (
+    <div className={cn('flex justify-between gap-2 py-0.5', className)}>
+      <span className="text-[13px] text-muted">{k}</span>
+      <span className="font-mono text-sm">{v}</span>
+    </div>
+  );
+}
+
+function Coord({ children }: { children: ReactNode }) {
+  return <span className="text-right font-mono text-sm text-green">{children}</span>;
+}

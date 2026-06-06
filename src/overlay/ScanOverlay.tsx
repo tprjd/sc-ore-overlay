@@ -1,7 +1,7 @@
 // The "scanned rock" transparent, click-through overlay box. Owns the window
 // concerns only — IPC wiring, idle fade, visibility toggle, and the edit-mode
 // drag/resize. The card itself (SCU-per-content breakdown) is the shared
-// ScanCard, so the control window's live preview always matches what ships.
+// ScanCard.
 // Shown only when the overlay config's `showScan` is on.
 
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';

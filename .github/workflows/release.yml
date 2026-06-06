@@ -1,0 +1,64 @@
+name: Release
+
+# Builds the Windows installer (NSIS) with electron-builder. The native bits
+# (onnxruntime-node, sharp) and the NSIS target require Windows, so the ubuntu
+# CI runner can't build this — hence a separate workflow on windows-latest.
+#
+# Trigger: push a version tag (v*), or run manually from the Actions UI. On a
+# tag, the .exe is attached to the matching GitHub Release (pre-release for
+# rc/beta tags). Manual runs just upload the installer as a build artifact.
+#
+# Unsigned for now (code signing deferred) — the installer triggers a Windows
+# SmartScreen "unknown publisher" warning. See NOTES.md (deferred product decisions).
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write # create/update the GitHub Release on a tag
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build Windows installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # vite build && electron-builder. `prebuild` copies the PP-OCR models into
+      # public/models so extraResources can bundle them. No --publish flag, so
+      # electron-builder builds but uploads nothing (output → release/).
+      - name: Build installer
+        run: npm run dist
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sc-ore-overlay-windows
+          path: release/*.exe
+          if-no-files-found: error
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.exe
+          # rc/beta/etc. tags (anything with a pre-release hyphen) → pre-release.
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true

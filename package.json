@@ -1,7 +1,7 @@
 {
   "name": "sc-ore-overlay",
   "private": true,
-  "version": "0.3.0",
+  "version": "1.0.0-rc.1",
   "description": "Non-obstructive desktop overlay that identifies Star Citizen ship-mining ores from the scanner Radar Signature (RS) reading.",
   "license": "MIT",
   "main": "dist-electron/main.js",
@@ -26,21 +26,33 @@
   },
   "dependencies": {
     "@gutenye/ocr-browser": "^1.4.8",
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-select": "^2.2.6",
+    "@radix-ui/react-slot": "^1.2.4",
+    "@radix-ui/react-tabs": "^1.1.13",
+    "@radix-ui/react-tooltip": "^1.2.8",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.17.0",
     "onnxruntime-node": "^1.26.0",
     "onnxruntime-web": "^1.17.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "sharp": "^0.33.5"
+    "sharp": "^0.33.5",
+    "tailwind-merge": "^3.6.0",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.16",
     "@gutenye/ocr-node": "^1.4.8",
+    "@tailwindcss/vite": "^4.3.0",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^33.3.1",
     "electron-builder": "^25.1.8",
+    "tailwindcss": "^4.3.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vite": "^5.4.11",
@@ -50,6 +62,9 @@
   "build": {
     "appId": "com.scoreoverlay.app",
     "productName": "SC Ore Overlay",
+    "directories": {
+      "output": "release"
+    },
     "files": [
       "dist/**/*",
       "dist-electron/**/*"

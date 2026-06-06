@@ -2,9 +2,13 @@
 // `electron` or DOM imports — so both the Node (main/preload) and browser
 // (renderer) TypeScript projects can reference it without leaking globals.
 
+import type { CrawlProgress } from '../core/crawl';
 import type { QualityDetail } from '../core/quality';
 import type { ScanResult } from '../core/scan';
 import type { SurveyEntry } from '../core/survey';
+import type { SignatureTable } from '../core/types';
+
+export type { CrawlProgress } from '../core/crawl';
 
 /** A screen or window the user can capture, as enumerated by desktopCapturer. */
 export interface CaptureSource {
@@ -60,6 +64,7 @@ export interface OverlayOcr {
  * - `no-scan`     — RS fine, but no SCAN RESULTS panel detected (empty scan box).
  * - `source-lost` — the capture source is gone; the overlay hides entirely.
  * - `paused`      — capture paused by the user.
+ * - `inactive`    — no source picked / the Mining view isn't live; the overlay hides entirely.
  */
 export type OverlayStatus =
   | 'ok'
@@ -70,7 +75,8 @@ export type OverlayStatus =
   | 'no-rs'
   | 'no-scan'
   | 'source-lost'
-  | 'paused';
+  | 'paused'
+  | 'inactive';
 
 /** What the control window pushes to the overlay (relayed to both boxes). */
 export interface OverlayPayload {
@@ -264,13 +270,13 @@ export interface AppSettings {
   dismissedUpdate?: string;
   /**
    * OCR execution backend.
-   * - 'wasm' (CPU, default): never touches the GPU, so it can't be starved by
+   * - 'wasm' (CPU, fallback): never touches the GPU, so it can't be starved by
    *   the overlay window's compositor. Slowest (~1–2 s/fresh read).
-   * - 'directml': native onnxruntime-node in a utility process, DirectML EP —
-   *   GPU OCR on any DX12 GPU (NVIDIA/AMD/Intel). Its own D3D12 device sits
+   * - 'directml' (default): native onnxruntime-node in a utility process, DirectML
+   *   EP — GPU OCR on any DX12 GPU (NVIDIA/AMD/Intel). Its own D3D12 device sits
    *   outside Chromium's GPU process, so it does NOT contend with the overlay
    *   the way in-renderer WebGPU does. ~28 ms/read once warm. Falls back to
-   *   'wasm' if the host can't start or DirectML init fails. (See TASKS.md R4.)
+   *   'wasm' if the host can't start or DirectML init fails. (See NOTES.md → OCR.)
    * - 'webgpu': in-renderer ONNX-Runtime-Web WebGPU. Faster than wasm but
    *   fights the visible overlay for the GPU on some setups (latency spikes
    *   into the seconds); kept for the adventurous, not the default.
@@ -295,6 +301,11 @@ export interface ScoBridge {
   getSettings(): Promise<AppSettings>;
   /** Merge + persist settings to Electron userData (control window). */
   setSettings(patch: Partial<AppSettings>): void;
+  /**
+   * Factory reset: delete the persisted settings file and relaunch the app to a
+   * clean first-run state. The survey scan log (separate file) is left intact.
+   */
+  resetSettings(): void;
   /** Re-register the global hotkeys and persist them. Returns ok-per-action. */
   setHotkeys(map: HotkeyMap): Promise<Record<HotkeyAction, boolean>>;
   /** Control → overlay (relayed by main): push the latest matches. */
@@ -329,6 +340,26 @@ export interface ScoBridge {
   getSurveyLog(): Promise<SurveyEntry[]>;
   /** Survey Mode: persist the full scan log (append-only, managed in renderer). */
   saveSurveyLog(entries: SurveyEntry[]): void;
+  /**
+   * Load the crawled signature tables from userData (may be empty). The renderer
+   * merges these over its bundled fallback, preferring a crawled table per patch.
+   */
+  getCrawledTables(): Promise<SignatureTable[]>;
+  /**
+   * Startup sync: tell main the newest patch the renderer already has (bundled +
+   * crawled). Main crawls only if the live game patch is newer; same patch is a
+   * no-op. Results arrive via onCrawlProgress / onTablesUpdated.
+   */
+  syncTables(newestHave: string | null): void;
+  /**
+   * Force a re-crawl of the current game patch now. Resolves with the new table
+   * (also broadcast via onTablesUpdated), or null on failure. Never throws.
+   */
+  refreshTables(): Promise<SignatureTable | null>;
+  /** Control: a crawl finished and new tables are on disk. Returns an unsubscribe fn. */
+  onTablesUpdated(cb: () => void): () => void;
+  /** Control: progress from an in-flight crawl (startup or manual). Unsubscribe fn. */
+  onCrawlProgress(cb: (p: CrawlProgress) => void): () => void;
   /** Check GitHub Releases for a newer version (startup + manual). Never throws. */
   checkForUpdates(): Promise<UpdateInfo>;
   /** Open an external https URL in the user's browser (e.g. a release page). */

@@ -13,9 +13,6 @@ public/models/
 # generated icon preview (icon.svg/.ico/.png are committed source)
 build/icon-preview.png
 
-# local working notes (not project source)
-PRODUCTION-READINESS.md
-
 # local debug + plugin artifacts (not project source)
 screenshot/
 .agents/

@@ -5,16 +5,11 @@
 // decides which region it updates. The parent owns `mediaRef` so its capture
 // loop can read the same element this component attaches the stream to.
 
-import type {
-  CSSProperties,
-  MutableRefObject,
-  ReactNode,
-  PointerEvent as ReactPointerEvent,
-} from 'react';
+import type { MutableRefObject, ReactNode, PointerEvent as ReactPointerEvent } from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import type { DrawableSource, NormRegion } from '../preprocess';
-import type { PickedSource } from './SourcePicker';
+import type { PickedSource } from './SourceGrid';
 
 /** A region overlay to draw on the preview. */
 export interface PreviewRegion {
@@ -153,9 +148,9 @@ export function CapturePreview({ source, mediaRef, regions, onDraw, hint }: Capt
   const dragRegion = drag ? dragToRegion(drag) : null;
 
   return (
-    <div style={S.col}>
-      <label style={S.zoomRow}>
-        <span style={S.zoomLabel}>Zoom</span>
+    <div className="flex min-w-0 flex-1 flex-col p-3.5">
+      <label className="mb-2 flex items-center gap-2">
+        <span className="w-10 text-xs text-fg/80">Zoom</span>
         <input
           type="range"
           min={100}
@@ -163,14 +158,15 @@ export function CapturePreview({ source, mediaRef, regions, onDraw, hint }: Capt
           step={10}
           value={Math.round(zoom * 100)}
           onChange={(e) => setZoom(Number(e.target.value) / 100)}
-          style={S.range}
+          className="flex-1 accent-accent"
         />
-        <span style={S.zoomValue}>{zoom.toFixed(1)}×</span>
+        <span className="tnum w-12 text-right text-xs">{zoom.toFixed(1)}×</span>
       </label>
-      <div ref={areaRef} style={S.area}>
+      <div ref={areaRef} className="min-h-0 flex-1 overflow-auto rounded-lg bg-black">
         <div
           ref={wrapRef}
-          style={{ ...S.wrap, width: `${zoom * 100}%` }}
+          className="relative inline-block cursor-crosshair touch-none align-top leading-[0]"
+          style={{ width: `${zoom * 100}%` }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -181,14 +177,14 @@ export function CapturePreview({ source, mediaRef, regions, onDraw, hint }: Capt
               muted
               playsInline
               loop={source.kind === 'video'}
-              style={S.media}
+              className="pointer-events-none block h-auto w-full select-none"
             />
           ) : (
             <img
               ref={imgRef}
               src={source.imageUrl}
               alt="capture source"
-              style={S.media}
+              className="pointer-events-none block h-auto w-full select-none"
               onLoad={() => {
                 mediaRef.current = imgRef.current;
               }}
@@ -197,8 +193,8 @@ export function CapturePreview({ source, mediaRef, regions, onDraw, hint }: Capt
           {regions.map((r) => (
             <div
               key={r.id}
+              className="pointer-events-none absolute border-2"
               style={{
-                ...S.box,
                 left: `${r.rect.x * 100}%`,
                 top: `${r.rect.y * 100}%`,
                 width: `${r.rect.w * 100}%`,
@@ -209,64 +205,30 @@ export function CapturePreview({ source, mediaRef, regions, onDraw, hint }: Capt
                 boxShadow: r.active ? `0 0 0 1px ${r.color}` : 'none',
               }}
             >
-              {r.label && <span style={{ ...S.boxLabel, background: r.color }}>{r.label}</span>}
+              {r.label && (
+                <span
+                  className="absolute -top-4 -left-px whitespace-nowrap rounded-[3px] px-1 text-[9px] font-bold leading-[14px] text-[#06121a]"
+                  style={{ background: r.color }}
+                >
+                  {r.label}
+                </span>
+              )}
             </div>
           ))}
           {dragRegion && (
             <div
+              className="pointer-events-none absolute border-2 border-solid border-white bg-white/10"
               style={{
-                ...S.box,
                 left: `${dragRegion.x * 100}%`,
                 top: `${dragRegion.y * 100}%`,
                 width: `${dragRegion.w * 100}%`,
                 height: `${dragRegion.h * 100}%`,
-                borderColor: '#fff',
-                borderStyle: 'solid',
-                background: 'rgba(255,255,255,0.12)',
               }}
             />
           )}
         </div>
       </div>
-      {hint && <p style={S.hint}>{hint}</p>}
+      {hint && <p className="mx-0.5 mt-2.5 text-xs text-muted">{hint}</p>}
     </div>
   );
 }
-
-const S: Record<string, CSSProperties> = {
-  col: { flex: 1, display: 'flex', flexDirection: 'column', padding: 14, minWidth: 0 },
-  zoomRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 },
-  zoomLabel: { width: 40, fontSize: 12, opacity: 0.8 },
-  zoomValue: { width: 48, textAlign: 'right', fontSize: 12, fontVariantNumeric: 'tabular-nums' },
-  range: { flex: 1 },
-  area: { flex: 1, minHeight: 0, overflow: 'auto', background: '#000', borderRadius: 8 },
-  wrap: {
-    position: 'relative',
-    display: 'inline-block',
-    verticalAlign: 'top',
-    lineHeight: 0,
-    touchAction: 'none',
-    cursor: 'crosshair',
-  },
-  media: {
-    display: 'block',
-    width: '100%',
-    height: 'auto',
-    userSelect: 'none',
-    pointerEvents: 'none',
-  },
-  box: { position: 'absolute', borderWidth: 2, pointerEvents: 'none' },
-  boxLabel: {
-    position: 'absolute',
-    top: -16,
-    left: -1,
-    fontSize: 9,
-    lineHeight: '14px',
-    padding: '0 4px',
-    color: '#06121a',
-    fontWeight: 700,
-    borderRadius: 3,
-    whiteSpace: 'nowrap',
-  },
-  hint: { margin: '10px 2px 0', fontSize: 12, opacity: 0.6 },
-};

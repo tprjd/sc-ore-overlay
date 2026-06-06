@@ -1,6 +1,6 @@
 // R4.0 — DirectML feasibility gate (run on Windows).
 //
-// Answers the one make-or-break question for TASKS.md R4: does the prebuilt
+// Answers the make-or-break question for the native DirectML OCR work: does the prebuilt
 // `onnxruntime-node` binary on this machine actually ship the DirectML execution
 // provider, and can it read a real RS crop with low, FLAT latency (no ramp)?
 //

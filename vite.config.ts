@@ -7,7 +7,11 @@ import electron from 'vite-plugin-electron';
 // Vite ↔ Electron integration (locked stack). The renderer is a normal Vite
 // app; the plugin compiles the main + preload processes and launches Electron
 // in `vite dev`. Window wiring lands in Phase 1/3.
-export default defineConfig(({ command }) => {
+export default defineConfig(async ({ command }) => {
+  // @tailwindcss/vite is ESM-only; this config is bundled as CommonJS (the
+  // package has no "type":"module"), so a static import gets require()'d and
+  // fails. Dynamic import sidesteps that.
+  const tailwind = (await import('@tailwindcss/vite')).default;
   // Before `vite dev` spawns Electron, make sure the installed binary matches
   // this OS — the repo is run from both WSL and native Windows against one
   // shared node_modules, so the binary is often built for the other platform.
@@ -25,6 +29,11 @@ export default defineConfig(({ command }) => {
   return {
     plugins: [
       react(),
+      // Tailwind v4. Only the control window imports the stylesheet
+      // (src/control/ui/theme.css via control/main.tsx), so the transparent
+      // overlay/detail/scan windows never load it and keep their runtime-inline,
+      // config-driven appearance untouched.
+      tailwind(),
       // Package is CommonJS, so the plugin emits CJS main + preload (a sandboxed
       // preload must be CommonJS). The renderer is still bundled as ESM by Vite.
       electron([
@@ -52,7 +61,7 @@ export default defineConfig(({ command }) => {
     // the worker can import onnxruntime-web + @gutenye/ocr-common. Pre-bundle the
     // OCR libs so their CommonJS deps (e.g. js-clipper) get ESM-default interop;
     // keep onnxruntime-web out (it ships WASM) and deduped.
-    worker: { format: 'es' },
+    worker: { format: 'es' as const },
     optimizeDeps: {
       include: ['@gutenye/ocr-common', '@gutenye/ocr-common/splitIntoLineImages'],
       exclude: ['onnxruntime-web'],

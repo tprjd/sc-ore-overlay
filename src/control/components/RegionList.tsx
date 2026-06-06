@@ -4,8 +4,11 @@
 // in a section/card. Drawing the box happens in CapturePreview (the caller wires
 // the active region's rect).
 
-import type { CSSProperties, ReactNode } from 'react';
+import { X } from 'lucide-react';
+import type { ReactNode } from 'react';
 import type { SurveyRegionSetting, SurveyRole } from '../../shared/bridge';
+import { Button } from '../ui';
+import { cn } from '../ui/cn';
 import type { RegionDebug } from '../useSurveyCapture';
 import { DEFAULT_RECT, newRegionId, ROLE_META } from './roles';
 
@@ -59,31 +62,37 @@ export function RegionList({
 
   return (
     <>
-      <div style={S.addRow}>
-        <span style={S.dim}>Add:</span>
+      <div className="mb-2.5 flex flex-wrap items-center gap-1.5">
+        <span className="text-xs text-muted">Add:</span>
         {roles.map((role) => (
-          <button key={role} type="button" style={S.addBtn} onClick={() => addRegion(role)}>
+          <Button key={role} variant="secondary" size="sm" onClick={() => addRegion(role)}>
             + {ROLE_META[role].label}
-          </button>
+          </Button>
         ))}
       </div>
       {regions.length === 0 ? (
-        <p style={S.dim}>No regions yet. Add one to start reading the HUD.</p>
+        <p className="text-xs text-muted">No regions yet. Add one to start reading the HUD.</p>
       ) : (
-        <div style={S.regionList}>
+        <div className="flex flex-col gap-2">
           {regions.map((r) => {
             const dbg = debug[r.id];
             const verdict = verdictColor(dbg);
             return (
               <div
                 key={r.id}
-                style={{ ...S.regionCard, ...(r.id === activeId ? S.regionCardActive : null) }}
+                className={cn(
+                  'cursor-pointer rounded-md border bg-bg p-2 transition-colors',
+                  r.id === activeId ? 'border-accent' : 'border-border',
+                )}
                 onClick={() => onActiveChange(r.id)}
               >
-                <div style={S.regionTop}>
-                  <span style={{ ...S.dot, background: ROLE_META[r.role].color }} />
+                <div className="flex items-center gap-2">
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ background: ROLE_META[r.role].color }}
+                  />
                   <select
-                    style={S.select}
+                    className="flex-1 rounded-md border border-border-strong bg-bg px-1.5 py-1 text-[13px] text-fg"
                     value={r.role}
                     onClick={(e) => e.stopPropagation()}
                     onChange={(e) => updateRegion(r.id, { role: e.target.value as SurveyRole })}
@@ -95,7 +104,7 @@ export function RegionList({
                     ))}
                   </select>
                   <label
-                    style={S.scaleLabel}
+                    className="flex items-center gap-0.5 text-[11px] text-muted"
                     title="upscale — raise for small/blurry text (high FOV)"
                     onClick={(e) => e.stopPropagation()}
                   >
@@ -109,13 +118,17 @@ export function RegionList({
                           scale: Math.max(1, Math.min(12, Math.round(Number(e.target.value)) || 1)),
                         })
                       }
-                      style={S.scaleInput}
+                      className="w-9 rounded-sm border border-border-strong bg-bg px-1 py-0.5 text-xs text-fg"
                     />
                     ×
                   </label>
-                  <label style={S.enableLabel} onClick={(e) => e.stopPropagation()}>
+                  <label
+                    className="flex items-center gap-1 text-xs text-fg/80"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <input
                       type="checkbox"
+                      className="accent-accent"
                       checked={r.enabled}
                       onChange={(e) => updateRegion(r.id, { enabled: e.target.checked })}
                     />
@@ -123,35 +136,50 @@ export function RegionList({
                   </label>
                   <button
                     type="button"
-                    style={S.delBtn}
+                    className="grid h-6 w-6 place-items-center rounded-md border border-border-strong text-muted transition-colors hover:text-fg"
                     onClick={(e) => {
                       e.stopPropagation();
                       removeRegion(r.id);
                     }}
                   >
-                    ✕
+                    <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
-                <div style={S.regionBody}>
-                  <div style={{ ...S.cropWrap, borderColor: verdict }}>
+                <div className="mt-2 flex items-start gap-2">
+                  <div
+                    className="flex min-h-9 min-w-24 items-center justify-center rounded-sm border bg-black p-0.5"
+                    style={{ borderColor: verdict }}
+                  >
                     {dbg?.dataUrl ? (
-                      <img src={dbg.dataUrl} alt="crop" style={S.crop} />
+                      <img
+                        src={dbg.dataUrl}
+                        alt="crop"
+                        className="max-h-[60px] max-w-[140px] [image-rendering:pixelated]"
+                      />
                     ) : (
-                      <span style={S.dim}>{r.enabled ? '…' : 'off'}</span>
+                      <span className="text-xs text-muted">{r.enabled ? '…' : 'off'}</span>
                     )}
                   </div>
-                  <div style={S.regionMeta}>
-                    <div style={S.parsedRow}>
-                      <span style={{ ...S.parsed, color: dbg?.ok ? '#6ee7b7' : '#9fb3c8' }}>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline justify-between gap-1.5">
+                      <span
+                        className="min-w-0 break-all font-mono text-[13px]"
+                        style={{ color: dbg?.ok ? '#6ee7b7' : '#9fb3c8' }}
+                      >
                         {dbg?.parsed ?? '—'}
                       </span>
                       {dbg?.score != null && (
-                        <span style={{ ...S.conf, color: verdict, borderColor: verdict }}>
+                        <span
+                          className="tnum shrink-0 rounded-sm border px-1.5 text-[11px] font-semibold"
+                          style={{ color: verdict, borderColor: verdict }}
+                        >
                           {Math.round(dbg.score * 100)}%
                         </span>
                       )}
                     </div>
-                    <div style={S.raw}>{dbg?.rawText ?? '(waiting)'}</div>
+                    <div className="mt-0.5 break-all text-[11px] text-fg/50">
+                      {dbg?.rawText ?? '(waiting)'}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -159,92 +187,7 @@ export function RegionList({
           })}
         </div>
       )}
-      {hint && <p style={S.dim}>{hint}</p>}
+      {hint && <p className="text-xs text-muted">{hint}</p>}
     </>
   );
 }
-
-const S: Record<string, CSSProperties> = {
-  dim: { opacity: 0.45, fontSize: 12 },
-  addRow: { display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, flexWrap: 'wrap' },
-  addBtn: {
-    background: '#2a2f3a',
-    color: '#e6e6e6',
-    border: '1px solid #3a4150',
-    borderRadius: 6,
-    padding: '4px 8px',
-    cursor: 'pointer',
-    fontSize: 12,
-  },
-  regionList: { display: 'flex', flexDirection: 'column', gap: 8 },
-  regionCard: {
-    background: '#0d0f12',
-    border: '1px solid #2c323d',
-    borderRadius: 6,
-    padding: 8,
-    cursor: 'pointer',
-  },
-  regionCardActive: { borderColor: '#4fd1ff' },
-  regionTop: { display: 'flex', alignItems: 'center', gap: 8 },
-  dot: { width: 10, height: 10, borderRadius: 5, flex: '0 0 auto' },
-  select: {
-    flex: 1,
-    background: '#0d0f12',
-    color: '#e6e6e6',
-    border: '1px solid #3a4150',
-    borderRadius: 6,
-    padding: '4px 6px',
-    fontSize: 13,
-  },
-  scaleLabel: { display: 'flex', alignItems: 'center', gap: 2, fontSize: 11, opacity: 0.7 },
-  scaleInput: {
-    width: 36,
-    background: '#0d0f12',
-    color: '#e6e6e6',
-    border: '1px solid #3a4150',
-    borderRadius: 4,
-    padding: '2px 4px',
-    fontSize: 12,
-  },
-  enableLabel: { display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, opacity: 0.8 },
-  delBtn: {
-    background: 'none',
-    color: '#9fb3c8',
-    border: '1px solid #3a4150',
-    borderRadius: 6,
-    padding: '2px 7px',
-    cursor: 'pointer',
-    fontSize: 12,
-  },
-  regionBody: { display: 'flex', gap: 8, marginTop: 8, alignItems: 'flex-start' },
-  cropWrap: {
-    minWidth: 96,
-    minHeight: 36,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: '#000',
-    border: '1px solid #2c323d',
-    borderRadius: 4,
-    padding: 2,
-  },
-  crop: { maxWidth: 140, maxHeight: 60, imageRendering: 'pixelated' },
-  regionMeta: { flex: 1, minWidth: 0 },
-  parsedRow: { display: 'flex', alignItems: 'baseline', gap: 6, justifyContent: 'space-between' },
-  parsed: {
-    fontFamily: 'ui-monospace, monospace',
-    fontSize: 13,
-    wordBreak: 'break-all',
-    minWidth: 0,
-  },
-  conf: {
-    fontSize: 11,
-    fontWeight: 600,
-    fontVariantNumeric: 'tabular-nums',
-    border: '1px solid',
-    borderRadius: 4,
-    padding: '0 5px',
-    flex: '0 0 auto',
-  },
-  raw: { fontSize: 11, opacity: 0.5, marginTop: 2, wordBreak: 'break-all' },
-};

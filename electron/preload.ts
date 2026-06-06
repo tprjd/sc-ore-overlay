@@ -3,7 +3,9 @@
 
 import type { IpcRendererEvent } from 'electron';
 import { contextBridge, ipcRenderer } from 'electron';
+import type { CrawlProgress } from '../src/core/crawl';
 import type { SurveyEntry } from '../src/core/survey';
+import type { SignatureTable } from '../src/core/types';
 import type {
   AppSettings,
   CaptureSource,
@@ -23,6 +25,7 @@ const api: ScoBridge = {
   ping: () => 'pong',
   getSettings: () => ipcRenderer.invoke('sco:get-settings') as Promise<AppSettings>,
   setSettings: (patch) => ipcRenderer.send('sco:set-settings', patch),
+  resetSettings: () => ipcRenderer.send('sco:reset-settings'),
   setHotkeys: (map: HotkeyMap) =>
     ipcRenderer.invoke('sco:set-hotkeys', map) as Promise<Record<HotkeyAction, boolean>>,
 
@@ -67,6 +70,20 @@ const api: ScoBridge = {
   ocrAvailable: () => ipcRenderer.invoke('sco:ocr-available') as Promise<boolean>,
   ocrRecognize: (dataUrl: string) =>
     ipcRenderer.invoke('sco:ocr-recognize', dataUrl) as Promise<OcrLine[]>,
+
+  getCrawledTables: () => ipcRenderer.invoke('sco:get-tables') as Promise<SignatureTable[]>,
+  syncTables: (newestHave) => ipcRenderer.send('sco:sync-tables', newestHave),
+  refreshTables: () => ipcRenderer.invoke('sco:refresh-tables') as Promise<SignatureTable | null>,
+  onTablesUpdated: (cb) => {
+    const handler = (): void => cb();
+    ipcRenderer.on('sco:tables-updated', handler);
+    return () => ipcRenderer.off('sco:tables-updated', handler);
+  },
+  onCrawlProgress: (cb) => {
+    const handler = (_e: IpcRendererEvent, p: CrawlProgress): void => cb(p);
+    ipcRenderer.on('sco:crawl-progress', handler);
+    return () => ipcRenderer.off('sco:crawl-progress', handler);
+  },
 
   checkForUpdates: () => ipcRenderer.invoke('sco:check-updates') as Promise<UpdateInfo>,
   openExternal: (url: string) => ipcRenderer.send('sco:open-external', url),

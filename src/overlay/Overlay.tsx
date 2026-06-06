@@ -9,12 +9,17 @@ import type { OverlayConfig, OverlayPayload } from '../shared/bridge';
 import { DEFAULT_OVERLAY_CONFIG } from '../shared/bridge';
 import { OverlayCard } from './OverlayCard';
 
-const EMPTY: OverlayPayload = { reading: null, candidates: [], status: 'no-rs' };
+// Start inactive (hidden) — the control window pushes a live status only once the
+// Mining capture view is up, so no placeholder shows before a source is picked.
+const EMPTY: OverlayPayload = { reading: null, candidates: [], status: 'inactive' };
 
 export function Overlay() {
   const [payload, setPayload] = useState<OverlayPayload>(EMPTY);
   const [editing, setEditing] = useState(false);
-  const [idle, setIdle] = useState(true);
+  // `idle` gates the fade only; the overlay starts hidden via the 'inactive'
+  // EMPTY status until the control window pushes a live capture status, so no
+  // placeholder shows before a source is selected.
+  const [idle, setIdle] = useState(false);
   const [config, setConfig] = useState<OverlayConfig>(DEFAULT_OVERLAY_CONFIG);
   const [hidden, setHidden] = useState(false);
 
@@ -51,6 +56,9 @@ export function Overlay() {
       const cfg: OverlayConfig = { ...DEFAULT_OVERLAY_CONFIG, ...(s.overlay ?? {}) };
       idleMsRef.current = cfg.idleMs;
       setConfig(cfg);
+      // Arm the fade with the real idleMs now that it's loaded, so the live
+      // placeholder eventually fades instead of hanging on the default timer.
+      armIdle();
     });
 
     const offMatches = sco.onMatches((next) => {
@@ -67,7 +75,16 @@ export function Overlay() {
       setConfig(cfg);
       armIdle();
     });
-    const offToggle = sco.onToggleVisible(() => setHidden((h) => !h));
+    // Toggle-overlay hotkey: flip the hard hidden flag, and when *revealing*,
+    // re-arm idle so the overlay actually reappears instead of staying gated
+    // behind a long-elapsed idle timer.
+    const offToggle = sco.onToggleVisible(() =>
+      setHidden((h) => {
+        const next = !h;
+        if (!next) armIdle();
+        return next;
+      }),
+    );
 
     return () => {
       offMatches();
@@ -100,14 +117,14 @@ export function Overlay() {
   };
 
   const { reading, candidates, settling, ocr, status } = payload;
-  // Source lost → the overlay vanishes entirely, regardless of idle/content/edit.
-  const sourceLost = status === 'source-lost';
+  // Source lost, or no live capture (no source picked / Mining view not live) →
+  // the overlay vanishes entirely, regardless of idle/content/edit.
+  const gone = status === 'source-lost' || status === 'inactive';
   // Show whenever we have *anything* useful: candidates, or a reading (so the
   // "no match" message is visible), or — when enabled — the "scanning…"
   // placeholder. Idle fade handles eventual disappearance.
   const hasContent = candidates.length > 0 || reading != null || config.showPlaceholder;
-  const visible =
-    !sourceLost && (editing || (!hidden && hasContent && (config.idleMs <= 0 || !idle)));
+  const visible = !gone && (editing || (!hidden && hasContent && (config.idleMs <= 0 || !idle)));
 
   return (
     <div

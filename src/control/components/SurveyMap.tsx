@@ -4,10 +4,11 @@
 // the ship as the origin when there are no entries yet. Faint grid + concentric
 // range rings (km), pan by drag, cursor-anchored wheel zoom, hover tooltip.
 
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { AxisPlane, SurveyEntry, Vec3 } from '../../core';
 import { distance, project } from '../../core';
+import { cn } from '../ui/cn';
 
 export interface SurveyMapProps {
   /** Live ship position (drawn as a marker); may be null when not flying. */
@@ -222,43 +223,48 @@ export function SurveyMap({ ship, entries, plane = 'xy' }: SurveyMapProps) {
     : null;
 
   return (
-    <div ref={wrapRef} style={S.wrap}>
+    <div ref={wrapRef} className="relative h-full w-full overflow-hidden rounded-lg bg-[#0a0c10]">
       {origin ? (
         <canvas
           ref={setCanvasEl}
-          style={{
-            width: '100%',
-            height: '100%',
-            display: 'block',
-            cursor: drag.current ? 'grabbing' : 'crosshair',
-          }}
+          className={cn(
+            'block h-full w-full',
+            drag.current ? 'cursor-grabbing' : 'cursor-crosshair',
+          )}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerLeave={() => setHover(null)}
         />
       ) : (
-        <div style={S.empty}>
+        <div className="absolute inset-0 flex items-center justify-center p-6 text-center text-[13px] text-muted">
           No data yet. Log a scan, box a “Ship Pos” region, or turn on Debug values.
         </div>
       )}
-      <button style={S.fitBtn} onClick={fit}>
+      <button
+        className="absolute bottom-2 right-2 rounded-md border border-border-strong bg-surface/80 px-2.5 py-1 text-xs text-fg transition-colors hover:bg-surface"
+        onClick={fit}
+      >
         Fit
       </button>
       {hoverInfo && (
-        <div style={{ ...S.tip, left: hover!.x + 12, top: hover!.y + 12 }}>
-          <div style={S.tipTitle}>
-            {hoverInfo.e.ore ?? '—'} <span style={S.tipNodes}>×{hoverInfo.e.nodes ?? '?'}</span>
+        <div
+          className="pointer-events-none absolute z-[2] max-w-[220px] rounded-md border border-border-strong bg-[#0d0f12]/95 px-2 py-1.5 text-xs text-fg"
+          style={{ left: hover!.x + 12, top: hover!.y + 12 }}
+        >
+          <div className="font-bold">
+            {hoverInfo.e.ore ?? '—'}{' '}
+            <span className="text-accent">×{hoverInfo.e.nodes ?? '?'}</span>
           </div>
-          <div style={S.tipRow}>
+          <div className="tnum text-[11px] text-fg/85">
             RS {hoverInfo.e.rs}
             {hoverInfo.e.scan?.scu != null ? ` · ${hoverInfo.e.scan.scu.toFixed(1)} SCU` : ''}
           </div>
-          <div style={S.tipRow}>
+          <div className="tnum text-[11px] text-fg/85">
             {km(hoverInfo.dist)} km {hoverInfo.fromShip ? 'from ship' : 'from center'} · depth{' '}
             {km(hoverInfo.depth)} km
           </div>
-          <div style={S.tipDim}>{hoverInfo.e.scout}</div>
+          <div className="text-[11px] text-fg/50">{hoverInfo.e.scout}</div>
         </div>
       )}
     </div>
@@ -366,53 +372,3 @@ function draw(
     }
   }
 }
-
-const S: Record<string, CSSProperties> = {
-  wrap: {
-    position: 'relative',
-    width: '100%',
-    height: '100%',
-    background: '#0a0c10',
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  empty: {
-    position: 'absolute',
-    inset: 0,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    textAlign: 'center',
-    padding: 24,
-    color: '#9fb3c8',
-    fontSize: 13,
-  },
-  fitBtn: {
-    position: 'absolute',
-    right: 8,
-    bottom: 8,
-    background: '#1d2128cc',
-    color: '#e6e6e6',
-    border: '1px solid #3a4150',
-    borderRadius: 6,
-    padding: '4px 10px',
-    cursor: 'pointer',
-    fontSize: 12,
-  },
-  tip: {
-    position: 'absolute',
-    pointerEvents: 'none',
-    background: 'rgba(13,15,18,0.95)',
-    border: '1px solid #3a4150',
-    borderRadius: 6,
-    padding: '6px 8px',
-    fontSize: 12,
-    color: '#e6e6e6',
-    maxWidth: 220,
-    zIndex: 2,
-  },
-  tipTitle: { fontWeight: 700 },
-  tipNodes: { color: '#4fd1ff' },
-  tipRow: { fontSize: 11, opacity: 0.85, fontVariantNumeric: 'tabular-nums' },
-  tipDim: { fontSize: 11, opacity: 0.5 },
-};

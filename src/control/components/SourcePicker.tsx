@@ -1,25 +1,12 @@
-// Step 1: choose what to capture. Lists desktopCapturer screens/windows, and
-// also accepts a static image file or a video file — handy for tuning the OCR
-// against a saved HUD screenshot or a recorded mining clip without Star Citizen
-// running (a looping video gives reproducible live-ish frames for debugging).
+// Standalone capture-source page. Shown when the app has a profile but no live
+// source (streams don't survive a relaunch). The actual chooser lives in
+// SourceGrid, shared with the setup wizard's Source step. First-run users see
+// the wizard (which embeds the same grid) instead of this bare page.
 
-import type { ChangeEvent, CSSProperties } from 'react';
-import { useEffect, useRef, useState } from 'react';
-import type { CaptureSource } from '../../shared/bridge';
+import type { PickedSource } from './SourceGrid';
+import { SourceGrid } from './SourceGrid';
 
-/** What the picker hands back to the app once a source is chosen. */
-export interface PickedSource {
-  kind: 'desktop' | 'image' | 'video';
-  label: string;
-  stream?: MediaStream;
-  imageUrl?: string;
-  /** Object URL for a chosen video file (kind 'video'). */
-  videoUrl?: string;
-  /** desktopCapturer id (desktop sources only) — persisted for auto-reconnect. */
-  sourceId?: string;
-}
-
-const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+export type { PickedSource } from './SourceGrid';
 
 export function SourcePicker({
   onPick,
@@ -28,169 +15,15 @@ export function SourcePicker({
   onPick: (s: PickedSource) => void;
   lastSourceId?: string;
 }) {
-  const [sources, setSources] = useState<CaptureSource[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const reconnected = useRef(false);
-
-  const refresh = async (): Promise<void> => {
-    setLoading(true);
-    setError(null);
-    try {
-      if (!window.sco) {
-        throw new Error(
-          'Preload bridge unavailable — run inside Electron, or use “Load image” below.',
-        );
-      }
-      setSources(await window.sco.getCaptureSources());
-    } catch (e) {
-      setError(msg(e));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only — enumerate sources once on open.
-  useEffect(() => {
-    void refresh();
-  }, []);
-
-  const pickDesktop = async (src: CaptureSource): Promise<void> => {
-    setError(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        // Electron desktop-capture constraints (not standard MediaTrackConstraints).
-        video: {
-          mandatory: {
-            chromeMediaSource: 'desktop',
-            chromeMediaSourceId: src.id,
-          },
-        },
-      } as unknown as MediaStreamConstraints);
-      onPick({ kind: 'desktop', label: src.name, stream, sourceId: src.id });
-    } catch (e) {
-      setError(`Could not capture “${src.name}”: ${msg(e)}`);
-    }
-  };
-
-  // Auto-reconnect to the last-used source once it appears in the list.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-runs on source/id change only — pickDesktop is stable for this purpose.
-  useEffect(() => {
-    if (reconnected.current || !lastSourceId) return;
-    const hit = sources.find((s) => s.id === lastSourceId);
-    if (hit) {
-      reconnected.current = true;
-      void pickDesktop(hit);
-    }
-  }, [sources, lastSourceId]);
-
-  const pickImage = (e: ChangeEvent<HTMLInputElement>): void => {
-    const file = e.target.files?.[0];
-    if (file) onPick({ kind: 'image', label: file.name, imageUrl: URL.createObjectURL(file) });
-  };
-
-  const pickVideo = (e: ChangeEvent<HTMLInputElement>): void => {
-    const file = e.target.files?.[0];
-    if (file) onPick({ kind: 'video', label: file.name, videoUrl: URL.createObjectURL(file) });
-  };
-
   return (
-    <div style={S.page}>
-      <header style={S.header}>
-        <h1 style={S.h1}>SC Ore Overlay</h1>
-        <p style={S.sub}>Pick the screen or window showing the mining scanner.</p>
+    <div className="mx-auto flex h-full w-full max-w-5xl flex-col gap-5 p-6">
+      <header>
+        <h1 className="text-2xl font-bold tracking-tight">SC Ore Overlay</h1>
+        <p className="mt-1 text-sm text-muted">
+          Pick the screen or window showing the mining scanner to capture.
+        </p>
       </header>
-
-      <div style={S.toolbar}>
-        <button style={S.btn} onClick={() => void refresh()} disabled={loading}>
-          {loading ? 'Scanning…' : 'Refresh sources'}
-        </button>
-        <label style={{ ...S.btn, ...S.fileBtn }}>
-          Load image…
-          <input type="file" accept="image/*" onChange={pickImage} style={{ display: 'none' }} />
-        </label>
-        <label
-          style={{ ...S.btn, ...S.fileBtn }}
-          title="Use a recorded clip as the source — loops for reproducible debugging"
-        >
-          Load video…
-          <input type="file" accept="video/*" onChange={pickVideo} style={{ display: 'none' }} />
-        </label>
-      </div>
-
-      {error && <div style={S.error}>{error}</div>}
-
-      <div style={S.grid}>
-        {sources.map((src) => (
-          <button
-            key={src.id}
-            style={S.card}
-            onClick={() => void pickDesktop(src)}
-            title={src.name}
-          >
-            <img src={src.thumbnailDataUrl} alt="" style={S.thumb} />
-            <span style={S.cardLabel}>
-              <span style={S.badge}>{src.type}</span>
-              {src.name}
-            </span>
-          </button>
-        ))}
-        {!loading && sources.length === 0 && !error && (
-          <p style={S.empty}>No capture sources found.</p>
-        )}
-      </div>
+      <SourceGrid onPick={onPick} lastSourceId={lastSourceId} />
     </div>
   );
 }
-
-const S: Record<string, CSSProperties> = {
-  page: { padding: 24, color: '#e6e6e6', minHeight: '100vh', boxSizing: 'border-box' },
-  header: { marginBottom: 16 },
-  h1: { margin: '0 0 4px', fontSize: 22 },
-  sub: { margin: 0, opacity: 0.7 },
-  toolbar: { display: 'flex', gap: 8, marginBottom: 12 },
-  btn: {
-    background: '#2a2f3a',
-    color: '#e6e6e6',
-    border: '1px solid #3a4150',
-    borderRadius: 6,
-    padding: '8px 12px',
-    cursor: 'pointer',
-    fontSize: 13,
-  },
-  fileBtn: { display: 'inline-flex', alignItems: 'center' },
-  error: {
-    background: '#3a1f24',
-    border: '1px solid #7a3b44',
-    color: '#ffb4bd',
-    padding: '8px 12px',
-    borderRadius: 6,
-    marginBottom: 12,
-    fontSize: 13,
-  },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 },
-  card: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
-    background: '#1d2128',
-    border: '1px solid #2c323d',
-    borderRadius: 8,
-    padding: 8,
-    cursor: 'pointer',
-    textAlign: 'left',
-    color: '#e6e6e6',
-  },
-  thumb: { width: '100%', height: 124, objectFit: 'cover', borderRadius: 4, background: '#000' },
-  cardLabel: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, lineHeight: 1.3 },
-  badge: {
-    fontSize: 10,
-    textTransform: 'uppercase',
-    background: '#2c323d',
-    borderRadius: 4,
-    padding: '2px 5px',
-    opacity: 0.8,
-  },
-  empty: { opacity: 0.6 },
-};

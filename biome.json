@@ -15,7 +15,8 @@
       "!public/models",
       "!build",
       "!src/data/tables",
-      "!**/*.min.js"
+      "!**/*.min.js",
+      "!src/control/ui/theme.css"
     ]
   },
   "formatter": {

@@ -1,15 +1,23 @@
 // About / help panel (Mining → About sub-tab). Surfaces the things a user
 // otherwise can't see without the README: app version, which signature table is
 // loaded (patch + crawl date), the borderless-windowed requirement, a hotkey
-// cheat-sheet, and links (GitHub, manual update check, open the log folder for
-// bug reports). Self-contained — talks to window.sco directly.
+// cheat-sheet, setup reset controls, and links (GitHub, manual update check, open
+// the log folder for bug reports). Self-contained — talks to window.sco directly.
 
-import type { CSSProperties } from 'react';
 import { useEffect, useState } from 'react';
 import type { SignatureTable } from '../../core';
 import type { HotkeyMap, UpdateInfo } from '../../shared/bridge';
+import {
+  Button,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+  DialogTrigger,
+} from '../ui';
 import { HOTKEY_ROWS, Section } from './controls';
-import { C, F, R } from './tokens';
 
 const REPO_URL = 'https://github.com/tprjd/sc-ore-overlay';
 
@@ -26,7 +34,16 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-export function AboutPanel({ table, hotkeys }: { table: SignatureTable; hotkeys: HotkeyMap }) {
+export function AboutPanel({
+  table,
+  hotkeys,
+  onReRunSetup,
+}: {
+  table: SignatureTable;
+  hotkeys: HotkeyMap;
+  /** Re-open the first-run setup wizard (keeps existing settings). */
+  onReRunSetup: () => void;
+}) {
   const [version, setVersion] = useState<string | null>(null);
   const [update, setUpdate] = useState<UpdateState>({ status: 'idle' });
 
@@ -59,42 +76,48 @@ export function AboutPanel({ table, hotkeys }: { table: SignatureTable; hotkeys:
   return (
     <>
       <Section title="About">
-        <div style={s.appRow}>
-          <span style={s.appName}>SC Ore Overlay</span>
-          <span style={s.version}>{version ? `v${version}` : '—'}</span>
+        <div className="mb-1.5 flex items-baseline gap-2">
+          <span className="text-base font-bold">SC Ore Overlay</span>
+          <span className="tnum text-[13px] text-accent">{version ? `v${version}` : '—'}</span>
         </div>
-        <p style={s.dim}>
+        <p className="text-xs leading-relaxed text-muted">
           Unofficial, fan-made tool for Star Citizen ship mining. Not affiliated with Cloud Imperium
           Games. Licensed MIT.
         </p>
-        <div style={s.btnRow}>
-          <button
-            type="button"
-            style={s.btn}
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={checkUpdates}
             disabled={update.status === 'checking'}
           >
             {update.status === 'checking' ? 'Checking…' : 'Check for updates'}
-          </button>
-          <button type="button" style={s.btn} onClick={() => window.sco?.openExternal?.(REPO_URL)}>
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => window.sco?.openExternal?.(REPO_URL)}
+          >
             GitHub
-          </button>
-          <button
-            type="button"
-            style={s.btn}
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => window.sco?.openLogs?.()}
             title="Open the folder with main.log for bug reports"
           >
             Open logs
-          </button>
+          </Button>
         </div>
-        {update.status === 'latest' && <p style={s.ok}>You're on the latest version.</p>}
+        {update.status === 'latest' && (
+          <p className="mt-2 text-xs text-green">You're on the latest version.</p>
+        )}
         {update.status === 'available' && (
-          <p style={s.update}>
+          <p className="mt-2 text-xs text-amber">
             Update available: <strong>{update.info.latest}</strong>{' '}
             <button
               type="button"
-              style={s.link}
+              className="font-semibold text-accent underline"
               onClick={() => window.sco?.openExternal?.(update.info.url)}
             >
               Download
@@ -102,29 +125,64 @@ export function AboutPanel({ table, hotkeys }: { table: SignatureTable; hotkeys:
           </p>
         )}
         {update.status === 'error' && (
-          <p style={s.dim}>Update check failed (offline or no releases yet).</p>
+          <p className="mt-2 text-xs text-muted">
+            Update check failed (offline or no releases yet).
+          </p>
         )}
       </Section>
 
+      <Section title="Setup">
+        <p className="mb-2.5 text-xs leading-relaxed text-muted">
+          Re-run the guided setup, or wipe everything back to a clean first launch.
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          <Button variant="secondary" size="sm" onClick={onReRunSetup}>
+            Re-run setup
+          </Button>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="secondary" size="sm" className="text-danger hover:text-danger">
+                Reset everything…
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogTitle>Reset everything?</DialogTitle>
+              <DialogDescription>
+                This deletes all saved settings — capture source, regions, location, overlay
+                appearance, hotkeys — and relaunches the app to a clean first-run state. Your survey
+                scan log is kept. This can’t be undone.
+              </DialogDescription>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button variant="secondary" size="sm">
+                    Cancel
+                  </Button>
+                </DialogClose>
+                <Button variant="danger" size="sm" onClick={() => window.sco?.resetSettings?.()}>
+                  Reset &amp; relaunch
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </Section>
+
       <Section title="Signature table">
-        <dl style={s.dl}>
-          <dt style={s.dt}>Patch</dt>
-          <dd style={s.dd}>{table.patch}</dd>
-          <dt style={s.dt}>Updated</dt>
-          <dd style={s.dd}>{formatDate(table.generatedAt)}</dd>
-          <dt style={s.dt}>Deposits</dt>
-          <dd style={s.dd}>{table.deposits.length}</dd>
-          <dt style={s.dt}>Methods</dt>
-          <dd style={s.dd}>{table.methodsIncluded.join(', ')}</dd>
+        <dl className="m-0 flex flex-col gap-1.5">
+          <Row k="Patch" v={table.patch} />
+          <Row k="Updated" v={formatDate(table.generatedAt)} />
+          <Row k="Deposits" v={String(table.deposits.length)} />
+          <Row k="Methods" v={table.methodsIncluded.join(', ')} />
         </dl>
-        <p style={s.dim}>
+        <p className="mt-2 text-xs leading-relaxed text-muted">
           Signatures and clustering change between game patches. Re-crawl per patch (
-          <code style={s.code}>npm run crawl</code>) and switch the table from the Match tab.
+          <code className="rounded-sm bg-bg px-1 py-0.5 font-mono text-[11px]">npm run crawl</code>)
+          and switch the table from the Match tab.
         </p>
       </Section>
 
       <Section title="Requirement: borderless windowed">
-        <p style={s.body}>
+        <p className="m-0 text-xs leading-relaxed">
           Click-through overlays don't draw over <strong>exclusive fullscreen</strong>. Set Star
           Citizen to <strong>Borderless</strong> (or Windowed) in graphics settings so the overlay
           shows on top of the game.
@@ -132,15 +190,17 @@ export function AboutPanel({ table, hotkeys }: { table: SignatureTable; hotkeys:
       </Section>
 
       <Section title="Hotkeys">
-        <dl style={s.dl}>
+        <dl className="m-0 flex flex-col gap-1.5">
           {HOTKEY_ROWS.map(([action, label]) => (
-            <div key={action} style={s.hotkeyRow}>
-              <dt style={s.dt}>{label}</dt>
-              <dd style={s.kbd}>{hotkeys[action]}</dd>
+            <div key={action} className="flex items-center justify-between gap-2">
+              <dt className="text-xs text-muted">{label}</dt>
+              <dd className="m-0 rounded-sm border border-border-strong bg-bg px-1.5 py-0.5 font-mono text-xs text-accent">
+                {hotkeys[action]}
+              </dd>
             </div>
           ))}
         </dl>
-        <p style={s.dim}>
+        <p className="mt-2 text-xs text-muted">
           Rebind these in the Hotkeys tab. Bindings work while the game is focused.
         </p>
       </Section>
@@ -148,53 +208,11 @@ export function AboutPanel({ table, hotkeys }: { table: SignatureTable; hotkeys:
   );
 }
 
-const s: Record<string, CSSProperties> = {
-  appRow: { display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 },
-  appName: { fontSize: 16, fontWeight: 700 },
-  version: { fontSize: 13, color: C.accent, fontVariantNumeric: 'tabular-nums' },
-  body: { fontSize: 12, lineHeight: 1.5, margin: 0 },
-  dim: { opacity: 0.5, fontSize: 12, lineHeight: 1.5, marginTop: 8, marginBottom: 0 },
-  ok: { color: C.green, fontSize: 12, marginTop: 8, marginBottom: 0 },
-  update: { color: C.amber, fontSize: 12, marginTop: 8, marginBottom: 0 },
-  btnRow: { display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' },
-  btn: {
-    background: C.btn,
-    color: C.text,
-    border: `1px solid ${C.borderStrong}`,
-    borderRadius: R.md,
-    padding: '6px 10px',
-    cursor: 'pointer',
-    fontSize: 12,
-  },
-  link: {
-    background: 'none',
-    border: 'none',
-    color: C.accent,
-    cursor: 'pointer',
-    fontSize: 12,
-    fontWeight: 600,
-    padding: 0,
-    textDecoration: 'underline',
-  },
-  dl: { margin: 0, display: 'flex', flexDirection: 'column', gap: 6 },
-  hotkeyRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  dt: { fontSize: 12, opacity: 0.7 },
-  dd: { margin: 0, fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums' },
-  kbd: {
-    margin: 0,
-    fontSize: 12,
-    fontFamily: F.mono,
-    color: C.accent,
-    background: C.bg,
-    border: `1px solid ${C.borderStrong}`,
-    borderRadius: R.sm,
-    padding: '2px 6px',
-  },
-  code: {
-    fontFamily: F.mono,
-    fontSize: 11,
-    background: C.bg,
-    borderRadius: R.sm,
-    padding: '1px 4px',
-  },
-};
+function Row({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <dt className="text-xs text-muted">{k}</dt>
+      <dd className="tnum m-0 text-xs font-semibold">{v}</dd>
+    </div>
+  );
+}
