@@ -103,7 +103,15 @@ actions. Keeps the stream-teardown logic in one place.
 
 ---
 
-## Plan B — `electron/main.ts` (sketch, do after App)
+## Plan B — `electron/main.ts` ✅ done (2026-06-06)
+
+Split into modules: `env` (paths), `settings` (userData I/O + `patchSettings`),
+`windows` (a `createOverlayBox` factory replaces the 3× duplicate creators + refs +
+edit-mode), `ocr` (host client + IPC + kill), `hotkeys` (apply/register + IPC),
+`ipc` (core handlers), `security` (nav hardening + CSP). `main.ts` 614 → 52 (lifecycle
+glue). All 18 IPC channels intact. typecheck + biome ci + build green.
+
+### Original sketch
 
 - `electron/windows.ts`: `createControlWindow()` + a `createOverlayBox({ name, defaults,
   boundsKey })` factory that the overlay/detail/scan windows all use (transparent,
