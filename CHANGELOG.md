@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (0.x while pre-1.0).
 
+## [1.0.0-rc.2] — 2026-06-06
+
+Build/release-process only — no app-behavior changes from rc.1.
+
+### Changed
+
+- **Installer ~31% smaller (~225 MiB → ~154 MiB).** `onnxruntime-node` ships every
+  platform's prebuilt binaries in one tarball, so the Windows-x64 build was bundling
+  ~470 MB of unused native libraries (including a 329 MB Linux CUDA `.so`) plus 142 MB
+  of `onnxruntime-web` WASM that loads from the jsDelivr CDN at runtime and is never read
+  from disk. The build now bundles only the `win32/x64` runtime it actually uses.
+
+### Fixed
+
+- **Release build no longer fails at publish.** On a CI tag build, electron-builder
+  auto-detected the tag and tried to publish to GitHub itself, dying with
+  `GitHub Personal Access Token is not set`. The build step now runs
+  `electron-builder --publish never`; the explicit workflow step attaches the installer.
+  RELEASING.md corrected to match.
+
 ## [1.0.0-rc.1] — 2026-06-05
 
 First release candidate for 1.0. Everything below landed on `main` after v0.3.0;
@@ -67,6 +87,7 @@ R4/R6 in-game checkpoints are confirmed.
   Signature → constrained-division ore match → live transparent, click-through,
   always-on-top overlay. Phases 0–5; both v1 human-verification gates passed.
 
+[1.0.0-rc.2]: https://github.com/tprjd/sc-ore-overlay/releases/tag/v1.0.0-rc.2
 [1.0.0-rc.1]: https://github.com/tprjd/sc-ore-overlay/releases/tag/v1.0.0-rc.1
 [0.3.0]: https://github.com/tprjd/sc-ore-overlay/releases/tag/v0.3.0
 [0.2.0]: https://github.com/tprjd/sc-ore-overlay/releases/tag/v0.2.0

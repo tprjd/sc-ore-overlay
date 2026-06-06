@@ -1,7 +1,7 @@
 {
   "name": "sc-ore-overlay",
   "private": true,
-  "version": "1.0.0-rc.1",
+  "version": "1.0.0-rc.2",
   "description": "Non-obstructive desktop overlay that identifies Star Citizen ship-mining ores from the scanner Radar Signature (RS) reading.",
   "license": "MIT",
   "main": "dist-electron/main.js",
