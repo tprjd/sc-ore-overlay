@@ -142,6 +142,7 @@ export function App() {
         hotkeys={s.hotkeys}
         hotkeyStatus={s.hotkeyStatus}
         onHotkeysChange={s.setHotkeys}
+        captureParams={{ intervalMs: s.params.intervalMs, quorum: s.params.quorum }}
         onComplete={completeSetup}
         onSkip={skipSetup}
         onExit={skipSetup}

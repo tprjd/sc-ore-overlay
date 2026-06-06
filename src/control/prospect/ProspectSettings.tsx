@@ -19,6 +19,7 @@ import { AboutPanel } from '../components/AboutPanel';
 import { HotkeyEditor, NoiseEditor, Section, Slider } from '../components/controls';
 import {
   CAPTURE_PRESETS,
+  captureValuesLabel,
   matchCapturePreset,
   matchPreset,
   OVERLAY_PRESETS,
@@ -243,7 +244,7 @@ export function ProspectSettings(props: ProspectSettingsProps) {
                     key={id}
                     variant="secondary"
                     size="sm"
-                    title={hint}
+                    title={`${captureValuesLabel(patch)} — ${hint}`}
                     className={cn(activeCapture === id && 'border-accent text-accent')}
                     onClick={() => onParamsChange({ ...params, ...patch })}
                   >

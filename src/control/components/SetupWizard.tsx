@@ -52,9 +52,14 @@ import type { LoopParams } from '../useCaptureLoop';
 import { pickReading } from '../useCaptureLoop';
 import type { PreviewRegion } from './CapturePreview';
 import { CapturePreview } from './CapturePreview';
-import { HotkeyEditor } from './controls';
-import type { CapturePreset, OverlayPreset } from './presets';
-import { CAPTURE_PRESETS, OVERLAY_PRESETS } from './presets';
+import { HotkeyEditor, Slider } from './controls';
+import type { CaptureParams, OverlayPreset } from './presets';
+import {
+  CAPTURE_PRESETS,
+  captureValuesLabel,
+  matchCapturePreset,
+  OVERLAY_PRESETS,
+} from './presets';
 import { newRegionId, ROLE_META } from './roles';
 import type { PickedSource } from './SourceGrid';
 import { SourceGrid } from './SourceGrid';
@@ -78,6 +83,8 @@ export interface SetupWizardProps {
   hotkeys: HotkeyMap;
   hotkeyStatus: Partial<Record<HotkeyAction, boolean>>;
   onHotkeysChange: (map: HotkeyMap) => void;
+  /** Current capture interval + quorum, to seed the Capture step. */
+  captureParams: CaptureParams;
   onComplete: (result: SetupResult) => void;
   onSkip: () => void;
   /** Leave the wizard entirely (← from the welcome step). */
@@ -112,6 +119,7 @@ export function SetupWizard({
   hotkeys,
   hotkeyStatus,
   onHotkeysChange,
+  captureParams,
   onComplete,
   onSkip,
   onExit,
@@ -126,7 +134,7 @@ export function SetupWizard({
   const [scanRect, setScanRect] = useState<NormRegion | null>(null);
   const [location, setLocation] = useState<string | null>(null);
   const [presetId, setPresetId] = useState<OverlayPreset | null>('standard');
-  const [captureId, setCaptureId] = useState<CapturePreset>('normal');
+  const [capture, setCapture] = useState<CaptureParams>(captureParams);
 
   // RS confirm-read gate: OCR the drawn box once so a bad crop is caught here.
   const [testing, setTesting] = useState(false);
@@ -190,7 +198,7 @@ export function SetupWizard({
       overlayPreset: presetId
         ? (OVERLAY_PRESETS.find((p) => p.id === presetId)?.patch ?? null)
         : null,
-      captureParams: CAPTURE_PRESETS.find((p) => p.id === captureId)?.patch ?? null,
+      captureParams: capture,
     });
   };
 
@@ -414,10 +422,10 @@ export function SetupWizard({
               <button
                 key={p.id}
                 type="button"
-                onClick={() => setCaptureId(p.id)}
+                onClick={() => setCapture(p.patch)}
                 className={cn(
                   'flex flex-col gap-1 rounded-lg border p-3 text-left transition-colors',
-                  captureId === p.id
+                  matchCapturePreset(capture) === p.id
                     ? 'border-accent bg-accent/10'
                     : 'border-border bg-surface hover:border-border-strong',
                 )}
@@ -425,10 +433,40 @@ export function SetupWizard({
                 <span className="flex items-center gap-1.5 font-semibold">
                   <Gauge className="h-3.5 w-3.5 text-accent" />
                   {p.label}
+                  <span className="tnum font-normal text-muted">
+                    — {captureValuesLabel(p.patch)}
+                  </span>
                 </span>
                 <span className="text-xs text-muted">{p.hint}</span>
               </button>
             ))}
+          </section>
+
+          <section>
+            <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
+              Manual {matchCapturePreset(capture) === null && '(custom)'}
+            </h3>
+            <Slider
+              label="Interval"
+              min={300}
+              max={2000}
+              step={50}
+              value={capture.intervalMs}
+              onChange={(intervalMs) => setCapture((c) => ({ ...c, intervalMs }))}
+              suffix=" ms"
+            />
+            <Slider
+              label="Vote quorum"
+              min={1}
+              max={8}
+              value={capture.quorum}
+              onChange={(quorum) => setCapture((c) => ({ ...c, quorum }))}
+              suffix=" frames"
+            />
+            <p className="mt-1 text-xs text-muted">
+              Interval = how often the RS region is read. Vote quorum = matching reads needed before
+              a value locks (kills OCR flicker).
+            </p>
           </section>
 
           <Footer className="mt-auto">
