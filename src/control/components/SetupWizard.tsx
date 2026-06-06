@@ -1,8 +1,8 @@
 // First-run setup wizard. Walks a fresh profile through everything needed to
 // start, with every non-essential step skippable and the whole flow skippable
 // from the header. Steps:
-//   welcome → source → RS region (+ test read) → scan panel (opt) → options (opt)
-//   → hotkeys (opt) → done
+//   welcome → source → RS region (+ test read) → scan panel (opt) → capture speed
+//   (opt) → options (opt) → hotkeys (opt) → done
 //
 // It owns no persistence: it collects choices and hands them back via onComplete;
 // App applies them. Reuses CapturePreview (self-contained — no capture loop just
@@ -14,6 +14,7 @@ import {
   ArrowRight,
   Check,
   Crosshair,
+  Gauge,
   Keyboard,
   Layers,
   MonitorPlay,
@@ -47,12 +48,13 @@ import {
   Stepper,
 } from '../ui';
 import { cn } from '../ui/cn';
+import type { LoopParams } from '../useCaptureLoop';
 import { pickReading } from '../useCaptureLoop';
 import type { PreviewRegion } from './CapturePreview';
 import { CapturePreview } from './CapturePreview';
 import { HotkeyEditor } from './controls';
-import type { OverlayPreset } from './presets';
-import { OVERLAY_PRESETS } from './presets';
+import type { CapturePreset, OverlayPreset } from './presets';
+import { CAPTURE_PRESETS, OVERLAY_PRESETS } from './presets';
 import { newRegionId, ROLE_META } from './roles';
 import type { PickedSource } from './SourceGrid';
 import { SourceGrid } from './SourceGrid';
@@ -63,6 +65,8 @@ export interface SetupResult {
   scanRegion: SurveyRegionSetting | null;
   location: string | null;
   overlayPreset: Partial<OverlayConfig> | null;
+  /** Capture-speed preset (interval + quorum); null = leave as-is. */
+  captureParams: Pick<LoopParams, 'intervalMs' | 'quorum'> | null;
 }
 
 export interface SetupWizardProps {
@@ -80,13 +84,14 @@ export interface SetupWizardProps {
   onExit: () => void;
 }
 
-type Step = 'welcome' | 'source' | 'rs' | 'scan' | 'options' | 'hotkeys' | 'done';
-const FLOW: Step[] = ['welcome', 'source', 'rs', 'scan', 'options', 'hotkeys', 'done'];
+type Step = 'welcome' | 'source' | 'rs' | 'scan' | 'speed' | 'options' | 'hotkeys' | 'done';
+const FLOW: Step[] = ['welcome', 'source', 'rs', 'scan', 'speed', 'options', 'hotkeys', 'done'];
 
 const STEPPER = [
   { label: 'Source' },
   { label: 'RS region' },
   { label: 'Scan panel', optional: true },
+  { label: 'Capture', optional: true },
   { label: 'Options', optional: true },
   { label: 'Hotkeys', optional: true },
 ];
@@ -94,8 +99,9 @@ const STEPPER_INDEX: Partial<Record<Step, number>> = {
   source: 0,
   rs: 1,
   scan: 2,
-  options: 3,
-  hotkeys: 4,
+  speed: 3,
+  options: 4,
+  hotkeys: 5,
 };
 
 export function SetupWizard({
@@ -120,6 +126,7 @@ export function SetupWizard({
   const [scanRect, setScanRect] = useState<NormRegion | null>(null);
   const [location, setLocation] = useState<string | null>(null);
   const [presetId, setPresetId] = useState<OverlayPreset | null>('standard');
+  const [captureId, setCaptureId] = useState<CapturePreset>('normal');
 
   // RS confirm-read gate: OCR the drawn box once so a bad crop is caught here.
   const [testing, setTesting] = useState(false);
@@ -183,6 +190,7 @@ export function SetupWizard({
       overlayPreset: presetId
         ? (OVERLAY_PRESETS.find((p) => p.id === presetId)?.patch ?? null)
         : null,
+      captureParams: CAPTURE_PRESETS.find((p) => p.id === captureId)?.patch ?? null,
     });
   };
 
@@ -392,6 +400,49 @@ export function SetupWizard({
         ) : (
           <NeedSource onBack={() => setStep('source')} />
         ))}
+
+      {step === 'speed' && (
+        <div className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col gap-5 overflow-y-auto p-6">
+          <StepHeading
+            icon={<Gauge className="h-5 w-5" />}
+            title="Capture speed (optional)"
+            desc="How often the RS region is read and how many matching reads it takes to lock a value. Faster reacts quicker but jumps more; slower is steadier and lighter on CPU. Changeable later from the Mining panel."
+          />
+
+          <section className="flex flex-col gap-2">
+            {CAPTURE_PRESETS.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setCaptureId(p.id)}
+                className={cn(
+                  'flex flex-col gap-1 rounded-lg border p-3 text-left transition-colors',
+                  captureId === p.id
+                    ? 'border-accent bg-accent/10'
+                    : 'border-border bg-surface hover:border-border-strong',
+                )}
+              >
+                <span className="flex items-center gap-1.5 font-semibold">
+                  <Gauge className="h-3.5 w-3.5 text-accent" />
+                  {p.label}
+                </span>
+                <span className="text-xs text-muted">{p.hint}</span>
+              </button>
+            ))}
+          </section>
+
+          <Footer className="mt-auto">
+            <Button variant="link" onClick={next}>
+              Skip this step
+            </Button>
+            <span className="flex-1" />
+            <Button variant="primary" onClick={next}>
+              Next
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </Footer>
+        </div>
+      )}
 
       {step === 'options' && (
         <div className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col gap-5 overflow-y-auto p-6">

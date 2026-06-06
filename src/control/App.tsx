@@ -92,6 +92,7 @@ export function App() {
     });
     s.setLocation(result.location);
     if (result.overlayPreset) s.setOverlayConfig({ ...s.overlayConfig, ...result.overlayPreset });
+    if (result.captureParams) s.setParams({ ...s.params, ...result.captureParams });
     setShowWizard(false);
     s.markSetupComplete();
   };

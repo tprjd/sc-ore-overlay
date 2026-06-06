@@ -17,7 +17,12 @@ import type {
 import { DEFAULT_OVERLAY_CONFIG } from '../../shared/bridge';
 import { AboutPanel } from '../components/AboutPanel';
 import { HotkeyEditor, NoiseEditor, Section, Slider } from '../components/controls';
-import { matchPreset, OVERLAY_PRESETS } from '../components/presets';
+import {
+  CAPTURE_PRESETS,
+  matchCapturePreset,
+  matchPreset,
+  OVERLAY_PRESETS,
+} from '../components/presets';
 import { RegionList } from '../components/RegionList';
 import type { PickedSource } from '../components/SourcePicker';
 import type { OcrBackend } from '../ocr';
@@ -122,6 +127,7 @@ export function ProspectSettings(props: ProspectSettingsProps) {
     onParamsChange({ ...params, [key]: val });
 
   const activePreset = matchPreset(overlayConfig);
+  const activeCapture = matchCapturePreset(params);
 
   return (
     <>
@@ -230,6 +236,21 @@ export function ProspectSettings(props: ProspectSettingsProps) {
             </Section>
 
             <Section title="Timing">
+              <div className="mb-3 flex flex-wrap items-center gap-1.5">
+                <span className="mr-0.5 text-xs text-fg/80">Speed</span>
+                {CAPTURE_PRESETS.map(({ id, label, patch, hint }) => (
+                  <Button
+                    key={id}
+                    variant="secondary"
+                    size="sm"
+                    title={hint}
+                    className={cn(activeCapture === id && 'border-accent text-accent')}
+                    onClick={() => onParamsChange({ ...params, ...patch })}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
               <Slider
                 label="Interval"
                 min={300}
