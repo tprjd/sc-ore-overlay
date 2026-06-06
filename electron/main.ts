@@ -14,8 +14,7 @@ import { registerCoreIpc } from './ipc';
 import { installCrashHandlers, log } from './log';
 import { killOcrHost, registerOcrIpc } from './ocr';
 import { installContentSecurityPolicy, installNavigationHardening } from './security';
-import { runStartupTableSync } from './tables';
-import { controlWindow, createAllWindows } from './windows';
+import { createAllWindows } from './windows';
 
 // Capture crashes/throws to <userData>/logs/main.log before anything else can
 // fail silently (see electron/log.ts).
@@ -36,15 +35,9 @@ void app.whenReady().then(() => {
   registerHotkeyIpc();
   createAllWindows();
   applyHotkeys(currentHotkeys());
-
-  // Crawl/refresh ore data in the background (first run, newer patch, etc.).
-  // Deferred a tick so the control renderer can subscribe to progress/updated
-  // events first; never awaited, so it can't block or crash startup.
-  setTimeout(() => {
-    void runStartupTableSync((channel, payload) =>
-      controlWindow()?.webContents.send(channel, payload),
-    );
-  }, 1500);
+  // Ore-data sync is renderer-driven: useTables calls sco.syncTables() once it
+  // knows the newest patch it has (bundled + crawled), so main only crawls when
+  // the live patch is actually newer. See electron/ipc.ts 'sco:sync-tables'.
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createAllWindows();

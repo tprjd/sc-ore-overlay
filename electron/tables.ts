@@ -70,15 +70,6 @@ export function loadCrawledTables(): SignatureTable[] {
   return out;
 }
 
-/** Newest crawled patch label, or null if none. */
-function newestCrawledPatch(tables: SignatureTable[]): string | null {
-  let best: string | null = null;
-  for (const t of tables) {
-    if (best === null || isVersionNewer(t.patch, best)) best = t.patch;
-  }
-  return best;
-}
-
 /**
  * Crawl the wiki and write <userData>/tables/<patch>.json. Rejects on an empty
  * crawl so a partial/failed run never overwrites a good table with nothing.
@@ -97,34 +88,30 @@ export async function crawlAndSave(
 }
 
 /**
- * Startup sync: crawl on first launch (no crawled table yet), or when the live
- * game patch is newer than the newest crawled one. Never blocks launch; every
+ * Check the live game patch and crawl only if it's newer than what the renderer
+ * already has (`newestHave` = newest of bundled + crawled). Same patch → no
+ * crawl (the user can still force one via refresh). Never blocks launch; every
  * failure is logged and swallowed so the app keeps running on its existing
- * (crawled or bundled) table. Emits progress + an updated signal via `send`.
+ * table. Emits progress + an updated signal via `send`.
  */
-export async function runStartupTableSync(
+export async function syncTables(
+  newestHave: string | null,
   send: (channel: string, payload?: unknown) => void,
 ): Promise<void> {
   try {
-    const existing = loadCrawledTables();
     const get = makeGet();
     const livePatch = await detectPatch(get);
-    const newest = newestCrawledPatch(existing);
-    const need =
-      existing.length === 0 ||
-      (livePatch !== 'unknown' && (newest === null || isVersionNewer(livePatch, newest)));
-    if (!need) {
-      log.info(`ore data current (have ${newest}, live ${livePatch})`);
+    if (livePatch === 'unknown') return; // API unreachable — keep what we have
+    if (newestHave && !isVersionNewer(livePatch, newestHave)) {
+      log.info(`ore data current (have ${newestHave}, live ${livePatch})`);
       return;
     }
-    log.info(`ore data sync: crawling ${livePatch} (had ${newest ?? 'none'})`);
-    await crawlAndSave(livePatch === 'unknown' ? undefined : livePatch, (p) =>
-      send('sco:crawl-progress', p),
-    );
+    log.info(`ore data sync: crawling ${livePatch} (had ${newestHave ?? 'none'})`);
+    await crawlAndSave(livePatch, (p) => send('sco:crawl-progress', p));
     send('sco:crawl-progress', { phase: 'done', done: 1, total: 1 });
     send('sco:tables-updated');
   } catch (e) {
-    log.error('ore-data startup sync failed', e);
+    log.error('ore-data sync failed', e);
     send('sco:crawl-progress', { phase: 'error', done: 0, total: 0 });
   }
 }

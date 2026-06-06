@@ -72,6 +72,7 @@ const api: ScoBridge = {
     ipcRenderer.invoke('sco:ocr-recognize', dataUrl) as Promise<OcrLine[]>,
 
   getCrawledTables: () => ipcRenderer.invoke('sco:get-tables') as Promise<SignatureTable[]>,
+  syncTables: (newestHave) => ipcRenderer.send('sco:sync-tables', newestHave),
   refreshTables: () => ipcRenderer.invoke('sco:refresh-tables') as Promise<SignatureTable | null>,
   onTablesUpdated: (cb) => {
     const handler = (): void => cb();

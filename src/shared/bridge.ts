@@ -346,6 +346,12 @@ export interface ScoBridge {
    */
   getCrawledTables(): Promise<SignatureTable[]>;
   /**
+   * Startup sync: tell main the newest patch the renderer already has (bundled +
+   * crawled). Main crawls only if the live game patch is newer; same patch is a
+   * no-op. Results arrive via onCrawlProgress / onTablesUpdated.
+   */
+  syncTables(newestHave: string | null): void;
+  /**
    * Force a re-crawl of the current game patch now. Resolves with the new table
    * (also broadcast via onTablesUpdated), or null on failure. Never throws.
    */

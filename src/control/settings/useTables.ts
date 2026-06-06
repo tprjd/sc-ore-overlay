@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { SignatureTable } from '../../core';
 import { loadSignatureTable } from '../../core';
+import { isVersionNewer } from '../../core/semver';
 import type { CrawlProgress } from '../../shared/bridge';
 
 // Bundled fallback tables, inlined at build time.
@@ -22,6 +23,15 @@ function bundledTables(): Record<string, SignatureTable> {
   }
   return out;
 }
+const BUNDLED = bundledTables();
+
+/** Newest patch label among the given list, or null if empty. */
+function newestPatch(patches: string[]): string | null {
+  return patches.reduce<string | null>(
+    (best, p) => (best && !isVersionNewer(p, best) ? best : p),
+    null,
+  );
+}
 
 export interface UseTables {
   /** patch → table (bundled, overlaid with any crawled tables). */
@@ -35,7 +45,7 @@ export interface UseTables {
 }
 
 export function useTables(): UseTables {
-  const [tables, setTables] = useState<Record<string, SignatureTable>>(bundledTables);
+  const [tables, setTables] = useState<Record<string, SignatureTable>>(BUNDLED);
   const [refreshing, setRefreshing] = useState(false);
   const [progress, setProgress] = useState<CrawlProgress | null>(null);
 
@@ -63,7 +73,20 @@ export function useTables(): UseTables {
   }, [mergeCrawled]);
 
   useEffect(() => {
-    loadCrawled();
+    // Initial load, then ask main to crawl only if the live game patch is newer
+    // than the newest table we already have (bundled + crawled).
+    window.sco
+      ?.getCrawledTables?.()
+      .then((crawled) => {
+        mergeCrawled(crawled);
+        const patches = [
+          ...Object.keys(BUNDLED),
+          ...(crawled ?? []).map((t) => t.patch).filter(Boolean),
+        ];
+        window.sco?.syncTables?.(newestPatch(patches));
+      })
+      .catch(() => {});
+
     const offUpdated = window.sco?.onTablesUpdated?.(() => {
       setRefreshing(false);
       setProgress(null);
@@ -82,7 +105,7 @@ export function useTables(): UseTables {
       offUpdated?.();
       offProgress?.();
     };
-  }, [loadCrawled]);
+  }, [loadCrawled, mergeCrawled]);
 
   const refresh = useCallback(() => {
     setRefreshing(true);

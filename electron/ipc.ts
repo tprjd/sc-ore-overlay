@@ -24,7 +24,7 @@ import {
   writeSettings,
   writeSurveyLog,
 } from './settings';
-import { crawlAndSave, loadCrawledTables } from './tables';
+import { crawlAndSave, loadCrawledTables, syncTables } from './tables';
 import { checkForUpdate } from './update';
 import { controlWindow, detailBox, overlayBox, overlayBoxWindows, scanBox } from './windows';
 
@@ -93,6 +93,13 @@ export function registerCoreIpc(): void {
   // tables (preferring them per patch). Startup sync + manual refresh both write
   // to userData and notify via 'sco:tables-updated' / 'sco:crawl-progress'.
   ipcMain.handle('sco:get-tables', (): SignatureTable[] => loadCrawledTables());
+  // Renderer-driven startup sync: crawl only if the live patch is newer than the
+  // newest the renderer already has (bundled + crawled). Notifies via events.
+  ipcMain.on('sco:sync-tables', (_e: IpcMainEvent, newestHave: string | null) => {
+    void syncTables(newestHave, (channel: string, payload?: unknown) =>
+      controlWindow()?.webContents.send(channel, payload),
+    );
+  });
   ipcMain.handle('sco:refresh-tables', async (): Promise<SignatureTable | null> => {
     const send = (channel: string, payload?: unknown): void =>
       controlWindow()?.webContents.send(channel, payload);
