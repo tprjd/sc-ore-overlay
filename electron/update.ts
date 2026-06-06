@@ -18,7 +18,13 @@ import { log } from './log';
 
 const OWNER = 'tprjd';
 const REPO = 'sc-ore-overlay';
-const LATEST_API = `https://api.github.com/repos/${OWNER}/${REPO}/releases/latest`;
+// NOT /releases/latest — that endpoint excludes pre-releases, so while we ship
+// rc/beta builds it 404s and the app reports "up to date" forever. List recent
+// releases and take the newest published (non-draft) one, pre-releases included,
+// so testers on an rc get notified of the next rc. (Once a stable release is the
+// newest, it wins on SemVer precedence anyway; if you later want to hide
+// pre-releases from non-testers, filter `!r.prerelease` here.)
+const RELEASES_API = `https://api.github.com/repos/${OWNER}/${REPO}/releases?per_page=10`;
 const RELEASES_PAGE = `https://github.com/${OWNER}/${REPO}/releases/latest`;
 const TIMEOUT_MS = 6000;
 
@@ -30,7 +36,7 @@ export async function checkForUpdate(): Promise<UpdateInfo> {
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
     // net.fetch uses Chromium's network stack, so it honors system proxy config.
-    const res = await net.fetch(LATEST_API, {
+    const res = await net.fetch(RELEASES_API, {
       headers: {
         'User-Agent': `sc-ore-overlay/${current}`,
         Accept: 'application/vnd.github+json',
@@ -42,9 +48,20 @@ export async function checkForUpdate(): Promise<UpdateInfo> {
       log.info(`[update] check: HTTP ${res.status}`);
       return info;
     }
-    const data = (await res.json()) as { tag_name?: string; html_url?: string };
-    info.latest = data.tag_name ?? null;
-    if (data.html_url) info.url = data.html_url;
+    // GitHub returns releases newest-first; unauthenticated callers never see
+    // drafts, but guard anyway. First published release wins.
+    const list = (await res.json()) as Array<{
+      tag_name?: string;
+      html_url?: string;
+      draft?: boolean;
+    }>;
+    const newest = Array.isArray(list) ? list.find((r) => !r.draft) : undefined;
+    if (!newest) {
+      log.info('[update] check: no published releases');
+      return info;
+    }
+    info.latest = newest.tag_name ?? null;
+    if (newest.html_url) info.url = newest.html_url;
     info.available = info.latest != null && isVersionNewer(info.latest, current);
     log.info(
       `[update] current=${current} latest=${info.latest ?? '?'} available=${info.available}`,

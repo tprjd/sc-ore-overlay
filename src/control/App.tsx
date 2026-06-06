@@ -6,6 +6,7 @@
 import { X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { isVersionNewer } from '../core/semver';
+import { AboutDialog } from './components/AboutDialog';
 import type { SetupResult } from './components/SetupWizard';
 import { SetupWizard } from './components/SetupWizard';
 import type { PickedSource } from './components/SourcePicker';
@@ -154,6 +155,9 @@ export function App() {
       <SourcePicker
         onPick={handlePick}
         lastSourceId={autoReconnect ? s.lastSource.current.id : undefined}
+        about={
+          <AboutDialog table={table} hotkeys={s.hotkeys} onReRunSetup={() => setShowWizard(true)} />
+        }
       />
     );
   }

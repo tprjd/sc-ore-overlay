@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (0.x while pre-1.0).
 
+## [1.0.0-rc.3] — 2026-06-07
+
+### Added
+
+- **About/help reachable from the source picker.** Version, update check, open
+  logs, the borderless-windowed requirement, hotkeys, and setup reset were locked
+  behind picking a capture source; they're now available from the picker via an
+  About dialog (the same shared panel).
+
+### Fixed
+
+- **In-app update check now sees pre-releases.** It polled `/releases/latest`
+  (which excludes pre-releases) and dropped the `-rc.N` suffix when comparing, so
+  rc builds always reported "up to date". Now lists `/releases`, takes the newest
+  published release, and applies SemVer pre-release precedence
+  (`1.0.0` > `1.0.0-rc.2` > `1.0.0-rc.1`). _(Takes effect from this build onward;
+  rc.1/rc.2 shipped the old check and can't self-correct.)_
+- **About dialog layout.** Fixed header with a pinned close button, a scrollable
+  body, and section cards that no longer shrink or clip their content.
+
 ## [1.0.0-rc.2] — 2026-06-06
 
 Build/release-process only — no app-behavior changes from rc.1.
@@ -87,6 +107,7 @@ R4/R6 in-game checkpoints are confirmed.
   Signature → constrained-division ore match → live transparent, click-through,
   always-on-top overlay. Phases 0–5; both v1 human-verification gates passed.
 
+[1.0.0-rc.3]: https://github.com/tprjd/sc-ore-overlay/releases/tag/v1.0.0-rc.3
 [1.0.0-rc.2]: https://github.com/tprjd/sc-ore-overlay/releases/tag/v1.0.0-rc.2
 [1.0.0-rc.1]: https://github.com/tprjd/sc-ore-overlay/releases/tag/v1.0.0-rc.1
 [0.3.0]: https://github.com/tprjd/sc-ore-overlay/releases/tag/v0.3.0

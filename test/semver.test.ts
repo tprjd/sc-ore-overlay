@@ -34,4 +34,19 @@ describe('isVersionNewer', () => {
     expect(isVersionNewer('1.2.0', '1.2')).toBe(false);
     expect(isVersionNewer('1.2', '1.2.0')).toBe(false);
   });
+  it('orders pre-releases of the same core by SemVer precedence', () => {
+    // The bug that hid rc.2 from rc.1 users: same numeric core must compare by suffix.
+    expect(isVersionNewer('1.0.0-rc.2', '1.0.0-rc.1')).toBe(true);
+    expect(isVersionNewer('1.0.0-rc.1', '1.0.0-rc.2')).toBe(false);
+    expect(isVersionNewer('1.0.0-rc.10', '1.0.0-rc.2')).toBe(true); // numeric, not lexical
+    expect(isVersionNewer('1.0.0-rc.1', '1.0.0-rc.1')).toBe(false);
+  });
+  it('ranks a stable release above any pre-release of the same core', () => {
+    expect(isVersionNewer('1.0.0', '1.0.0-rc.2')).toBe(true);
+    expect(isVersionNewer('1.0.0-rc.2', '1.0.0')).toBe(false);
+  });
+  it('lets a higher core beat a pre-release regardless of suffix', () => {
+    expect(isVersionNewer('1.0.1-rc.1', '1.0.0')).toBe(true);
+    expect(isVersionNewer('1.0.0-rc.1', '0.9.0')).toBe(true);
+  });
 });
