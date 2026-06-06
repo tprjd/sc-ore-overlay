@@ -4,7 +4,7 @@
 // window refs + the edit-mode toggle; accessors let ipc/hotkeys reach the windows.
 
 import path from 'node:path';
-import { BrowserWindow } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import type { AppSettings } from '../src/shared/bridge';
 import { APP_ICON, DEV_SERVER_URL, PRELOAD, RENDERER_DIST } from './env';
 import { readSettings, writeSettings } from './settings';
@@ -139,6 +139,12 @@ function createControlWindow(): BrowserWindow {
   if (DEV_SERVER_URL) win.webContents.openDevTools({ mode: 'detach' });
   win.on('closed', () => {
     controlWin = null;
+    // The overlay boxes are parented to a hidden owner (not this window) so they
+    // don't hide when the control window minimizes — but that means closing the
+    // control window leaves them open and window-all-closed never fires. The
+    // control window is the primary window, so closing it quits the app (which
+    // closes the boxes + owner and runs will-quit cleanup).
+    app.quit();
   });
   return win;
 }
