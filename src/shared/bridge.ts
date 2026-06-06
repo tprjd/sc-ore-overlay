@@ -270,13 +270,13 @@ export interface AppSettings {
   dismissedUpdate?: string;
   /**
    * OCR execution backend.
-   * - 'wasm' (CPU, default): never touches the GPU, so it can't be starved by
+   * - 'wasm' (CPU, fallback): never touches the GPU, so it can't be starved by
    *   the overlay window's compositor. Slowest (~1–2 s/fresh read).
-   * - 'directml': native onnxruntime-node in a utility process, DirectML EP —
-   *   GPU OCR on any DX12 GPU (NVIDIA/AMD/Intel). Its own D3D12 device sits
+   * - 'directml' (default): native onnxruntime-node in a utility process, DirectML
+   *   EP — GPU OCR on any DX12 GPU (NVIDIA/AMD/Intel). Its own D3D12 device sits
    *   outside Chromium's GPU process, so it does NOT contend with the overlay
    *   the way in-renderer WebGPU does. ~28 ms/read once warm. Falls back to
-   *   'wasm' if the host can't start or DirectML init fails. (See TASKS.md R4.)
+   *   'wasm' if the host can't start or DirectML init fails. (See NOTES.md → OCR.)
    * - 'webgpu': in-renderer ONNX-Runtime-Web WebGPU. Faster than wasm but
    *   fights the visible overlay for the GPU on some setups (latency spikes
    *   into the seconds); kept for the adventurous, not the default.

@@ -9,7 +9,7 @@ name: Release
 # rc/beta tags). Manual runs just upload the installer as a build artifact.
 #
 # Unsigned for now (code signing deferred) — the installer triggers a Windows
-# SmartScreen "unknown publisher" warning. See PRODUCTION-READINESS.md.
+# SmartScreen "unknown publisher" warning. See NOTES.md (deferred product decisions).
 
 on:
   push:

@@ -265,8 +265,8 @@ Extend `AppSettings` (Electron `userData`, same mechanism as today):
 
 ## 10. Phased build plan (with acceptance checks)
 
-Mirror `TASKS.md` conventions: small commits per sub-phase, run the acceptance check, **stop
-at the human-verification checkpoint**.
+Small commits per sub-phase, run the acceptance check, **stop at the human-verification
+checkpoint**.
 
 Priority is the first milestone: **read coordinates, then draw the map (debug-seeded).**
 Local logging follows. Networking is parked until explicitly requested.

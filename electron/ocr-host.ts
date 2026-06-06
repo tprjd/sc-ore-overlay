@@ -4,8 +4,8 @@
 // provider** (`['dml','cpu']`), so OCR is back on the GPU but vendor-agnostic
 // (any DX12 GPU: NVIDIA/AMD/Intel).
 //
-// Why a separate process and not the renderer's WebGPU path (see OCR-ISSUES.md /
-// TASKS.md R4): in the renderer, WebGPU OCR and the always-on-top overlay
+// Why a separate process and not the renderer's WebGPU path (see NOTES.md → OCR
+// pipeline): in the renderer, WebGPU OCR and the always-on-top overlay
 // compositor are serialized through Chromium's single GPU process, and
 // onnxruntime-web 1.17.3's WebGPU EP leaks — together they ramp OCR latency into
 // the seconds and freeze. A native onnxruntime-node process talks to the GPU via

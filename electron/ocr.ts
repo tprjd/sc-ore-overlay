@@ -1,7 +1,7 @@
 // Native OCR host client (main side). A Node utility process with its own D3D12
 // device runs onnxruntime-node + DirectML, so GPU OCR doesn't contend with the
-// overlay the way in-renderer WebGPU does (see electron/ocr-host.ts / TASKS.md
-// R4). Spawned lazily on first probe; the renderer falls back to the in-renderer
+// overlay the way in-renderer WebGPU does (see electron/ocr-host.ts / NOTES.md →
+// OCR pipeline). Spawned lazily on first probe; the renderer falls back to the in-renderer
 // WASM worker if it can't start. Exposes the IPC handlers + a kill for shutdown.
 
 import path from 'node:path';

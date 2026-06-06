@@ -1,7 +1,8 @@
 # RELEASING.md
 
 How **SC Ore Overlay** builds and ships a release. Windows-only target (Star Citizen is
-Windows-only), unsigned for now (code signing deferred — see PRODUCTION-READINESS.md).
+Windows-only), unsigned for now (code signing deferred — see NOTES.md → deferred product
+decisions).
 
 ---
 
@@ -56,4 +57,4 @@ needed. electron-builder runs with no `--publish` flag, so it never uploads on i
 artifact upload + Release attach are explicit workflow steps.
 
 Still unsigned until a code-signing cert / Trusted Signing budget exists. Once signing lands,
-revisit full `electron-updater` auto-download/install (PRODUCTION-READINESS.md #5).
+revisit full `electron-updater` auto-download/install (NOTES.md → deferred product decisions).

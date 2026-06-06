@@ -1,11 +1,9 @@
 # CLAUDE.md
 
-You are building **SC Ore Overlay** from scratch. This file is your operating guide: the locked
-stack, the verified domain knowledge you must build on, and the guardrails. The phased build plan
-with acceptance criteria is in **`TASKS.md`** — follow it phase by phase, run each phase's
-acceptance check, and stop at the human-verification checkpoints before continuing.
-
-There is no starter code in this repo by design. You write all of it.
+**SC Ore Overlay** — your operating guide: the locked stack, the verified domain knowledge you
+must build on, and the guardrails. v1 (ship mining) is **built and shipped** (v1.0.0-rc.1);
+remaining roadmap, the OCR knobs/root-cause, known issues, and architecture notes live in
+**`NOTES.md`**. The release process is in **`RELEASING.md`**.
 
 ---
 
@@ -16,7 +14,7 @@ the **Radar Signature (RS)** number off the mining scanner HUD from a user-defin
 which ore the reading corresponds to, and displays the ore name + node count on a transparent,
 always-on-top, click-through overlay while the user plays.
 
-**v1 scope: ship mining only.** ROC/FPS mining is deferred (see TASKS.md Phase 5).
+**v1 scope: ship mining only.** ROC/FPS mining is deferred (see NOTES.md roadmap).
 
 ---
 
@@ -48,11 +46,11 @@ overlay mechanism. OCR is locked to **PP-OCR via @gutenye/ocr-browser on ONNX Ru
 in-renderer) after Tesseract.js and a small TrOCR model both proved unreliable on the HUD font. If
 you believe a locked choice genuinely cannot work, stop and flag it rather than swapping silently.
 
-> **Sanctioned deviation (2026-06-03, TASKS.md R4):** OCR may also run on a **native
+> **Sanctioned deviation (2026-06-03, native DirectML OCR):** OCR may also run on a **native
 > `onnxruntime-node` + DirectML** backend in an Electron `utilityProcess` (`electron/ocr-host.ts`),
 > selected by `ocrBackend: 'directml'`. This amends "no native OCR binary" / the WASM-in-renderer
 > lock **with the human's explicit approval**, to get vendor-agnostic GPU OCR (any DX12 GPU) without
-> the overlay-vs-WebGPU contention documented in OCR-ISSUES.md. The **OCR engine is unchanged** —
+> the overlay-vs-WebGPU contention documented in NOTES.md (OCR pipeline). The **OCR engine is unchanged** —
 > same PP-OCR (`ch_PP-OCRv4_det/rec`) models; only the runtime *host* moves out of the renderer. The
 > WASM-in-renderer path remains the automatic fallback, so the locked path is never removed. Do
 > **not** "fix" this back to web-only.
@@ -218,7 +216,7 @@ in-game behavior.
 
 ## Working conventions
 
-- Implement **phase by phase** per `TASKS.md`; small, reviewable commits aligned to phases.
+- Small, reviewable, focused commits.
 - TypeScript strict; keep `src/core` pure (no Electron/DOM globals except the documented
   renderer-only OCR/preprocess helpers).
 - Don't add dependencies without saying why.
