@@ -6,7 +6,9 @@
 import path from 'node:path';
 import type { IpcMainEvent } from 'electron';
 import { app, desktopCapturer, ipcMain, shell } from 'electron';
+import type { CrawlProgress } from '../src/core/crawl';
 import type { SurveyEntry } from '../src/core/survey';
+import type { SignatureTable } from '../src/core/types';
 import type {
   AppSettings,
   CaptureSource,
@@ -22,6 +24,7 @@ import {
   writeSettings,
   writeSurveyLog,
 } from './settings';
+import { crawlAndSave, loadCrawledTables } from './tables';
 import { checkForUpdate } from './update';
 import { controlWindow, detailBox, overlayBox, overlayBoxWindows, scanBox } from './windows';
 
@@ -83,6 +86,28 @@ export function registerCoreIpc(): void {
   });
   ipcMain.on('sco:scan-resize', (_e: IpcMainEvent, size: { width: number; height: number }) => {
     scanBox()?.setSize(clampResize(size.width, 160), clampResize(size.height, 80));
+  });
+
+  // --- Signature tables (runtime crawl) ---
+  // The renderer seeds from its bundled fallback, then merges these crawled
+  // tables (preferring them per patch). Startup sync + manual refresh both write
+  // to userData and notify via 'sco:tables-updated' / 'sco:crawl-progress'.
+  ipcMain.handle('sco:get-tables', (): SignatureTable[] => loadCrawledTables());
+  ipcMain.handle('sco:refresh-tables', async (): Promise<SignatureTable | null> => {
+    const send = (channel: string, payload?: unknown): void =>
+      controlWindow()?.webContents.send(channel, payload);
+    try {
+      const table = await crawlAndSave(undefined, (p: CrawlProgress) =>
+        send('sco:crawl-progress', p),
+      );
+      send('sco:crawl-progress', { phase: 'done', done: 1, total: 1 });
+      send('sco:tables-updated');
+      return table;
+    } catch (e) {
+      log.error('manual ore-data refresh failed', e);
+      send('sco:crawl-progress', { phase: 'error', done: 0, total: 0 });
+      return null;
+    }
   });
 
   // --- Survey scan log ---

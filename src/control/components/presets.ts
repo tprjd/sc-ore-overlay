@@ -29,7 +29,7 @@ export const OVERLAY_PRESETS: Array<{
   {
     id: 'standard',
     label: 'Standard',
-    hint: 'Ore + nodes with a subtle card and “scanning” hint.',
+    hint: 'Ore + nodes with a subtle card and a live status line when empty.',
     patch: {
       scale: 'normal',
       border: true,

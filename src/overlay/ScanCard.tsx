@@ -1,6 +1,5 @@
-// Presentational "scanned rock" card — pure, no IPC/window logic. Shared by the
-// ScanOverlay window (ScanOverlay.tsx) and the control window's live preview
-// (Prospect Overlay tab), so the preview can't drift from what ships.
+// Presentational "scanned rock" card — pure, no IPC/window logic. Rendered by
+// the ScanOverlay window (ScanOverlay.tsx).
 //
 // After a rock is scanned, shows how much of each content there is — SCU from
 // the composition (percent × total SCU) — alongside per-material quality.

@@ -1,27 +1,22 @@
 // The right-hand settings panel: a subtab bar (Capture · Match · Overlay ·
 // Hotkeys · About) over one group at a time. Presentational + local subtab
-// state; all config/handlers come from the orchestrator as props. The Overlay
-// tab's live preview reads per-tick runtime values (stableRs/settling/frozenScan)
-// straight from the prospect store so they don't have to be threaded as props.
+// state; all config/handlers come from the orchestrator as props. Overlay style
+// changes apply to the on-screen overlay live (via the config IPC echo), so the
+// panel no longer renders a duplicate live preview.
 
+import { RotateCw } from 'lucide-react';
 import { useState } from 'react';
-import type { QualityDetail, SignatureTable } from '../../core';
-import { DetailCard } from '../../overlay/DetailCard';
-import { OverlayCard } from '../../overlay/OverlayCard';
-import { ScanCard } from '../../overlay/ScanCard';
+import type { SignatureTable } from '../../core';
 import type {
   HotkeyAction,
   HotkeyMap,
-  OverlayCandidate,
   OverlayConfig,
-  OverlayOcr,
   OverlayScale,
-  OverlayStatus,
   SurveyRegionSetting,
 } from '../../shared/bridge';
 import { DEFAULT_OVERLAY_CONFIG } from '../../shared/bridge';
 import { AboutPanel } from '../components/AboutPanel';
-import { HOTKEY_ROWS, KeyCapture, NoiseEditor, Section, Slider } from '../components/controls';
+import { HotkeyEditor, NoiseEditor, Section, Slider } from '../components/controls';
 import { matchPreset, OVERLAY_PRESETS } from '../components/presets';
 import { RegionList } from '../components/RegionList';
 import type { PickedSource } from '../components/SourcePicker';
@@ -40,7 +35,6 @@ import {
 } from '../ui';
 import type { LoopParams } from '../useCaptureLoop';
 import type { RegionDebug } from '../useSurveyCapture';
-import { useProspectStore } from './store';
 
 type PanelTab = 'capture' | 'match' | 'overlay' | 'hotkeys' | 'about';
 const PANEL_TABS: Array<[PanelTab, string]> = [
@@ -67,9 +61,11 @@ export interface ProspectSettingsProps {
   onOcrBackendChange: (backend: OcrBackend) => void;
   // Match
   table: SignatureTable;
-  patches: string[];
   activePatch: string;
-  onPatchChange: (patch: string) => void;
+  /** A crawl (startup or manual) is in flight. */
+  tablesRefreshing: boolean;
+  /** Force a re-crawl of the current game patch. */
+  onRefreshTables: () => void;
   location: string | null;
   onLocationChange: (location: string | null) => void;
   systemGroups: Array<{ system: string; locations: string[] }>;
@@ -77,13 +73,9 @@ export interface ProspectSettingsProps {
   onEnforceClusterChange: (next: boolean) => void;
   noiseSignatures: number[];
   onNoiseSignaturesChange: (sigs: number[]) => void;
-  // Overlay (+ live preview)
+  // Overlay
   overlayConfig: OverlayConfig;
   onOverlayConfigChange: (config: OverlayConfig) => void;
-  overlayCandidates: OverlayCandidate[];
-  detail: QualityDetail | null;
-  overlayStatus: OverlayStatus;
-  ocr: OverlayOcr | null;
   // Hotkeys
   hotkeys: HotkeyMap;
   hotkeyStatus: Partial<Record<HotkeyAction, boolean>>;
@@ -107,9 +99,9 @@ export function ProspectSettings(props: ProspectSettingsProps) {
     effectiveBackend,
     onOcrBackendChange,
     table,
-    patches,
     activePatch,
-    onPatchChange,
+    tablesRefreshing,
+    onRefreshTables,
     location,
     onLocationChange,
     systemGroups,
@@ -119,10 +111,6 @@ export function ProspectSettings(props: ProspectSettingsProps) {
     onNoiseSignaturesChange,
     overlayConfig,
     onOverlayConfigChange,
-    overlayCandidates,
-    detail,
-    overlayStatus,
-    ocr,
     hotkeys,
     hotkeyStatus,
     onHotkeysChange,
@@ -133,10 +121,6 @@ export function ProspectSettings(props: ProspectSettingsProps) {
   const set = <K extends keyof LoopParams>(key: K, val: LoopParams[K]): void =>
     onParamsChange({ ...params, [key]: val });
 
-  // Live-preview runtime values come from the store, not props.
-  const stableRs = useProspectStore((s) => s.stableRs);
-  const settling = useProspectStore((s) => s.settling);
-  const frozenScan = useProspectStore((s) => s.frozenScan);
   const activePreset = matchPreset(overlayConfig);
 
   return (
@@ -161,12 +145,21 @@ export function ProspectSettings(props: ProspectSettingsProps) {
         {panelTab === 'match' && (
           <>
             <Section title="Match">
-              <LabeledSelect
-                label="Patch"
-                value={activePatch}
-                onChange={onPatchChange}
-                options={patches.map((p) => ({ value: p, label: p }))}
-              />
+              <div className="mb-2.5 flex items-center gap-2">
+                <span className="w-[82px] shrink-0 text-xs text-fg/80">Ore data</span>
+                <span className="tnum text-xs text-fg/90">SC {activePatch}</span>
+                <span className="flex-1" />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={onRefreshTables}
+                  disabled={tablesRefreshing}
+                  title="Re-crawl ore signatures from the Star Citizen Wiki for the current patch"
+                >
+                  <RotateCw className={cn('h-3.5 w-3.5', tablesRefreshing && 'animate-spin')} />
+                  {tablesRefreshing ? 'Updating…' : 'Refresh'}
+                </Button>
+              </div>
               <LocationSelect
                 location={location}
                 onChange={onLocationChange}
@@ -295,45 +288,10 @@ export function ProspectSettings(props: ProspectSettingsProps) {
 
         {panelTab === 'overlay' && (
           <>
-            <div className="mb-3.5">
-              <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg/65">
-                Live preview
-              </div>
-              <div
-                className="flex flex-col gap-2 rounded-lg border border-border p-2"
-                style={{
-                  background:
-                    'repeating-conic-gradient(#3a3f4b 0% 25%, #2b2f38 0% 50%) 0 / 18px 18px',
-                }}
-              >
-                <div className="relative h-24 overflow-hidden rounded-lg">
-                  <OverlayCard
-                    reading={stableRs}
-                    candidates={overlayCandidates}
-                    settling={settling}
-                    ocr={overlayConfig.showOcrStats ? ocr : null}
-                    status={overlayStatus}
-                    config={overlayConfig}
-                  />
-                </div>
-                {overlayConfig.showDetail && (
-                  <div className="relative h-36 overflow-hidden rounded-lg">
-                    <DetailCard detail={detail} config={overlayConfig} />
-                  </div>
-                )}
-                {overlayConfig.showScan && (
-                  <div className="relative h-36 overflow-hidden rounded-lg">
-                    <ScanCard
-                      scan={frozenScan}
-                      config={overlayConfig}
-                      onSortChange={(scanSort, scanSortDir) =>
-                        onOverlayConfigChange({ ...overlayConfig, scanSort, scanSortDir })
-                      }
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
+            <p className="mb-3.5 text-xs text-muted">
+              Changes apply to the on-screen overlay live. Use “Edit overlay” to reposition the
+              boxes.
+            </p>
             <Section title="Overlay">
               <div className="mb-3 flex flex-wrap items-center gap-1.5">
                 <span className="mr-0.5 text-xs text-fg/80">Preset</span>
@@ -460,7 +418,8 @@ export function ProspectSettings(props: ProspectSettingsProps) {
                 onChange={(showPlaceholder) =>
                   onOverlayConfigChange({ ...overlayConfig, showPlaceholder })
                 }
-                label="Show “scanning” placeholder"
+                label="Show live status when no match"
+                hint="While capturing but nothing matches, show why the overlay is empty (scanning…, no RS, no scan panel, low signal, locking…). Off: the overlay stays blank until a match."
               />
               <CheckRow
                 checked={overlayConfig.showDetail}
@@ -488,21 +447,11 @@ export function ProspectSettings(props: ProspectSettingsProps) {
 
         {panelTab === 'hotkeys' && (
           <Section title="Hotkeys">
-            {HOTKEY_ROWS.map(([action, label]) => (
-              <div key={action} className="mb-1.5 flex items-center gap-2">
-                <span className="w-[82px] text-xs text-fg/80">{label}</span>
-                <KeyCapture
-                  value={hotkeys[action]}
-                  onChange={(accel) => onHotkeysChange({ ...hotkeys, [action]: accel })}
-                />
-                {hotkeyStatus[action] === false && (
-                  <span className="text-[11px] text-danger">conflict</span>
-                )}
-              </div>
-            ))}
-            <p className="text-xs text-muted">
-              Click a binding, then press the combo (needs a modifier).
-            </p>
+            <HotkeyEditor
+              hotkeys={hotkeys}
+              hotkeyStatus={hotkeyStatus}
+              onChange={onHotkeysChange}
+            />
           </Section>
         )}
 

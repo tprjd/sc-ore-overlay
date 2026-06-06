@@ -1,17 +1,11 @@
 // Build-time crawl of the Star Citizen Wiki API → a compact local signature
-// table the renderer can load. NEVER run on the per-scan hot path.
-//
-//   List:   GET /api/commodities?page[number]=N   (paginated, 30/page)
-//   Detail: GET /api/commodities/{uuid}
-//
-// The scanner value lives nested at `locations[].resources[].signature`
-// (Iron = 4270), NOT at top-level `data.signature` (Iron = 4700).
-//
-// Etiquette: a descriptive User-Agent, sequential requests with a throttle,
-// and an on-disk cache so re-runs don't re-hit the API. Re-crawl per patch.
+// table the app ships as a fallback. The crawl logic lives in src/core/crawl.ts
+// (shared with the runtime crawl in electron/tables.ts); this script is just the
+// CLI wrapper: a disk-cached + throttled `get`, arg parsing, file output, and a
+// sanity log. NEVER run on the per-scan hot path.
 //
 // Usage:
-//   npm run crawl                       # ship-mineable only (v1), patch "unknown"
+//   npm run crawl                       # ship-mineable only (v1), auto-detect patch
 //   npm run crawl -- --patch=4.2        # tag the output with a patch
 //   npm run crawl -- --all-methods      # keep every mining method (Phase 5)
 //   npm run crawl -- --refresh          # ignore the cache and re-fetch
@@ -20,86 +14,8 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import type {
-  Clustering,
-  ClusterParam,
-  Deposit,
-  DepositLocation,
-  QualityMaterial,
-  SignatureTable,
-} from '../src/core/types';
-
-// ---------------------------------------------------------------------------
-// Shape of the bits of the wiki response we consume (loose by design).
-// ---------------------------------------------------------------------------
-interface WikiClusterParam {
-  min_size?: number;
-  max_size?: number;
-  relative_probability?: number;
-}
-interface WikiClustering {
-  min_size?: number;
-  max_size?: number;
-  probability?: number | null;
-  params?: WikiClusterParam[] | null;
-}
-interface WikiMaterial {
-  name?: string;
-  min_percentage?: number | null;
-  max_percentage?: number | null;
-  quality_min?: number | null;
-  quality_max?: number | null;
-  quality_mean?: number | null;
-  quality_stddev?: number | null;
-  quality_quantized_values?: number[] | null;
-  instability?: number | null;
-  resistance?: number | null;
-}
-interface WikiResource {
-  key?: string;
-  label?: string;
-  signature?: number | null;
-  clustering?: WikiClustering | null;
-  materials?: WikiMaterial[] | null;
-}
-interface WikiLocation {
-  name?: string;
-  display_name?: string;
-  system?: string;
-  type?: string;
-  uuid?: string;
-  group_probability?: number | null;
-  relative_probability?: number | null;
-  resources?: WikiResource[] | null;
-}
-interface WikiCommodity {
-  uuid: string;
-  name: string;
-  is_mineable?: boolean;
-  has_ship_mineables?: boolean;
-  signature?: number | null;
-  methods?: string[] | null;
-  locations?: WikiLocation[] | null;
-}
-interface WikiListResponse {
-  data: WikiCommodity[];
-  meta?: { last_page?: number };
-}
-interface WikiDetailResponse {
-  data: WikiCommodity;
-}
-interface WikiGameVersion {
-  code: string;
-  channel?: string;
-  is_default?: boolean;
-}
-
-// ---------------------------------------------------------------------------
-// Config / CLI args
-// ---------------------------------------------------------------------------
-const API_BASE = 'https://api.star-citizen.wiki/api';
-const USER_AGENT =
-  'sc-ore-overlay/0.1 (build-time signature crawler; +https://api.star-citizen.wiki)';
+import type { CrawlGet } from '../src/core/crawl';
+import { crawlSignatureTable, detectPatch, WIKI_USER_AGENT } from '../src/core/crawl';
 
 // npm scripts run with the package root as cwd.
 const repoRoot = process.cwd();
@@ -121,15 +37,12 @@ const DELAY_MS = Number(getOpt('delay', '150'));
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-// ---------------------------------------------------------------------------
-// Fetch + cache helpers
-// ---------------------------------------------------------------------------
 async function fetchJson<T>(url: string): Promise<T> {
   let lastErr: unknown;
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
       const res = await fetch(url, {
-        headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
+        headers: { 'User-Agent': WIKI_USER_AGENT, Accept: 'application/json' },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText} for ${url}`);
       return (await res.json()) as T;
@@ -142,7 +55,7 @@ async function fetchJson<T>(url: string): Promise<T> {
 }
 
 /** Fetch via the on-disk cache (unless --refresh). Throttles only on a miss. */
-async function cachedGet<T>(url: string, cacheKey: string): Promise<T> {
+const cachedGet: CrawlGet = async <T>(url: string, cacheKey: string): Promise<T> => {
   const file = path.join(CACHE_DIR, cacheKey);
   if (!REFRESH) {
     try {
@@ -156,209 +69,32 @@ async function cachedGet<T>(url: string, cacheKey: string): Promise<T> {
   await writeFile(file, JSON.stringify(json));
   await sleep(DELAY_MS);
   return json;
-}
-
-// ---------------------------------------------------------------------------
-// Crawl
-// ---------------------------------------------------------------------------
-async function listAllCommodities(): Promise<WikiCommodity[]> {
-  const first = await cachedGet<WikiListResponse>(
-    `${API_BASE}/commodities?page[number]=1`,
-    'list-p1.json',
-  );
-  const lastPage = first.meta?.last_page ?? 1;
-  const items = [...first.data];
-  for (let page = 2; page <= lastPage; page += 1) {
-    const resp = await cachedGet<WikiListResponse>(
-      `${API_BASE}/commodities?page[number]=${page}`,
-      `list-p${page}.json`,
-    );
-    items.push(...resp.data);
-  }
-  return items;
-}
-
-/** Working row: like a Deposit but with Set/Map for cheap de-duplicated merge. */
-interface RowAccumulator {
-  name: string;
-  signature: number;
-  methods: Set<string>;
-  clustering: Clustering;
-  locations: Map<string, DepositLocation>;
-  commoditySignature?: number;
-  commodityName?: string;
-  resourceKey?: string;
-  materials: QualityMaterial[];
-}
-
-function toClustering(cl: WikiClustering): Clustering | null {
-  if (typeof cl.min_size !== 'number' || typeof cl.max_size !== 'number') return null;
-  const params: ClusterParam[] = (cl.params ?? [])
-    .filter(
-      (p): p is Required<WikiClusterParam> =>
-        typeof p.min_size === 'number' &&
-        typeof p.max_size === 'number' &&
-        typeof p.relative_probability === 'number',
-    )
-    .map((p) => ({
-      minSize: p.min_size,
-      maxSize: p.max_size,
-      relativeProbability: p.relative_probability,
-    }));
-  return {
-    minSize: cl.min_size,
-    maxSize: cl.max_size,
-    probability: typeof cl.probability === 'number' ? cl.probability : undefined,
-    params,
-  };
-}
-
-function toMaterials(materials: WikiMaterial[] | null | undefined): QualityMaterial[] {
-  return (materials ?? [])
-    .filter((m): m is WikiMaterial & { name: string } => typeof m.name === 'string')
-    .map((m) => ({
-      name: m.name,
-      minPercent: typeof m.min_percentage === 'number' ? m.min_percentage : 0,
-      maxPercent: typeof m.max_percentage === 'number' ? m.max_percentage : 0,
-      qualityMin: typeof m.quality_min === 'number' ? m.quality_min : 0,
-      qualityMax: typeof m.quality_max === 'number' ? m.quality_max : 0,
-      mean: typeof m.quality_mean === 'number' ? m.quality_mean : 0,
-      stddev: typeof m.quality_stddev === 'number' ? m.quality_stddev : 0,
-      quantized: Array.isArray(m.quality_quantized_values) ? m.quality_quantized_values : [],
-      instability: typeof m.instability === 'number' ? m.instability : 0,
-      resistance: typeof m.resistance === 'number' ? m.resistance : 0,
-    }));
-}
-
-/** Detect the current game patch label (e.g. "4.8.0") from the wiki API. */
-async function detectPatch(): Promise<string> {
-  try {
-    const resp = await cachedGet<{ data: WikiGameVersion[] }>(
-      `${API_BASE}/game-versions`,
-      'game-versions.json',
-    );
-    const versions = resp.data ?? [];
-    const current = versions.find((v) => v.is_default) ?? versions[0];
-    if (current?.code) return current.code.split('-')[0]; // "4.8.0-LIVE.x" → "4.8.0"
-  } catch {
-    // fall through to "unknown"
-  }
-  return 'unknown';
-}
+};
 
 async function main(): Promise<void> {
-  console.log(`Crawling ${API_BASE} (cache: ${REFRESH ? 'refresh' : 'on'})`);
-  const patch = PATCH_ARG || (await detectPatch());
+  console.log(`Crawling the wiki (cache: ${REFRESH ? 'refresh' : 'on'})`);
+  const patch = PATCH_ARG || (await detectPatch(cachedGet));
   const OUT = path.resolve(
     repoRoot,
     OUT_ARG || path.join('src', 'data', 'tables', `${patch}.json`),
   );
   console.log(`patch=${patch}`);
-  const all = await listAllCommodities();
-  const mineable = all.filter((c) => c.is_mineable === true);
 
-  // For v1 we only need the requested method's commodities; record the full
-  // mineable count so we can confirm we enumerated everything.
-  const targets = ALL_METHODS
-    ? mineable
-    : mineable.filter((c) => (c.methods ?? []).includes(METHOD) || c.has_ship_mineables === true);
-
-  console.log(
-    `commodities=${all.length} mineable=${mineable.length} ` +
-      `targets(${ALL_METHODS ? 'all-methods' : METHOD})=${targets.length}`,
-  );
-
-  const rows = new Map<string, RowAccumulator>();
-  let skippedResources = 0;
-
-  for (const item of targets) {
-    const detail = await cachedGet<WikiDetailResponse>(
-      `${API_BASE}/commodities/${item.uuid}`,
-      `detail-${item.uuid}.json`,
-    );
-    const data = detail.data;
-    const methods = data.methods ?? [];
-
-    for (const loc of data.locations ?? []) {
-      for (const res of loc.resources ?? []) {
-        const sig = res.signature;
-        if (typeof sig !== 'number' || sig <= 0) {
-          skippedResources += 1;
-          continue;
-        }
-        const clustering = res.clustering ? toClustering(res.clustering) : null;
-        if (!clustering) {
-          skippedResources += 1;
-          continue;
-        }
-
-        const label = res.label ?? data.name;
-        // One row per distinct material + signature + cluster range.
-        const key = `${label}__${sig}__${clustering.minSize}-${clustering.maxSize}`;
-
-        let row = rows.get(key);
-        if (!row) {
-          row = {
-            name: label,
-            signature: sig,
-            methods: new Set<string>(),
-            clustering,
-            locations: new Map<string, DepositLocation>(),
-            commoditySignature: typeof data.signature === 'number' ? data.signature : undefined,
-            commodityName: data.name,
-            resourceKey: res.key,
-            materials: toMaterials(res.materials),
-          };
-          rows.set(key, row);
-        }
-
-        for (const m of methods) row.methods.add(m);
-
-        const locName = loc.display_name ?? loc.name ?? 'Unknown';
-        const locKey = loc.uuid ?? `${loc.system ?? ''}:${locName}`;
-        if (!row.locations.has(locKey)) {
-          row.locations.set(locKey, {
-            system: loc.system ?? 'Unknown System',
-            name: locName,
-            uuid: loc.uuid,
-            type: loc.type,
-            probability: typeof loc.group_probability === 'number' ? loc.group_probability : 1,
-            occurrence:
-              typeof loc.relative_probability === 'number' ? loc.relative_probability : undefined,
-          });
-        }
-      }
-    }
-  }
-
-  let deposits: Deposit[] = [...rows.values()].map((r) => ({
-    name: r.name,
-    signature: r.signature,
-    methods: [...r.methods],
-    clustering: r.clustering,
-    locations: [...r.locations.values()],
-    commoditySignature: r.commoditySignature,
-    commodityName: r.commodityName,
-    resourceKey: r.resourceKey,
-    materials: r.materials,
-  }));
-
-  if (!ALL_METHODS) deposits = deposits.filter((d) => d.methods.includes(METHOD));
-  deposits.sort((a, b) => a.name.localeCompare(b.name) || a.signature - b.signature);
-
-  const table: SignatureTable = {
+  const table = await crawlSignatureTable(cachedGet, {
     patch,
-    generatedAt: new Date().toISOString(),
-    source: API_BASE,
-    methodsIncluded: ALL_METHODS ? ['*'] : [METHOD],
-    deposits,
-  };
+    method: METHOD,
+    allMethods: ALL_METHODS,
+    onProgress: (p) => {
+      if (p.phase === 'detail' && p.done % 10 === 0) console.log(`  detail ${p.done}/${p.total}`);
+    },
+  });
 
   await mkdir(path.dirname(OUT), { recursive: true });
   await writeFile(OUT, `${JSON.stringify(table, null, 2)}\n`);
 
   // ----- sanity log -----
-  console.log(`rows=${rows.size} deposits=${deposits.length} skippedResources=${skippedResources}`);
+  const { deposits } = table;
+  console.log(`deposits=${deposits.length}`);
   console.log(`wrote ${path.relative(repoRoot, OUT)} (patch=${patch})`);
 
   const distinctOres = new Set(deposits.map((d) => d.name)).size;

@@ -46,6 +46,9 @@ export const STATUS_META: Record<OverlayStatus, { label: string; color: string }
   'no-rs': { label: 'no RS', color: '#9fb3c8' },
   'source-lost': { label: 'source lost', color: '#f87171' },
   paused: { label: 'paused', color: '#9fb3c8' },
+  // deriveOverlayStatus never emits this (the mining view isn't live then); it
+  // exists only to keep this map total over OverlayStatus.
+  inactive: { label: 'inactive', color: '#9fb3c8' },
 };
 
 export interface Health {

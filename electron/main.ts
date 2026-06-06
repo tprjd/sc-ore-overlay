@@ -14,7 +14,8 @@ import { registerCoreIpc } from './ipc';
 import { installCrashHandlers, log } from './log';
 import { killOcrHost, registerOcrIpc } from './ocr';
 import { installContentSecurityPolicy, installNavigationHardening } from './security';
-import { createAllWindows } from './windows';
+import { runStartupTableSync } from './tables';
+import { controlWindow, createAllWindows } from './windows';
 
 // Capture crashes/throws to <userData>/logs/main.log before anything else can
 // fail silently (see electron/log.ts).
@@ -35,6 +36,15 @@ void app.whenReady().then(() => {
   registerHotkeyIpc();
   createAllWindows();
   applyHotkeys(currentHotkeys());
+
+  // Crawl/refresh ore data in the background (first run, newer patch, etc.).
+  // Deferred a tick so the control renderer can subscribe to progress/updated
+  // events first; never awaited, so it can't block or crash startup.
+  setTimeout(() => {
+    void runStartupTableSync((channel, payload) =>
+      controlWindow()?.webContents.send(channel, payload),
+    );
+  }, 1500);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createAllWindows();

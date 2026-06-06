@@ -33,7 +33,9 @@ export function useAppSettings(tables: Record<string, SignatureTable>) {
 
   const [miningRegions, setMiningRegions] = useState<SurveyRegionSetting[]>([]);
   const [noiseSignatures, setNoiseSignatures] = useState<number[]>(DEFAULT_NOISE_SIGNATURES);
-  const [enforceCluster, setEnforceCluster] = useState<boolean>(true);
+  // Off by default: tables go stale between patches, so a node count outside the
+  // crawled cluster range is often real. The user can re-enable it to tighten matches.
+  const [enforceCluster, setEnforceCluster] = useState<boolean>(false);
   const [location, setLocation] = useState<string | null>(null);
   const [params, setParams] = useState<LoopParams>(DEFAULT_PARAMS);
   const [activePatch, setActivePatch] = useState<string>(() => patches[0] ?? 'unknown');

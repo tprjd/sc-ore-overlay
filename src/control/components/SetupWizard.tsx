@@ -1,7 +1,8 @@
 // First-run setup wizard. Walks a fresh profile through everything needed to
 // start, with every non-essential step skippable and the whole flow skippable
 // from the header. Steps:
-//   welcome → source → RS region (+ test read) → scan panel (opt) → options (opt) → done
+//   welcome → source → RS region (+ test read) → scan panel (opt) → options (opt)
+//   → hotkeys (opt) → done
 //
 // It owns no persistence: it collects choices and hands them back via onComplete;
 // App applies them. Reuses CapturePreview (self-contained — no capture loop just
@@ -13,6 +14,7 @@ import {
   ArrowRight,
   Check,
   Crosshair,
+  Keyboard,
   Layers,
   MonitorPlay,
   Rocket,
@@ -22,7 +24,12 @@ import {
 import { useMemo, useRef, useState } from 'react';
 import type { SignatureTable } from '../../core';
 import { groupLocations } from '../../core';
-import type { OverlayConfig, SurveyRegionSetting } from '../../shared/bridge';
+import type {
+  HotkeyAction,
+  HotkeyMap,
+  OverlayConfig,
+  SurveyRegionSetting,
+} from '../../shared/bridge';
 import { recognize } from '../ocr';
 import type { DrawableSource, NormRegion } from '../preprocess';
 import { preprocess } from '../preprocess';
@@ -43,6 +50,7 @@ import { cn } from '../ui/cn';
 import { pickReading } from '../useCaptureLoop';
 import type { PreviewRegion } from './CapturePreview';
 import { CapturePreview } from './CapturePreview';
+import { HotkeyEditor } from './controls';
 import type { OverlayPreset } from './presets';
 import { OVERLAY_PRESETS } from './presets';
 import { newRegionId, ROLE_META } from './roles';
@@ -62,28 +70,42 @@ export interface SetupWizardProps {
   onPickSource: (s: PickedSource) => void;
   lastSourceId?: string;
   table: SignatureTable;
+  /** Current hotkey bindings + live registration status (edited in-place). */
+  hotkeys: HotkeyMap;
+  hotkeyStatus: Partial<Record<HotkeyAction, boolean>>;
+  onHotkeysChange: (map: HotkeyMap) => void;
   onComplete: (result: SetupResult) => void;
   onSkip: () => void;
   /** Leave the wizard entirely (← from the welcome step). */
   onExit: () => void;
 }
 
-type Step = 'welcome' | 'source' | 'rs' | 'scan' | 'options' | 'done';
-const FLOW: Step[] = ['welcome', 'source', 'rs', 'scan', 'options', 'done'];
+type Step = 'welcome' | 'source' | 'rs' | 'scan' | 'options' | 'hotkeys' | 'done';
+const FLOW: Step[] = ['welcome', 'source', 'rs', 'scan', 'options', 'hotkeys', 'done'];
 
 const STEPPER = [
   { label: 'Source' },
   { label: 'RS region' },
   { label: 'Scan panel', optional: true },
   { label: 'Options', optional: true },
+  { label: 'Hotkeys', optional: true },
 ];
-const STEPPER_INDEX: Partial<Record<Step, number>> = { source: 0, rs: 1, scan: 2, options: 3 };
+const STEPPER_INDEX: Partial<Record<Step, number>> = {
+  source: 0,
+  rs: 1,
+  scan: 2,
+  options: 3,
+  hotkeys: 4,
+};
 
 export function SetupWizard({
   source,
   onPickSource,
   lastSourceId,
   table,
+  hotkeys,
+  hotkeyStatus,
+  onHotkeysChange,
   onComplete,
   onSkip,
   onExit,
@@ -434,6 +456,35 @@ export function SetupWizard({
                 </button>
               ))}
             </div>
+          </section>
+
+          <Footer className="mt-auto">
+            <Button variant="link" onClick={next}>
+              Skip this step
+            </Button>
+            <span className="flex-1" />
+            <Button variant="primary" onClick={next}>
+              Next
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </Footer>
+        </div>
+      )}
+
+      {step === 'hotkeys' && (
+        <div className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col gap-5 overflow-y-auto p-6">
+          <StepHeading
+            icon={<Keyboard className="h-5 w-5" />}
+            title="Hotkeys (optional)"
+            desc="Global shortcuts that work while Star Citizen is focused. Defaults are set — change any binding or skip. Editable later from the Mining panel."
+          />
+
+          <section className="max-w-md">
+            <HotkeyEditor
+              hotkeys={hotkeys}
+              hotkeyStatus={hotkeyStatus}
+              onChange={onHotkeysChange}
+            />
           </section>
 
           <Footer className="mt-auto">

@@ -5,8 +5,7 @@
 
 import { X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import type { SignatureTable } from '../core';
-import { loadSignatureTable } from '../core';
+import { isVersionNewer } from '../core/semver';
 import type { SetupResult } from './components/SetupWizard';
 import { SetupWizard } from './components/SetupWizard';
 import type { PickedSource } from './components/SourcePicker';
@@ -15,26 +14,28 @@ import { SurveyView } from './components/SurveyView';
 import { ProspectView } from './prospect/ProspectView';
 import { useAppSettings } from './settings/useAppSettings';
 import { useOcrEngine } from './settings/useOcrEngine';
+import { useTables } from './settings/useTables';
 import { useUpdateCheck } from './settings/useUpdateCheck';
 import { Button } from './ui';
 import { cn } from './ui/cn';
 
 type Tab = 'mining' | 'survey';
 
-// All crawled patch tables, bundled at build time → { patch: table }.
-const tableModules = import.meta.glob('../data/tables/*.json', { eager: true, import: 'default' });
-function loadTables(): Record<string, SignatureTable> {
-  const out: Record<string, SignatureTable> = {};
-  for (const mod of Object.values(tableModules)) {
-    const table = loadSignatureTable(mod);
-    out[table.patch] = table;
-  }
-  return out;
+/** Newest patch label among the available tables (the one the app uses). */
+function newestPatch(patches: string[]): string {
+  return patches.reduce((best, p) => (isVersionNewer(p, best) ? p : best), patches[0] ?? 'unknown');
 }
 
 export function App() {
-  const tables = useMemo(loadTables, []);
-  const patches = useMemo(() => Object.keys(tables).sort(), [tables]);
+  // Bundled tables, overlaid with any runtime-crawled ones (see useTables).
+  const {
+    tables,
+    refreshing: tablesRefreshing,
+    progress: tablesProgress,
+    refresh: refreshTables,
+  } = useTables();
+  const patches = useMemo(() => Object.keys(tables), [tables]);
+  const activePatch = useMemo(() => newestPatch(patches), [patches]);
 
   const s = useAppSettings(tables);
   const effectiveBackend = useOcrEngine(s.ocrBackend, s.loaded);
@@ -100,7 +101,20 @@ export function App() {
     s.markSetupComplete();
   };
 
-  const table = tables[s.activePatch] ?? tables[patches[0] ?? ''];
+  const table = tables[activePatch] ?? tables[patches[0] ?? ''];
+
+  // The overlay only draws while the Mining capture view is actually live.
+  // Whenever it isn't — settings still loading, no table, no source picked, the
+  // setup wizard is up, or the Survey tab is active — push an `inactive` status
+  // so the overlay boxes hide. Otherwise the main box would sit showing its
+  // launch placeholder (or a stale reading) with nothing capturing. ProspectView
+  // owns the push while live, so these never conflict.
+  const miningLive =
+    s.loaded && !!table && !!source && !showWizard && (s.surveyEnabled ? tab === 'mining' : true);
+  useEffect(() => {
+    if (!miningLive)
+      window.sco?.sendMatches?.({ reading: null, candidates: [], status: 'inactive' });
+  }, [miningLive]);
 
   if (!s.loaded) return null;
   if (!table) {
@@ -124,6 +138,9 @@ export function App() {
         onPickSource={handlePick}
         lastSourceId={autoReconnect ? s.lastSource.current.id : undefined}
         table={table}
+        hotkeys={s.hotkeys}
+        hotkeyStatus={s.hotkeyStatus}
+        onHotkeysChange={s.setHotkeys}
         onComplete={completeSetup}
         onSkip={skipSetup}
         onExit={skipSetup}
@@ -168,6 +185,16 @@ export function App() {
           </Button>
         </div>
       )}
+      {tablesRefreshing && (
+        <div className="flex items-center gap-2.5 border-b border-border bg-surface-alt px-3 py-1.5 text-xs text-muted">
+          <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-accent" />
+          <span>
+            Updating ore data…
+            {tablesProgress?.phase === 'detail' &&
+              ` (${tablesProgress.done}/${tablesProgress.total})`}
+          </span>
+        </div>
+      )}
       {s.surveyEnabled && (
         <nav className="flex gap-0.5 border-b border-border bg-surface-alt px-2.5 pt-1.5">
           {(['mining', 'survey'] as const).map((t) => (
@@ -205,9 +232,9 @@ export function App() {
             table={table}
             location={s.location}
             onLocationChange={s.setLocation}
-            patches={patches}
-            activePatch={s.activePatch}
-            onPatchChange={s.setActivePatch}
+            activePatch={activePatch}
+            tablesRefreshing={tablesRefreshing}
+            onRefreshTables={refreshTables}
             hotkeys={s.hotkeys}
             hotkeyStatus={s.hotkeyStatus}
             onHotkeysChange={s.setHotkeys}

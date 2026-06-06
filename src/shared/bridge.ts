@@ -2,9 +2,13 @@
 // `electron` or DOM imports — so both the Node (main/preload) and browser
 // (renderer) TypeScript projects can reference it without leaking globals.
 
+import type { CrawlProgress } from '../core/crawl';
 import type { QualityDetail } from '../core/quality';
 import type { ScanResult } from '../core/scan';
 import type { SurveyEntry } from '../core/survey';
+import type { SignatureTable } from '../core/types';
+
+export type { CrawlProgress } from '../core/crawl';
 
 /** A screen or window the user can capture, as enumerated by desktopCapturer. */
 export interface CaptureSource {
@@ -60,6 +64,7 @@ export interface OverlayOcr {
  * - `no-scan`     — RS fine, but no SCAN RESULTS panel detected (empty scan box).
  * - `source-lost` — the capture source is gone; the overlay hides entirely.
  * - `paused`      — capture paused by the user.
+ * - `inactive`    — no source picked / the Mining view isn't live; the overlay hides entirely.
  */
 export type OverlayStatus =
   | 'ok'
@@ -70,7 +75,8 @@ export type OverlayStatus =
   | 'no-rs'
   | 'no-scan'
   | 'source-lost'
-  | 'paused';
+  | 'paused'
+  | 'inactive';
 
 /** What the control window pushes to the overlay (relayed to both boxes). */
 export interface OverlayPayload {
@@ -334,6 +340,20 @@ export interface ScoBridge {
   getSurveyLog(): Promise<SurveyEntry[]>;
   /** Survey Mode: persist the full scan log (append-only, managed in renderer). */
   saveSurveyLog(entries: SurveyEntry[]): void;
+  /**
+   * Load the crawled signature tables from userData (may be empty). The renderer
+   * merges these over its bundled fallback, preferring a crawled table per patch.
+   */
+  getCrawledTables(): Promise<SignatureTable[]>;
+  /**
+   * Force a re-crawl of the current game patch now. Resolves with the new table
+   * (also broadcast via onTablesUpdated), or null on failure. Never throws.
+   */
+  refreshTables(): Promise<SignatureTable | null>;
+  /** Control: a crawl finished and new tables are on disk. Returns an unsubscribe fn. */
+  onTablesUpdated(cb: () => void): () => void;
+  /** Control: progress from an in-flight crawl (startup or manual). Unsubscribe fn. */
+  onCrawlProgress(cb: (p: CrawlProgress) => void): () => void;
   /** Check GitHub Releases for a newer version (startup + manual). Never throws. */
   checkForUpdates(): Promise<UpdateInfo>;
   /** Open an external https URL in the user's browser (e.g. a release page). */

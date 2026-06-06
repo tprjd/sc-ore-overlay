@@ -3,7 +3,9 @@
 
 import type { IpcRendererEvent } from 'electron';
 import { contextBridge, ipcRenderer } from 'electron';
+import type { CrawlProgress } from '../src/core/crawl';
 import type { SurveyEntry } from '../src/core/survey';
+import type { SignatureTable } from '../src/core/types';
 import type {
   AppSettings,
   CaptureSource,
@@ -68,6 +70,19 @@ const api: ScoBridge = {
   ocrAvailable: () => ipcRenderer.invoke('sco:ocr-available') as Promise<boolean>,
   ocrRecognize: (dataUrl: string) =>
     ipcRenderer.invoke('sco:ocr-recognize', dataUrl) as Promise<OcrLine[]>,
+
+  getCrawledTables: () => ipcRenderer.invoke('sco:get-tables') as Promise<SignatureTable[]>,
+  refreshTables: () => ipcRenderer.invoke('sco:refresh-tables') as Promise<SignatureTable | null>,
+  onTablesUpdated: (cb) => {
+    const handler = (): void => cb();
+    ipcRenderer.on('sco:tables-updated', handler);
+    return () => ipcRenderer.off('sco:tables-updated', handler);
+  },
+  onCrawlProgress: (cb) => {
+    const handler = (_e: IpcRendererEvent, p: CrawlProgress): void => cb(p);
+    ipcRenderer.on('sco:crawl-progress', handler);
+    return () => ipcRenderer.off('sco:crawl-progress', handler);
+  },
 
   checkForUpdates: () => ipcRenderer.invoke('sco:check-updates') as Promise<UpdateInfo>,
   openExternal: (url: string) => ipcRenderer.send('sco:open-external', url),

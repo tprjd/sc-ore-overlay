@@ -74,6 +74,21 @@ you believe a locked choice genuinely cannot work, stop and flag it rather than 
 > CJS, so the plugin is loaded via a dynamic `import()` in an async config. Do **not** reintroduce a
 > parallel inline-token system for the control UI.
 
+> **Sanctioned deviation (2026-06-06, runtime crawl):** the signature table may now be **crawled at
+> runtime**, not only at build time, **with the human's explicit approval** — patch-to-patch signature
+> changes are small and shouldn't require a new app build. The crawl logic is shared
+> (`src/core/crawl.ts`, framework-free, caller-injected `get`): the build-time CLI
+> (`scripts/crawl-wiki.ts`) writes the **bundled fallback** under `src/data/tables/`, and the Electron
+> **main process** (`electron/tables.ts`) crawls into `<userData>/tables/<patch>.json` via `net.fetch`
+> on first launch, when a newer game patch is detected at startup, or on a manual "Refresh ore data"
+> button. The renderer seeds from the bundled tables (so it works offline) and overlays the crawled
+> ones, preferring a crawled table per patch (`useTables`). This **amends guardrail #2** ("build-time
+> crawl only") but the rest of that guardrail still binds: descriptive User-Agent, sequential
+> throttled requests, **never on the per-scan hot path** (crawl is infrequent + background, never
+> blocks launch, partial/empty crawls never overwrite a good table). The read-only guardrail (#1) is
+> unchanged — this is still public-data lookup, never game memory/injection. Do **not** "fix" this
+> back to build-only.
+
 ---
 
 ## Verified domain knowledge (build on this — it was confirmed against the live API)
@@ -110,8 +125,9 @@ Each resource also carries:
 
 `data.methods` (e.g. `["Ship"]`), `data.systems`, and per-location `group_probability` are also present.
 
-> Build-time crawl only. Never call the wiki API on the per-scan hot path. Throttle, set a
-> User-Agent, cache. Re-crawl per game patch (signatures/clustering change between patches).
+> Never call the wiki API on the per-scan hot path. Throttle, set a User-Agent, cache. Re-crawl per
+> game patch (signatures/clustering change between patches) — this now happens at runtime too, not
+> just at build time (see the runtime-crawl sanctioned deviation in the Locked stack section).
 
 ### 3. The clustering constraint — this is what makes identification tractable
 Don't accept "any multiple of a signature." A candidate ore is valid only when the signature divides
@@ -149,9 +165,11 @@ location filter, method filter, OCR-jitter tolerance, and no-match.
 
 - **`electron/`** — main process (control window + transparent overlay window, global hotkeys,
   `desktopCapturer` source enumeration) and a preload that exposes a typed, sandboxed bridge.
-- **`scripts/crawl-wiki.*`** — the build-time crawl/derive script → a compact local signature table
-  (one row per distinct `material + signature + cluster range`, locations merged). Output committed
-  under a path the renderer can load.
+- **`scripts/crawl-wiki.*`** — the build-time CLI wrapper around the shared crawl
+  (`src/core/crawl.ts`) → a compact signature table (one row per distinct `material + signature +
+  cluster range`, locations merged) committed under `src/data/tables/` as the **bundled fallback**.
+  The same `src/core/crawl.ts` is reused at runtime by `electron/tables.ts` (crawl into userData; see
+  the runtime-crawl deviation), and `src/control/settings/useTables.ts` merges bundled + crawled.
 - **`src/core/`** — pure, framework-free logic: data types, the matcher, a validator
   (plausibility + N-frame temporal voting to kill OCR flicker), table loader + location grouping.
   Plus renderer-only helpers: a crop+upscale step (`src/control/preprocess.ts`) and the OCR wrapper
@@ -175,7 +193,9 @@ mode. Capture frames ~every 0.5–1s (not 60fps); skip OCR when the cropped regi
 1. **Read-only.** Screen capture + public-data lookup only. **Never** read game memory, inject into
    the game process, hook input, or automate gameplay. If a task seems to need that, stop and flag
    it — the whole design avoids it for anti-cheat and ToS reasons.
-2. **Wiki API etiquette.** Build-time crawl only, throttled, cached, with a User-Agent.
+2. **Wiki API etiquette.** Throttled, with a User-Agent, **never on the per-scan hot path**. (Crawl
+   is no longer build-time-only — see the 2026-06-06 runtime-crawl sanctioned deviation above; the
+   etiquette here still binds for both the build-time and runtime crawls.)
 3. **Borderless windowed requirement.** Click-through overlays don't draw over exclusive
    fullscreen; the app assumes Star Citizen runs borderless/windowed. Document this for the user.
 4. **No silent stack changes** (see Locked stack).

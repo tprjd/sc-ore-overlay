@@ -48,9 +48,11 @@ export interface ProspectViewProps {
   table: SignatureTable;
   location: string | null;
   onLocationChange: (location: string | null) => void;
-  patches: string[];
   activePatch: string;
-  onPatchChange: (patch: string) => void;
+  /** A crawl (startup or manual) is in flight. */
+  tablesRefreshing: boolean;
+  /** Force a re-crawl of the current game patch. */
+  onRefreshTables: () => void;
   hotkeys: HotkeyMap;
   hotkeyStatus: Partial<Record<HotkeyAction, boolean>>;
   onHotkeysChange: (map: HotkeyMap) => void;
@@ -80,9 +82,9 @@ export function ProspectView(props: ProspectViewProps) {
     table,
     location,
     onLocationChange,
-    patches,
     activePatch,
-    onPatchChange,
+    tablesRefreshing,
+    onRefreshTables,
     hotkeys,
     hotkeyStatus,
     onHotkeysChange,
@@ -341,9 +343,9 @@ export function ProspectView(props: ProspectViewProps) {
             effectiveBackend={effectiveBackend}
             onOcrBackendChange={onOcrBackendChange}
             table={table}
-            patches={patches}
             activePatch={activePatch}
-            onPatchChange={onPatchChange}
+            tablesRefreshing={tablesRefreshing}
+            onRefreshTables={onRefreshTables}
             location={location}
             onLocationChange={onLocationChange}
             systemGroups={systemGroups}
@@ -353,10 +355,6 @@ export function ProspectView(props: ProspectViewProps) {
             onNoiseSignaturesChange={onNoiseSignaturesChange}
             overlayConfig={overlayConfig}
             onOverlayConfigChange={onOverlayConfigChange}
-            overlayCandidates={overlayCandidates}
-            detail={detail}
-            overlayStatus={overlayStatus}
-            ocr={readout.ocr}
             hotkeys={hotkeys}
             hotkeyStatus={hotkeyStatus}
             onHotkeysChange={onHotkeysChange}

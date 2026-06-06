@@ -6,7 +6,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 
-import type { HotkeyAction } from '../../shared/bridge';
+import type { HotkeyAction, HotkeyMap } from '../../shared/bridge';
 import { cn } from '../ui/cn';
 
 /** A titled, collapsible block. */
@@ -190,5 +190,40 @@ export function KeyCapture({
     >
       {capturing ? 'press combo…' : value}
     </button>
+  );
+}
+
+/**
+ * The full hotkey binding list (one KeyCapture per action + conflict badge),
+ * shared by the Mining settings panel and the setup wizard so both edit the same
+ * way and stay in sync. Editing is live — `onChange` re-registers immediately.
+ */
+export function HotkeyEditor({
+  hotkeys,
+  hotkeyStatus,
+  onChange,
+}: {
+  hotkeys: HotkeyMap;
+  hotkeyStatus: Partial<Record<HotkeyAction, boolean>>;
+  onChange: (map: HotkeyMap) => void;
+}) {
+  return (
+    <>
+      {HOTKEY_ROWS.map(([action, label]) => (
+        <div key={action} className="mb-1.5 flex items-center gap-2">
+          <span className="w-[82px] text-xs text-fg/80">{label}</span>
+          <KeyCapture
+            value={hotkeys[action]}
+            onChange={(accel) => onChange({ ...hotkeys, [action]: accel })}
+          />
+          {hotkeyStatus[action] === false && (
+            <span className="text-[11px] text-danger">conflict</span>
+          )}
+        </div>
+      ))}
+      <p className="text-xs text-muted">
+        Click a binding, then press the combo (needs a modifier).
+      </p>
+    </>
   );
 }
