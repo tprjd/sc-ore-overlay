@@ -8,7 +8,7 @@
 //
 // Built as CommonJS by vite-plugin-electron.
 
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, Menu } from 'electron';
 import { applyHotkeys, currentHotkeys, registerHotkeyIpc, unregisterAllHotkeys } from './hotkeys';
 import { registerCoreIpc } from './ipc';
 import { installCrashHandlers, log } from './log';
@@ -26,6 +26,11 @@ installCrashHandlers();
 if (process.platform === 'linux') app.disableHardwareAcceleration();
 
 installNavigationHardening();
+
+// No File/Edit/View menu — this is an overlay tool, not a document app. Drops the
+// default Windows/Linux menu bar from the control window (overlay boxes are
+// frameless and never had one).
+Menu.setApplicationMenu(null);
 
 void app.whenReady().then(() => {
   log.info(`SC Ore Overlay v${app.getVersion()} starting (electron ${process.versions.electron})`);
